@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Students{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="flex justify-between items-center flex-wrap gap-1">
+    <h2>Students</h2>
+    <div class="flex gap-1 flex-wrap">
+      <a href="{{ url_for('admit_student') }}" class="btn btn-accent btn-sm">+ Admit Student</a>
+      <a href="{{ url_for('export_students') }}" class="btn btn-outline btn-sm">Export CSV</a>
+    </div>
+  </div>
+  <form method="GET" class="flex gap-1 flex-wrap mt-2 items-center">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="Search name, email, mobile, roll…" style="flex:1;min-width:180px;margin:0">
+    <select name="class" style="width:auto;margin:0">
+      <option value="">All classes</option>
+      {% for c in classes %}
+      <option value="{{ c }}" {% if class_filter==c %}selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+    <select name="status" style="width:auto;margin:0">
+      <option value="all" {% if status=='all' %}selected{% endif %}>All</option>
+      <option value="verified" {% if status=='verified' %}selected{% endif %}>Verified</option>
+      <option value="pending" {% if status=='pending' %}selected{% endif %}>Pending OTP</option>
+      <option value="blocked" {% if status=='blocked' %}selected{% endif %}>Blocked</option>
+    </select>
+    <button class="btn btn-primary btn-sm" type="submit">Search</button>
+  </form>
+</div>
+
+<div class="card">
+  {% if students %}
+  <div style="overflow-x:auto">
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th><th>Class</th><th>Roll</th><th>Email</th><th>Mobile</th><th>Status</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in students %}
+      <tr>
+        <td><strong>{{ s.name }}</strong></td>
+        <td>{{ s.class_name }}</td>
+        <td>{{ s.roll or '—' }}</td>
+        <td>{{ s.email }}</td>
+        <td>{{ s.mobile or '—' }}</td>
+        <td>
+          {% if s.is_blocked %}<span class="badge badge-danger">Blocked</span>
+          {% elif s.is_verified %}<span class="badge badge-success">Verified</span>
+          {% else %}<span class="badge badge-info">Pending</span>{% endif %}
+          {% if s.admitted_by_teacher %}<span class="badge badge-info">Admitted</span>{% endif %}
+        </td>
+        <td>
+          <div class="flex gap-1 flex-wrap">
+            <a href="{{ url_for('edit_student', student_id=s.id) }}" class="btn btn-sm btn-primary">Edit</a>
+            <a href="{{ url_for('student_history', student_id=s.id) }}" class="btn btn-sm btn-outline">History</a>
+            {% if not s.is_verified %}
+            <form method="POST" action="{{ url_for('verify_student', student_id=s.id) }}">
+              <button class="btn btn-sm btn-primary">Verify</button>
+            </form>
+            {% endif %}
+            {% if s.is_verified and not s.is_blocked %}
+            <form method="POST" action="{{ url_for('login_as_student', student_id=s.id) }}">
+              <button class="btn btn-sm btn-accent" title="Login as this student">Login as</button>
+            </form>
+            {% endif %}
+            <form method="POST" action="{{ url_for('block_student', student_id=s.id) }}">
+              <button class="btn btn-sm btn-outline">{{ 'Unblock' if s.is_blocked else 'Block' }}</button>
+            </form>
+            <form method="POST" action="{{ url_for('delete_student', student_id=s.id) }}" onsubmit="return confirm('Permanently delete {{ s.name }}?')">
+              <button class="btn btn-sm btn-danger">Delete</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="text-muted mt-1">{{ students|length }} student(s)</p>
+  {% else %}
+  <p class="text-muted">No students match your search.</p>
+  {% endif %}
+</div>
+{% endblock %}

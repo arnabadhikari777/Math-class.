@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Edit Student{% endblock %}
+{% block content %}
+<div class="card" style="max-width:520px;">
+  <h2>Edit Student</h2>
+  <p class="helper-text">Students cannot change their own name. Only the teacher can update these details.</p>
+  <form method="POST" action="{{ url_for('edit_student', student_id=student.id) }}" accept-charset="UTF-8">
+    <label>Full Name</label>
+    <input type="text" name="name" value="{{ student.name }}" required>
+
+    <label>Class</label>
+    <select name="class_name" required>
+      {% for c in ['Six','Seven','Eight','Nine','Ten','SSC Batch','HSC Batch'] %}
+      <option value="{{ c }}" {% if student.class_name == c %}selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+
+    <label>Roll</label>
+    <input type="text" name="roll" value="{{ student.roll or '' }}" placeholder="Optional">
+
+    <label>Mobile</label>
+    <input type="text" name="mobile" value="{{ student.mobile or '' }}" placeholder="Optional">
+
+    <label>Email (read-only)</label>
+    <input type="email" value="{{ student.email }}" disabled style="opacity:0.7;">
+
+    <label>Internal notes (teacher only)</label>
+    <textarea name="notes_internal" rows="3" placeholder="Private notes about this student…">{{ student.notes_internal or '' }}</textarea>
+
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">
+      <button class="btn btn-primary" type="submit">Save changes</button>
+      <a class="btn btn-secondary" href="{{ url_for('students_list') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

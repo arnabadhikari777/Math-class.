@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Inbox{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>📩 Contact Requests</h2>
+  <div class="flex gap-1 mt-1">
+    <a href="?status=all" class="btn btn-sm {{ 'btn-primary' if status=='all' else 'btn-outline' }}">All</a>
+    <a href="?status=new" class="btn btn-sm {{ 'btn-primary' if status=='new' else 'btn-outline' }}">New</a>
+    <a href="?status=replied" class="btn btn-sm {{ 'btn-primary' if status=='replied' else 'btn-outline' }}">Replied</a>
+  </div>
+</div>
+{% for r in rows %}
+<div class="card">
+  <div class="flex justify-between flex-wrap gap-1">
+    <div>
+      <strong>{{ r.name }}</strong>
+      <span class="badge {{ 'badge-info' if r.status=='new' else ('badge-success' if r.status=='replied' else 'badge-danger') }}">{{ r.status }}</span>
+      <div class="text-muted" style="font-size:.85rem">
+        {{ r.email or '' }} {% if r.mobile %}· {{ r.mobile }}{% endif %}
+        · {{ r.created_at[:16].replace('T',' ') }}
+      </div>
+    </div>
+  </div>
+  {% if r.subject %}<p><strong>{{ r.subject }}</strong></p>{% endif %}
+  <p style="white-space:pre-wrap">{{ r.message }}</p>
+  {% if r.teacher_reply %}
+  <div class="announce mt-1"><strong>Your reply:</strong><div>{{ r.teacher_reply }}</div></div>
+  {% else %}
+  <form method="POST" action="{{ url_for('reply_contact', cid=r.id) }}" class="mt-1">
+    <textarea name="reply" placeholder="Write a reply note (stored for your records)…" rows="2"></textarea>
+    <button class="btn btn-sm btn-primary mt-1">Save Reply</button>
+  </form>
+  {% endif %}
+  <form method="POST" action="{{ url_for('close_contact', cid=r.id) }}" class="mt-1">
+    <button class="btn btn-sm btn-outline">Mark Closed</button>
+  </form>
+</div>
+{% else %}
+<div class="card"><p class="text-muted">No messages.</p></div>
+{% endfor %}
+{% endblock %}

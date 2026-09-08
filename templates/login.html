@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Login - Arnab Math Class{% endblock %}
+{% block content %}
+<div class="card" style="max-width:420px; margin:0 auto;">
+  <h2>Student Login</h2>
+  <form method="POST" action="{{ url_for('login') }}">
+    <label>Email Address</label>
+    <input type="email" name="email" required placeholder="you@example.com">
+
+    <label>Password</label>
+    <input type="password" name="password" required placeholder="Password">
+
+    <button class="btn btn-full" type="submit">Login</button>
+  </form>
+  <p class="helper-text center" style="margin-top:16px;">
+    Don't have an account yet? <a href="{{ url_for('register') }}" style="color:#2563eb; font-weight:600;">Register Here</a>
+  </p>
+</div>
+{% endblock %}

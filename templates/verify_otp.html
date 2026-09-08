@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Verify OTP - Arnab Math Class{% endblock %}
+{% block content %}
+<div class="card center" style="max-width:420px; margin:0 auto;">
+  <h2>📩 Verify Your Email</h2>
+  <p class="helper-text" style="margin-bottom:16px;">
+    A 6-digit OTP code has been sent to your email address:<br><strong>{{ email }}</strong>
+  </p>
+
+  <form method="POST" action="{{ url_for('verify_otp') }}">
+    <input type="text" name="otp_code" maxlength="6" required
+           placeholder="Enter 6-digit code"
+           style="text-align:center; font-size:1.4rem; letter-spacing:6px;">
+    <button class="btn btn-full" type="submit">Verify Now</button>
+  </form>
+
+  <p class="helper-text" style="margin-top:18px;">
+    Didn't receive the code? <span id="resendWrap"><a href="{{ url_for('resend_otp') }}" id="resendLink">Resend OTP</a></span>
+    <span id="timerText" style="display:none;">(You can request a new code in <span id="countdown">60</span> seconds)</span>
+  </p>
+</div>
+
+<script>
+  // Temporarily disable the resend link to prevent spamming
+  var link = document.getElementById('resendLink');
+  var timerText = document.getElementById('timerText');
+  var countdownEl = document.getElementById('countdown');
+  var seconds = 60; // must match OTP resend cooldown enforced in app.py (create_and_send_otp)
+
+  link.style.display = 'none';
+  timerText.style.display = 'inline';
+
+  var interval = setInterval(function () {
+    seconds--;
+    countdownEl.textContent = seconds;
+    if (seconds <= 0) {
+      clearInterval(interval);
+      timerText.style.display = 'none';
+      link.style.display = 'inline';
+    }
+  }, 1000);
+</script>
+{% endblock %}

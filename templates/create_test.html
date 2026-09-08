@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}New Test{% endblock %}
+{% block content %}
+<div class="card" style="max-width:480px;">
+  <h2>📝 Create a New Test</h2>
+  <form method="POST" action="{{ url_for('create_test') }}">
+    <label>Test Title</label>
+    <input type="text" name="title" required placeholder="e.g., Algebra - Model Test 1">
+
+    <label>Subject</label>
+    <input type="text" name="subject" placeholder="e.g., Mathematics">
+
+    <label>Class</label>
+    <select name="class_name" required>
+      <option value="">-- Select Class --</option>
+      <option value="Six">Six</option>
+      <option value="Seven">Seven</option>
+      <option value="Eight">Eight</option>
+      <option value="Nine">Nine</option>
+      <option value="Ten">Ten</option>
+      <option value="SSC Batch">SSC Batch</option>
+      <option value="HSC Batch">HSC Batch</option>
+    </select>
+
+    <label>Duration (minutes)</label>
+    <input type="number" name="duration_minutes" value="30" min="1" required>
+
+    <button class="btn btn-full" type="submit">Create Test & Add Questions</button>
+  </form>
+</div>
+{% endblock %}

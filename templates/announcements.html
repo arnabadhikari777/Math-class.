@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Announcements{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>📢 Post a Notice</h2>
+  <form method="POST">
+    <label>Title</label>
+    <input type="text" name="title" required placeholder="e.g. Extra class on Friday">
+    <label>Content</label>
+    <textarea name="content" required placeholder="Write the announcement..."></textarea>
+    <label>Class (leave blank for all)</label>
+    <input type="text" name="class_name" placeholder="e.g. Class 10">
+    <button type="submit" class="btn btn-primary mt-2">Post Announcement</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>All Announcements</h2>
+  {% if announcements %}
+  <table>
+    <thead>
+      <tr><th>Title</th><th>Class</th><th>Status</th><th>Date</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for a in announcements %}
+      <tr>
+        <td>
+          <strong>{{ a.title }}</strong>
+          <div class="text-muted" style="font-size:.85rem;max-width:320px;white-space:pre-wrap">{{ a.content[:120] }}{% if a.content|length > 120 %}…{% endif %}</div>
+        </td>
+        <td>{{ a.class_name or 'All' }}</td>
+        <td>
+          {% if a.is_active %}
+            <span class="badge badge-success">Active</span>
+          {% else %}
+            <span class="badge badge-danger">Hidden</span>
+          {% endif %}
+        </td>
+        <td class="text-muted">{{ a.created_at[:16].replace('T',' ') }}</td>
+        <td class="flex gap-1">
+          <form method="POST" action="{{ url_for('toggle_announcement', aid=a.id) }}">
+            <button class="btn btn-sm btn-outline">{{ 'Hide' if a.is_active else 'Show' }}</button>
+          </form>
+          <form method="POST" action="{{ url_for('delete_announcement', aid=a.id) }}" onsubmit="return confirm('Delete this notice?')">
+            <button class="btn btn-sm btn-danger">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="text-muted">No announcements yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

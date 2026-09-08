@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ student.name }} - Details{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>{{ student.name }}</h2>
+  <p class="helper-text">
+    Class: {{ student.class_name }} | Roll: {{ student.roll or '-' }} | Email: {{ student.email }}<br>
+    Registered At: {{ student.registered_at[:16].replace('T',' ') }}
+  </p>
+</div>
+
+<div class="card">
+  <h3>🕒 Login History ({{ history|length }})</h3>
+  {% if history %}
+    <table>
+      <tr><th>Login Time</th><th>IP Address</th></tr>
+      {% for h in history %}
+        <tr>
+          <td>{{ h.login_time[:19].replace('T',' ') }}</td>
+          <td>{{ h.ip_address }}</td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <div class="empty-state">No login history available for this student yet.</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>📊 Test Results</h3>
+  {% if results %}
+    <table>
+      <tr><th>Test Name</th><th>Score</th><th>Submission Time</th></tr>
+      {% for r in results %}
+        <tr>
+          <td>{{ r.test_title }}</td>
+          <td>{{ r.score }} / {{ r.total_marks }}</td>
+          <td>{{ r.submitted_at[:16].replace('T',' ') }}</td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <div class="empty-state">This student has not attempted any tests yet.</div>
+  {% endif %}
+</div>
+
+<a class="btn btn-secondary" href="{{ url_for('students_list') }}">Back to Students List</a>
+{% endblock %}

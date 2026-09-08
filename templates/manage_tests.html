@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}All Tests{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>All Tests</h2>
+  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    <a class="btn" href="{{ url_for('create_test') }}">+ Create a New Test</a>
+    <a class="btn btn-outline" href="{{ url_for('data_cleanup') }}">Data Cleanup</a>
+  </div>
+</div>
+
+{% if tests_data %}
+  {% for item in tests_data %}
+    <div class="card">
+      <h3>{{ item.test.title }}
+        {% if item.test.is_active %}
+          <span class="badge badge-green">Active</span>
+        {% else %}
+          <span class="badge badge-gray">Inactive</span>
+        {% endif %}
+      </h3>
+      <p class="helper-text">
+        Class: {{ item.test.class_name }} | Duration: {{ item.test.duration_minutes }} minutes |
+        Questions: {{ item.q_count }} | Submitted by: {{ item.r_count }} students
+      </p>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
+        <a class="btn btn-sm" href="{{ url_for('add_questions', test_id=item.test.id) }}">Manage Questions</a>
+        <a class="btn btn-sm btn-secondary" href="{{ url_for('test_results_view', test_id=item.test.id) }}">View Results</a>
+        <form method="POST" action="{{ url_for('toggle_test', test_id=item.test.id) }}">
+          <button class="btn btn-sm {% if item.test.is_active %}btn-outline{% endif %}" type="submit">
+            {% if item.test.is_active %}Deactivate{% else %}Activate{% endif %}
+          </button>
+        </form>
+        <form method="POST" action="{{ url_for('delete_test', test_id=item.test.id) }}"
+              onsubmit="return confirm('Permanently delete this test, all its questions, and all student submissions? This cannot be undone.');">
+          <button class="btn btn-sm btn-danger" type="submit">Delete permanently</button>
+        </form>
+      </div>
+    </div>
+  {% endfor %}
+{% else %}
+  <div class="empty-state">No tests have been created yet. Create one to get started.</div>
+{% endif %}
+{% endblock %}

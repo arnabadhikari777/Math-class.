@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Notes{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="flex justify-between items-center flex-wrap gap-1">
+    <h2>📚 Class Notes</h2>
+    <form method="GET" class="flex gap-1">
+      <input type="text" name="q" value="{{ q or '' }}" placeholder="Search notes…" style="width:200px;margin:0">
+      <button class="btn btn-primary btn-sm" type="submit">Search</button>
+    </form>
+  </div>
+</div>
+
+{% if notes %}
+<div class="grid-2">
+  {% for n in notes %}
+  <div class="card">
+    <h3 style="margin-bottom:.3rem">{{ n.title }}</h3>
+    <p class="text-muted" style="font-size:.9rem">
+      {{ n.subject or 'General' }}
+      {% if n.class_name %} · {{ n.class_name }}{% endif %}
+      <br>{{ n.uploaded_at[:16].replace('T',' ') }}
+    </p>
+    <a href="{{ url_for('download_note', note_id=n.id) }}" class="btn btn-primary btn-sm mt-1">⬇ Download PDF</a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card text-center">
+  <p class="text-muted">No notes found{% if q %} for “{{ q }}”{% endif %}.</p>
+</div>
+{% endif %}
+{% endblock %}

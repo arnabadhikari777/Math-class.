@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ test.title }}{% endblock %}
+{% block content %}
+<div id="timer-bar">
+  <div>
+    <strong>{{ test.title }}</strong>
+    <span class="text-muted"> · {{ questions|length }} questions</span>
+  </div>
+  <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:100%"></div></div>
+  <div id="timer">--:--</div>
+</div>
+
+<form method="POST" action="{{ url_for('submit_test', test_id=test.id) }}" id="testForm" class="mt-2">
+  {% for q in questions %}
+  <div class="q-card">
+    <div style="font-weight:700;margin-bottom:.6rem;font-family:'Noto Sans Bengali',Inter,sans-serif">
+      Q{{ loop.index }}. {{ q.question_text }}
+      <span class="badge badge-info">{{ q.marks }} mark{{ 's' if q.marks != 1 else '' }}</span>
+    </div>
+    {% for opt, letter in [('option_a','A'),('option_b','B'),('option_c','C'),('option_d','D')] %}
+    <label class="option-label" style="font-family:'Noto Sans Bengali',Inter,sans-serif">
+      <input type="radio" name="q_{{ q.id }}" value="{{ letter }}" required>
+      <span><strong>{{ letter }}.</strong> {{ q[opt] }}</span>
+    </label>
+    {% endfor %}
+
+  </div>
+  {% endfor %}
+
+  <div class="flex gap-2 items-center flex-wrap mt-2">
+    <button type="submit" class="btn btn-primary" id="submitBtn">Submit Test</button>
+    <span class="text-muted">Answers are saved only when you submit (or when time runs out).</span>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  const totalSeconds = {{ test.duration_minutes }} * 60;
+  let remaining = totalSeconds;
+  const timerEl = document.getElementById('timer');
+  const fillEl = document.getElementById('progressFill');
+  const form = document.getElementById('testForm');
+
+  function fmt(s) {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+  }
+
+  function tick() {
+    remaining--;
+    if (remaining < 0) {
+      clearInterval(iv);
+      timerEl.textContent = '00:00';
+      timerEl.classList.add('urgent');
+      form.submit();
+      return;
+    }
+    timerEl.textContent = fmt(remaining);
+    const pct = (remaining / totalSeconds) * 100;
+    fillEl.style.width = pct + '%';
+    if (remaining <= 60) timerEl.classList.add('urgent');
+  }
+
+  timerEl.textContent = fmt(remaining);
+  const iv = setInterval(tick, 1000);
+
+  form.addEventListener('submit', function() {
+    document.getElementById('submitBtn').disabled = true;
+    document.getElementById('submitBtn').textContent = 'Submitting…';
+  });
+})();
+</script>
+{% endblock %}

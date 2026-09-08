@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Upload Note{% endblock %}
+{% block content %}
+<div class="card" style="max-width:520px;">
+  <h2>📤 Upload a New Note</h2>
+  <form method="POST" action="{{ url_for('upload_note') }}" enctype="multipart/form-data" id="noteForm">
+    <label>Note Title</label>
+    <input type="text" name="title" required placeholder="e.g., Trigonometry - Chapter 5">
+
+    <label>Subject</label>
+    <input type="text" name="subject" placeholder="e.g., Mathematics">
+
+    <label>Target Class</label>
+    <select name="class_name">
+      <option value="">Available for all classes</option>
+      <option value="Six">Six</option>
+      <option value="Seven">Seven</option>
+      <option value="Eight">Eight</option>
+      <option value="Nine">Nine</option>
+      <option value="Ten">Ten</option>
+      <option value="SSC Batch">SSC Batch</option>
+      <option value="HSC Batch">HSC Batch</option>
+    </select>
+
+    <label>PDF File</label>
+    <input type="file" name="pdf_file" accept="application/pdf" required id="pdfInput">
+    <div class="helper-text">Maximum file size: ~15 MB. Only PDF format is accepted.</div>
+
+    <button class="btn btn-full" type="submit" id="uploadBtn">Upload Note</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>📚 All Uploaded Notes</h3>
+  {% if notes %}
+    <table>
+      <tr><th>Title</th><th>Subject</th><th>Class</th><th>Upload Date</th><th>Action</th></tr>
+      {% for n in notes %}
+        <tr>
+          <td>{{ n.title }}</td>
+          <td>{{ n.subject or '-' }}</td>
+          <td>{{ n.class_name or 'All' }}</td>
+          <td>{{ n.uploaded_at[:10] }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('delete_note', note_id=n.id) }}"
+                  onsubmit="return confirm('Are you sure you want to permanently delete this note?');" style="display:inline;">
+              <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <div class="empty-state">There are currently no notes available. Upload one above!</div>
+  {% endif %}
+</div>
+
+<script>
+  document.getElementById('noteForm').addEventListener('submit', function(){
+    document.getElementById('uploadBtn').disabled = true;
+    document.getElementById('uploadBtn').textContent = 'Uploading...';
+  });
+</script>
+{% endblock %}

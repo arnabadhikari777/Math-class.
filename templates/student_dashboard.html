@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>Hello, {{ student.name }}! 👋</h2>
+  <p class="text-muted">Class: <strong>{{ student.class_name }}</strong>
+    {% if student.roll %} · Roll: {{ student.roll }}{% endif %}
+  </p>
+</div>
+
+<div class="stats">
+  <div class="stat">
+    <div class="num">{{ total_attempted }}</div>
+    <div class="label">Tests Taken</div>
+  </div>
+  <div class="stat">
+    <div class="num">{{ avg_pct }}%</div>
+    <div class="label">Average Score</div>
+  </div>
+  <div class="stat">
+    <div class="num">{{ tests|length }}</div>
+    <div class="label">Available Tests</div>
+  </div>
+</div>
+
+{% if announcements %}
+<div class="card">
+  <h3>📢 Notices for you</h3>
+  {% for a in announcements %}
+  <div class="announce">
+    <strong>{{ a.title }}</strong>
+    <div style="white-space:pre-wrap;font-size:.92rem">{{ a.content }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>📝 Available Tests</h2>
+  {% if tests %}
+  <table>
+    <thead>
+      <tr><th>Title</th><th>Subject</th><th>Duration</th><th>Action</th></tr>
+    </thead>
+    <tbody>
+      {% for t in tests %}
+      <tr>
+        <td><strong>{{ t.title }}</strong></td>
+        <td>{{ t.subject or '—' }}</td>
+        <td>{{ t.duration_minutes }} min</td>
+        <td>
+          {% if t.id in attempted_test_ids %}
+            <a href="{{ url_for('test_result', test_id=t.id) }}" class="btn btn-sm btn-outline">View Result</a>
+            <a href="{{ url_for('test_leaderboard', test_id=t.id) }}" class="btn btn-sm btn-outline">🏆 Board</a>
+          {% else %}
+            <a href="{{ url_for('take_test', test_id=t.id) }}" class="btn btn-sm btn-primary">Start Test</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="text-muted">No active tests for your class right now.</p>
+  {% endif %}
+</div>
+
+{% if my_results %}
+<div class="card">
+  <h2>📊 Your Recent Results</h2>
+  <table>
+    <thead>
+      <tr><th>Test</th><th>Score</th><th>%</th><th>Date</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for r in my_results[:8] %}
+      <tr>
+        <td>{{ r.test_title }}</td>
+        <td>{{ r.score }} / {{ r.total_marks }}</td>
+        <td>
+          {% set p = ((r.score / r.total_marks * 100) if r.total_marks else 0) | round(1) %}
+          <span class="badge {{ 'badge-success' if p >= 40 else 'badge-danger' }}">{{ p }}%</span>
+        </td>
+        <td class="text-muted">{{ r.submitted_at[:16].replace('T',' ') }}</td>
+        <td>
+          <a href="{{ url_for('test_result', test_id=r.test_id) }}" class="btn btn-sm btn-outline">Review</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

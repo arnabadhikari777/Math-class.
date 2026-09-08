@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Download App{% endblock %}
+{% block content %}
+<div class="hero text-center">
+  <h1>📲 Install {{ site_name }}</h1>
+  <p style="margin:0 auto;">Get one-tap access to notes, tests and results — right from your home screen. No app store needed.</p>
+  <div class="hero-actions" style="justify-content:center;">
+    <button id="installBtn" class="btn btn-accent" style="display:none;">⬇ Install Now</button>
+  </div>
+</div>
+
+<div class="card" id="installHelp">
+  <h2>How to Install</h2>
+  <p class="helper-text mb-1">Follow the steps for your device. It only takes a few seconds and works completely free.</p>
+
+  <div class="grid-3">
+    <div class="item-box">
+      <div class="item-title">🤖 Android (Chrome)</div>
+      <div class="item-meta">
+        Tap the <strong>⋮</strong> menu in Chrome → <strong>Add to Home screen</strong> → <strong>Install</strong>.
+        Or just tap the "Install Now" button above if it appears.
+      </div>
+    </div>
+    <div class="item-box">
+      <div class="item-title">🍎 iPhone / iPad (Safari)</div>
+      <div class="item-meta">
+        Tap the <strong>Share</strong> icon (square with an arrow) → <strong>Add to Home Screen</strong> → <strong>Add</strong>.
+      </div>
+    </div>
+    <div class="item-box">
+      <div class="item-title">💻 Desktop (Chrome / Edge)</div>
+      <div class="item-meta">
+        Click the <strong>install icon</strong> in the address bar, or the browser menu → <strong>Install {{ site_name }}</strong>.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Why Install?</h2>
+  <div class="grid-2">
+    <div class="item-box">
+      <div class="item-title">⚡ Faster access</div>
+      <div class="item-meta">Opens straight to your dashboard — no typing a web address.</div>
+    </div>
+    <div class="item-box">
+      <div class="item-title">🖥 Full-screen, distraction-free</div>
+      <div class="item-meta">Runs like a native app without browser tabs and toolbars in the way.</div>
+    </div>
+  </div>
+</div>
+
+<div class="card text-center">
+  {% if session.get('student_id') %}
+    <a href="{{ url_for('student_dashboard') }}" class="btn btn-primary">Go to Dashboard</a>
+  {% else %}
+    <a href="{{ url_for('register') }}" class="btn btn-accent">Register as Student</a>
+    <a href="{{ url_for('login') }}" class="btn btn-outline">Student Login</a>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Progressive enhancement: show a native "Install" button when the browser supports it.
+  let deferredInstallPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    const btn = document.getElementById('installBtn');
+    if (btn) btn.style.display = 'inline-flex';
+  });
+  const installBtn = document.getElementById('installBtn');
+  if (installBtn) {
+    installBtn.addEventListener('click', async () => {
+      if (!deferredInstallPrompt) return;
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      installBtn.style.display = 'none';
+    });
+  }
+  window.addEventListener('appinstalled', () => {
+    if (installBtn) installBtn.style.display = 'none';
+  });
+</script>
+{% endblock %}

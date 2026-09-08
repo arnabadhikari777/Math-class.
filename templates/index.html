@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<div class="hero">
+  <h1>Welcome to <strong>Arnab Math Class</strong></h1>
+  <p>Download notes, take timed online tests, track your progress, and climb the leaderboard — all in one place.</p>
+  <div class="hero-actions">
+    {% if session.get('student_id') %}
+      <a href="{{ url_for('student_dashboard') }}" class="btn btn-accent">Go to Dashboard</a>
+    {% else %}
+      <a href="{{ url_for('register') }}" class="btn btn-accent">Register as Student</a>
+      <a href="{{ url_for('login') }}" class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.5)">Student Login</a>
+    {% endif %}
+    <a href="{{ url_for('download_app') }}" class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.5)">📲 Get the App</a>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat">
+    <div class="num">{{ total_students }}+</div>
+    <div class="label">Registered Students</div>
+  </div>
+  <div class="stat">
+    <div class="num">{{ total_tests }}+</div>
+    <div class="label">Live Tests</div>
+  </div>
+  <div class="stat">
+    <div class="num">{{ total_notes }}+</div>
+    <div class="label">Notes Available</div>
+  </div>
+</div>
+
+{% if announcements %}
+<div class="card">
+  <h2>📢 Latest Notices</h2>
+  {% for a in announcements %}
+  <div class="announce">
+    <strong>{{ a.title }}</strong>
+    <div class="text-muted" style="font-size:.9rem;white-space:pre-wrap">{{ a.content }}</div>
+    <div class="text-muted" style="font-size:.78rem;margin-top:.3rem">{{ a.created_at[:16].replace('T',' ') }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="grid-2">
+  <div class="card">
+    <h3>📚 Notes</h3>
+    <p class="text-muted">Class-wise PDF notes uploaded by Sir. Download anytime.</p>
+  </div>
+  <div class="card">
+    <h3>⏱️ Timed Tests</h3>
+    <p class="text-muted">MCQ tests with countdown timer, instant scoring and answer review.</p>
+  </div>
+  <div class="card">
+    <h3>🏆 Leaderboard</h3>
+    <p class="text-muted">See how you rank against classmates after every test.</p>
+  </div>
+  <div class="card">
+    <h3>🌙 Dark Mode</h3>
+    <p class="text-muted">Study comfortably day or night. Toggle from the navbar.</p>
+  </div>
+</div>
+
+<div class="card">
+  <h2>✨ Why Students Love This Class</h2>
+  <div class="grid-3">
+    <div class="item-box">
+      <div class="item-title">🎯 Instant Results</div>
+      <div class="item-meta">See your score, correct answers, and explanations the moment you submit a test.</div>
+    </div>
+    <div class="item-box">
+      <div class="item-title">📱 Learn Anywhere</div>
+      <div class="item-meta">Install the app on your phone and study offline-friendly, right from your home screen.</div>
+    </div>
+    <div class="item-box">
+      <div class="item-title">🔔 Never Miss an Update</div>
+      <div class="item-meta">Class notices and new tests show up on your dashboard as soon as Sir posts them.</div>
+    </div>
+  </div>
+</div>
+
+<div class="card text-center">
+  <h2>📲 Take Math Class With You</h2>
+  <p class="text-muted mb-1">Install the app on your phone or laptop for quick, one-tap access to notes and tests.</p>
+  <a href="{{ url_for('download_app') }}" class="btn btn-primary mt-1">Download / Install App</a>
+</div>
+{% endblock %}

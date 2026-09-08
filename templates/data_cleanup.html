@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Data Cleanup{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>Data Cleanup</h2>
+  <p class="helper-text">
+    Permanently remove old or unused data to free database space. These actions cannot be undone.
+  </p>
+</div>
+
+<div class="card">
+  <h3>Database overview</h3>
+  <table>
+    <tr><th>Item</th><th>Count</th></tr>
+    <tr><td>Students</td><td>{{ counts.students }}</td></tr>
+    <tr><td>Tests</td><td>{{ counts.tests }} (active: {{ counts.active_tests }}, inactive: {{ counts.inactive_tests }})</td></tr>
+    <tr><td>Questions</td><td>{{ counts.questions }}</td></tr>
+    <tr><td>Test results / submissions</td><td>{{ counts.results }}</td></tr>
+    <tr><td>Answer rows</td><td>{{ counts.answers }}</td></tr>
+    <tr><td>Notes</td><td>{{ counts.notes }}</td></tr>
+    <tr><td>Announcements</td><td>{{ counts.announcements }}</td></tr>
+    <tr><td>Contact messages</td><td>{{ counts.contacts }}</td></tr>
+    <tr><td>Login history</td><td>{{ counts.login_history }}</td></tr>
+    <tr><td>OTP codes</td><td>{{ counts.otp }}</td></tr>
+    <tr><td>Activity log</td><td>{{ counts.activity }}</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>Inactive tests</h3>
+  <p class="helper-text">Delete deactivated tests along with their questions and student submissions.</p>
+  {% if inactive_tests %}
+    {% for t in inactive_tests %}
+    <div class="item-box" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+      <div>
+        <strong>{{ t.title }}</strong>
+        <span class="helper-text"> · Class {{ t.class_name }} · {{ t.q_count }} questions · {{ t.r_count }} submissions</span>
+      </div>
+      <form method="POST" action="{{ url_for('delete_test', test_id=t.id) }}"
+            onsubmit="return confirm('Permanently delete «{{ t.title }}» and all related data?');">
+        <button class="btn btn-sm btn-danger" type="submit">Delete permanently</button>
+      </form>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="text-muted">No inactive tests.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>Bulk cleanup actions</h3>
+  <div style="display:flex; flex-direction:column; gap:12px; max-width:520px;">
+    <form method="POST" action="{{ url_for('cleanup_action') }}"
+          onsubmit="return confirm('Delete ALL inactive tests and their questions/results?');">
+      <input type="hidden" name="action" value="delete_inactive_tests">
+      <button class="btn btn-danger btn-full" type="submit">Delete all inactive tests ({{ counts.inactive_tests }})</button>
+    </form>
+
+    <form method="POST" action="{{ url_for('cleanup_action') }}"
+          onsubmit="return confirm('Delete all expired OTP codes?');">
+      <input type="hidden" name="action" value="clear_otps">
+      <button class="btn btn-outline btn-full" type="submit">Clear OTP codes ({{ counts.otp }})</button>
+    </form>
+
+    <form method="POST" action="{{ url_for('cleanup_action') }}"
+          onsubmit="return confirm('Delete login history older than 90 days?');">
+      <input type="hidden" name="action" value="clear_old_logins">
+      <button class="btn btn-outline btn-full" type="submit">Clear old login history (keep last 90 days)</button>
+    </form>
+
+    <form method="POST" action="{{ url_for('cleanup_action') }}"
+          onsubmit="return confirm('Delete activity log entries older than 90 days?');">
+      <input type="hidden" name="action" value="clear_old_activity">
+      <button class="btn btn-outline btn-full" type="submit">Clear old activity log (keep last 90 days)</button>
+    </form>
+
+    <form method="POST" action="{{ url_for('cleanup_action') }}"
+          onsubmit="return confirm('Delete all read/handled contact messages?');">
+      <input type="hidden" name="action" value="clear_old_contacts">
+      <button class="btn btn-outline btn-full" type="submit">Clear handled contact messages</button>
+    </form>
+
+    <form method="POST" action="{{ url_for('cleanup_action') }}"
+          onsubmit="return confirm('VACUUM the database to reclaim disk space?');">
+      <input type="hidden" name="action" value="vacuum">
+      <button class="btn btn-secondary btn-full" type="submit">Optimize database (VACUUM)</button>
+    </form>
+  </div>
+</div>
+
+<a class="btn btn-secondary" href="{{ url_for('teacher_dashboard') }}">Back to Dashboard</a>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}My Profile{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>👤 {{ student.name }}</h2>
+  <p class="text-muted">
+    {{ student.email }}{% if student.mobile %} · 📱 {{ student.mobile }}{% endif %} · Class {{ student.class_name }}
+    {% if student.roll %} · Roll {{ student.roll }}{% endif %}<br>
+    Registered: {{ student.registered_at[:16].replace('T',' ') }}
+  </p>
+</div>
+
+{% if results %}
+<div class="card">
+  <h3>Test History</h3>
+  <table>
+    <thead><tr><th>Test</th><th>Score</th><th>%</th><th>Date</th><th></th></tr></thead>
+    <tbody>
+      {% for r in results %}
+      <tr>
+        <td>{{ r.test_title }}</td>
+        <td>{{ r.score }}/{{ r.total_marks }}</td>
+        <td>{% set p = ((r.score / r.total_marks * 100) if r.total_marks else 0)|round(1) %}{{ p }}%</td>
+        <td class="text-muted">{{ r.submitted_at[:16].replace('T',' ') }}</td>
+        <td><a href="{{ url_for('test_result', test_id=r.test_id) }}" class="btn btn-sm btn-outline">Review</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if history %}
+<div class="card">
+  <h3>Recent Logins</h3>
+  <table>
+    <thead><tr><th>Time</th><th>IP</th></tr></thead>
+    <tbody>
+      {% for h in history %}
+      <tr>
+        <td>{{ h.login_time[:19].replace('T',' ') }}</td>
+        <td class="text-muted">{{ h.ip_address or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

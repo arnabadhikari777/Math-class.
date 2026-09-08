@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Admit Student{% endblock %}
+{% block content %}
+<div class="card" style="max-width:480px;margin:0 auto">
+  <h2>Admit Student (no OTP)</h2>
+  <p class="text-muted">Creates a verified account immediately. Mobile is mandatory for display only.</p>
+  <form method="POST">
+    <label>Full Name *</label>
+    <input type="text" name="name" required>
+    <label>Class *</label>
+    <input type="text" name="class_name" required>
+    <label>Roll</label>
+    <input type="text" name="roll">
+    <label>Email *</label>
+    <input type="email" name="email" required>
+    <label>Mobile * (10 digits)</label>
+    <input type="text" name="mobile" required pattern="[0-9]{10,15}" maxlength="15">
+    <label>Initial Password</label>
+    <input type="text" name="password" placeholder="student123" value="student123">
+    <button type="submit" class="btn btn-primary mt-2">Admit &amp; Verify</button>
+    <a href="{{ url_for('students_list') }}" class="btn btn-outline mt-2">Cancel</a>
+  </form>
+</div>
+{% endblock %}

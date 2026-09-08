@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Add Questions - {{ test.title }}{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>{{ test.title }}</h2>
+  <p class="helper-text">Class: {{ test.class_name }} | Duration: {{ test.duration_minutes }} minutes | Total Questions: {{ questions|length }}</p>
+</div>
+
+<div class="card">
+  <h3>Add MCQ Questions</h3>
+  <p class="helper-text" style="margin-bottom:14px;">
+    Enter the question text and four options, select the correct answer, then use <strong>+ Add another question</strong> to add more. Click <strong>Save all questions</strong> when done.
+  </p>
+
+  <form method="POST" action="{{ url_for('add_questions', test_id=test.id) }}" accept-charset="UTF-8" id="questionsForm">
+    <div id="questionBlocks"></div>
+
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:16px;">
+      <button type="button" class="btn btn-secondary" id="addBlockBtn">+ Add another question</button>
+      <button type="submit" class="btn btn-primary">Save all questions</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h3>All Questions ({{ questions|length }})</h3>
+  {% if questions %}
+    {% for q in questions %}
+      <div class="item-box" style="margin-bottom:12px;">
+        <div class="item-title" style="font-family:'Noto Sans Bengali',Inter,sans-serif;">{{ loop.index }}. {{ q.question_text }}</div>
+        <div class="item-meta" style="font-family:'Noto Sans Bengali',Inter,sans-serif;">
+          A) {{ q.option_a }} &nbsp; B) {{ q.option_b }} &nbsp; C) {{ q.option_c }} &nbsp; D) {{ q.option_d }}<br>
+          Correct Answer: <span class="badge badge-green">{{ q.correct_option }}</span> | Marks: {{ q.marks }}
+        </div>
+        <form method="POST" action="{{ url_for('delete_question', question_id=q.id, test_id=test.id) }}"
+              onsubmit="return confirm('Delete this question?');">
+          <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+        </form>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty-state">No questions yet. Add some above.</div>
+  {% endif %}
+</div>
+
+<a class="btn btn-secondary" href="{{ url_for('manage_tests') }}">Return to All Tests</a>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const container = document.getElementById('questionBlocks');
+  const addBtn = document.getElementById('addBlockBtn');
+  let index = 0;
+
+  function makeBlock(i) {
+    const div = document.createElement('div');
+    div.className = 'item-box q-block';
+    div.style.cssText = 'margin-bottom:18px;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--surface2);';
+    div.dataset.index = i;
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <strong>Question ${i + 1}</strong>
+        <button type="button" class="btn btn-sm btn-danger remove-btn" ${i === 0 ? 'style="display:none"' : ''}>Remove</button>
+      </div>
+      <label>Question Text</label>
+      <textarea name="question_text[]" required rows="2" placeholder="Type your question here..." style="font-family:'Noto Sans Bengali',Inter,sans-serif;"></textarea>
+      <label>Option A</label>
+      <input type="text" name="option_a[]" required style="font-family:'Noto Sans Bengali',Inter,sans-serif;">
+      <label>Option B</label>
+      <input type="text" name="option_b[]" required style="font-family:'Noto Sans Bengali',Inter,sans-serif;">
+      <label>Option C</label>
+      <input type="text" name="option_c[]" required style="font-family:'Noto Sans Bengali',Inter,sans-serif;">
+      <label>Option D</label>
+      <input type="text" name="option_d[]" required style="font-family:'Noto Sans Bengali',Inter,sans-serif;">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;">
+        <div style="flex:1;min-width:140px;">
+          <label>Correct Option</label>
+          <select name="correct_option[]" required>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+            <option value="D">D</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:100px;">
+          <label>Marks</label>
+          <input type="number" name="marks[]" value="1" min="1" required>
+        </div>
+      </div>
+    `;
+    div.querySelector('.remove-btn').addEventListener('click', function () {
+      div.remove();
+      renumber();
+    });
+    return div;
+  }
+
+  function renumber() {
+    const blocks = container.querySelectorAll('.q-block');
+    blocks.forEach((b, i) => {
+      b.querySelector('strong').textContent = 'Question ' + (i + 1);
+      const rm = b.querySelector('.remove-btn');
+      rm.style.display = blocks.length > 1 ? '' : 'none';
+    });
+  }
+
+  function addBlock() {
+    container.appendChild(makeBlock(index++));
+    renumber();
+  }
+
+  addBtn.addEventListener('click', addBlock);
+  addBlock();
+})();
+</script>
+{% endblock %}
