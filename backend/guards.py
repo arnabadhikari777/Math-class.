@@ -31,7 +31,20 @@ def _enforce_timer():
 
 
 def _visible(item_class, student_class):
-    return not item_class or item_class == student_class
+    """True if content with item_class is visible to a student in student_class.
+
+    Empty / NULL item_class means available to all classes. Comparison uses
+    canonical class values so legacy labels (Six, Nine, …) still match.
+    """
+    if not item_class or not str(item_class).strip():
+        return True
+    try:
+        from .classes import normalize_class
+        ni = normalize_class(item_class, allow_empty=True) or str(item_class).strip()
+        ns = normalize_class(student_class, allow_empty=True) or str(student_class or "").strip()
+        return ni == ns
+    except Exception:
+        return item_class == student_class
 
 
 def access_guard():

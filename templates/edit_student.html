@@ -10,8 +10,9 @@
 
     <label>Class</label>
     <select name="class_name" required>
-      {% for c in ['Six','Seven','Eight','Nine','Ten','SSC Batch','HSC Batch'] %}
-      <option value="{{ c }}" {% if student.class_name == c %}selected{% endif %}>{{ c }}</option>
+      <option value="" disabled>SELECT YOUR CLASS</option>
+      {% for opt in class_options %}
+      <option value="{{ opt.value }}" {% if student.class_name == opt.value %}selected{% endif %}>{{ opt.label }}</option>
       {% endfor %}
     </select>
 
@@ -27,9 +28,9 @@
     <label>Internal notes (teacher only)</label>
     <textarea name="notes_internal" rows="3" placeholder="Private notes about this student…">{{ student.notes_internal or '' }}</textarea>
 
-    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">
-      <button class="btn btn-primary" type="submit">Save changes</button>
-      <a class="btn btn-secondary" href="{{ url_for('students_list') }}">Cancel</a>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:1rem">
+      <button type="submit" class="btn btn-primary">Save Changes</button>
+      <a href="{{ url_for('students_list') }}" class="btn btn-outline">Cancel</a>
     </div>
   </form>
 </div>

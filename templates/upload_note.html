@@ -12,14 +12,9 @@
 
     <label>Target Class</label>
     <select name="class_name">
-      <option value="">Available for all classes</option>
-      <option value="Six">Six</option>
-      <option value="Seven">Seven</option>
-      <option value="Eight">Eight</option>
-      <option value="Nine">Nine</option>
-      <option value="Ten">Ten</option>
-      <option value="SSC Batch">SSC Batch</option>
-      <option value="HSC Batch">HSC Batch</option>
+      {% for opt in class_options_with_all %}
+      <option value="{{ opt.value }}">{{ opt.label }}</option>
+      {% endfor %}
     </select>
 
     <label>PDF File</label>

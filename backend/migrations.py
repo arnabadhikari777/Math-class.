@@ -94,6 +94,57 @@ _up_uq_attendance, _down_uq_attendance = _make_unique(
     "uq_attendance_student_date", "attendance", "(student_id, date)",
     "SELECT 1 FROM attendance GROUP BY student_id, date HAVING COUNT(*) > 1 LIMIT 1")
 
+
+# Normalize legacy class labels (Six, Nine, SSC Batch, …) to canonical values.
+# Safe, deterministic mapping only — unknown values are left unchanged.
+_CLASS_NORMALIZE_MAP = {
+    "Six": "SIX", "six": "SIX",
+    "Seven": "SEVEN", "seven": "SEVEN",
+    "Eight": "EIGHT", "eight": "EIGHT",
+    "Nine": "NINE", "nine": "NINE",
+    "Ten": "TEN", "ten": "TEN",
+    "SSC Batch": "TEN", "ssc batch": "TEN", "SSC": "TEN",
+    "HSC Batch": "12TH", "hsc batch": "12TH", "HSC": "12TH",
+    "11th": "11TH", "11": "11TH",
+    "12th": "12TH", "12": "12TH",
+    "Other": "OTHER", "other": "OTHER",
+}
+
+_CLASS_TABLES = (
+    ("students", "class_name"),
+    ("tests", "class_name"),
+    ("notes", "class_name"),
+    ("announcements", "class_name"),
+    ("notifications", "class_name"),
+    ("push_subscriptions", "class_name"),
+)
+
+
+def _up_normalize_classes(conn):
+    updated = 0
+    for table, col in _CLASS_TABLES:
+        if not _table_exists(conn, table):
+            continue
+        for old, new in _CLASS_NORMALIZE_MAP.items():
+            cur = conn.execute(
+                f"UPDATE {table} SET {col}=? WHERE {col}=?", (new, old)
+            )
+            updated += cur.rowcount or 0
+    return f"normalized {updated} class_name cells"
+
+
+def _down_normalize_classes(conn):
+    reverse = {
+        "SIX": "Six", "SEVEN": "Seven", "EIGHT": "Eight", "NINE": "Nine",
+        "TEN": "Ten", "11TH": "11th", "12TH": "12th", "OTHER": "Other",
+    }
+    for table, col in _CLASS_TABLES:
+        if not _table_exists(conn, table):
+            continue
+        for new, old in reverse.items():
+            conn.execute(f"UPDATE {table} SET {col}=? WHERE {col}=?", (old, new))
+
+
 MIGRATIONS = [
     ("001_test_attempts", "Record when a student opens a test (for timer checks)",
      _up_test_attempts, _down_test_attempts),
@@ -103,6 +154,8 @@ MIGRATIONS = [
      _up_uq_results, _down_uq_results),
     ("004_unique_attendance", "One attendance row per (student, date)",
      _up_uq_attendance, _down_uq_attendance),
+    ("005_normalize_class_names", "Map legacy class labels to canonical values (SIX…OTHER)",
+     _up_normalize_classes, _down_normalize_classes),
 ]
 
 

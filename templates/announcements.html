@@ -9,7 +9,11 @@
     <label>Content</label>
     <textarea name="content" required placeholder="Write the announcement..."></textarea>
     <label>Class (leave blank for all)</label>
-    <input type="text" name="class_name" placeholder="e.g. Class 10">
+    <select name="class_name">
+      {% for opt in class_options_with_all %}
+      <option value="{{ opt.value }}">{{ opt.label }}</option>
+      {% endfor %}
+    </select>
     <button type="submit" class="btn btn-primary mt-2">Post Announcement</button>
   </form>
 </div>

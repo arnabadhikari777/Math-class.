@@ -8,7 +8,12 @@
     <label>Full Name *</label>
     <input type="text" name="name" required>
     <label>Class *</label>
-    <input type="text" name="class_name" required placeholder="e.g. Class 10">
+    <select name="class_name" required>
+      <option value="" disabled selected>SELECT YOUR CLASS</option>
+      {% for opt in class_options %}
+      <option value="{{ opt.value }}">{{ opt.label }}</option>
+      {% endfor %}
+    </select>
     <label>Roll</label>
     <input type="text" name="roll">
     <label>Email *</label>

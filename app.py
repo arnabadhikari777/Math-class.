@@ -1170,14 +1170,20 @@ def contact():
 def register():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
-        class_name = request.form.get("class_name", "").strip()
+        class_name_raw = request.form.get("class_name", "").strip()
         roll = request.form.get("roll", "").strip()
         email = request.form.get("email", "").strip().lower()
         mobile = normalize_mobile(request.form.get("mobile", ""))
         password = request.form.get("password", "")
         confirm_password = request.form.get("confirm_password", "")
-        if not name or not class_name or not email or not password:
+        if not name or not class_name_raw or not email or not password:
             flash("Please fill all required fields.", "error")
+            return redirect(url_for("register"))
+        from backend.classes import require_class
+        try:
+            class_name = require_class(class_name_raw, allow_empty=False)
+        except ValueError as e:
+            flash(str(e), "error")
             return redirect(url_for("register"))
         if not EMAIL_RE.match(email):
             flash("Please enter a valid email address.", "error")
@@ -1701,13 +1707,19 @@ def students_list():
 def admit_student():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
-        class_name = request.form.get("class_name", "").strip()
+        class_name_raw = request.form.get("class_name", "").strip()
         roll = request.form.get("roll", "").strip()
         email = request.form.get("email", "").strip().lower()
         mobile = normalize_mobile(request.form.get("mobile", ""))
         password = request.form.get("password", "") or "student123"
-        if not name or not class_name or not email:
+        if not name or not class_name_raw or not email:
             flash("Name, class and email are required.", "error")
+            return redirect(url_for("admit_student"))
+        from backend.classes import require_class
+        try:
+            class_name = require_class(class_name_raw, allow_empty=False)
+        except ValueError as e:
+            flash(str(e), "error")
             return redirect(url_for("admit_student"))
         if not mobile or len(mobile) < 10:
             flash("Valid 10-digit mobile is mandatory.", "error")
@@ -1746,15 +1758,21 @@ def edit_student(student_id):
             abort(404)
         if request.method == "POST":
             name = request.form.get("name", "").strip()
-            class_name = request.form.get("class_name", "").strip()
+            class_name_raw = request.form.get("class_name", "").strip()
             roll = request.form.get("roll", "").strip()
             mobile = request.form.get("mobile", "").strip()
             notes_internal = request.form.get("notes_internal", "").strip()
             if not name:
                 flash("Name is required.", "error")
                 return redirect(url_for("edit_student", student_id=student_id))
-            if not class_name:
+            if not class_name_raw:
                 flash("Class is required.", "error")
+                return redirect(url_for("edit_student", student_id=student_id))
+            from backend.classes import require_class
+            try:
+                class_name = require_class(class_name_raw, allow_empty=False)
+            except ValueError as e:
+                flash(str(e), "error")
                 return redirect(url_for("edit_student", student_id=student_id))
             conn.execute(
                 """UPDATE students SET name=?, class_name=?, roll=?, mobile=?, notes_internal=?
@@ -1886,7 +1904,13 @@ def upload_note():
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         subject = request.form.get("subject", "").strip()
-        class_name = request.form.get("class_name", "").strip()
+        class_name_raw = request.form.get("class_name", "").strip()
+        from backend.classes import require_class
+        try:
+            class_name = require_class(class_name_raw, allow_empty=True)
+        except ValueError as e:
+            flash(str(e), "error")
+            return redirect(url_for("upload_note"))
         # Form field is named pdf_file (must match upload_note.html)
         file = request.files.get("pdf_file") or request.files.get("file")
         if not title:
@@ -1975,10 +1999,16 @@ def create_test():
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         subject = request.form.get("subject", "").strip()
-        class_name = request.form.get("class_name", "").strip()
+        class_name_raw = request.form.get("class_name", "").strip()
         duration = request.form.get("duration_minutes", "30").strip()
         if not title:
             flash("Test title is required.", "error")
+            return redirect(url_for("create_test"))
+        from backend.classes import require_class
+        try:
+            class_name = require_class(class_name_raw, allow_empty=False)
+        except ValueError as e:
+            flash(str(e), "error")
             return redirect(url_for("create_test"))
         try:
             duration = int(duration)
@@ -2302,7 +2332,13 @@ def manage_announcements():
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         content = request.form.get("content", "").strip()
-        class_name = request.form.get("class_name", "").strip()
+        class_name_raw = request.form.get("class_name", "").strip()
+        from backend.classes import require_class
+        try:
+            class_name = require_class(class_name_raw, allow_empty=True)
+        except ValueError as e:
+            flash(str(e), "error")
+            return redirect(url_for("manage_announcements"))
         if title and content:
             with get_db() as conn:
                 conn.execute(
@@ -2417,6 +2453,19 @@ def service_worker():
 def too_large(e):
     flash("File is too large. Maximum size is 15 MB.", "error")
     return redirect(request.referrer or url_for("upload_note"))
+
+
+@app.context_processor
+def inject_class_options():
+    """Canonical class dropdown options for all forms (single source of truth)."""
+    from backend.classes import class_options, DISPLAY_LABELS, CANONICAL_CLASSES, display_class
+    return {
+        "class_options": class_options(include_all=False),
+        "class_options_with_all": class_options(include_all=True),
+        "class_display": display_class,
+        "CANONICAL_CLASSES": CANONICAL_CLASSES,
+        "CLASS_DISPLAY_LABELS": DISPLAY_LABELS,
+    }
 
 
 @app.context_processor
