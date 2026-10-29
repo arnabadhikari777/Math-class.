@@ -69,8 +69,6 @@ STATIC_FOLDER = os.path.join(BASE_DIR, "static")
 ALLOWED_EXTENSIONS = {"pdf"}
 MAX_CONTENT_LENGTH = 15 * 1024 * 1024
 
-TEACHER_USERNAME = os.environ.get("TEACHER_USERNAME", "")
-TEACHER_PASSWORD = os.environ.get("TEACHER_PASSWORD", "")
 TEACHER_MOBILE = os.environ.get("TEACHER_MOBILE", "")
 
 EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS", "")
@@ -1030,25 +1028,38 @@ def _set_setting(key, value):
         conn.commit()
 
 
-def ensure_teacher_password_hash():
-    """Teacher password is stored hashed (like students). Seeded once from
-    TEACHER_PASSWORD_HASH or TEACHER_PASSWORD in .env; after that it can be
-    changed from the Teacher panel."""
-    if _get_setting("teacher_password_hash"):
-        return
-    preset = os.environ.get("TEACHER_PASSWORD_HASH", "").strip()
-    _set_setting("teacher_password_hash", preset or generate_password_hash(TEACHER_PASSWORD))
-
-
-def verify_teacher_password(password):
-    stored = _get_setting("teacher_password_hash")
-    if not stored:
-        ensure_teacher_password_hash()
-        stored = _get_setting("teacher_password_hash")
+def _teacher_creds():
+    """Teacher username/password come straight from .env and are re-read on every
+    login attempt, so editing .env takes effect immediately (no restart, nothing
+    stored in the database). Falls back to real environment variables."""
+    user, pw = os.environ.get("TEACHER_USERNAME", ""), os.environ.get("TEACHER_PASSWORD", "")
     try:
-        return check_password_hash(stored, password)
+        from dotenv import dotenv_values
+        vals = dotenv_values(Path(BASE_DIR) / ".env")
+        user = vals.get("TEACHER_USERNAME") or user
+        pw = vals.get("TEACHER_PASSWORD") or pw
+    except ImportError:
+        env_path = Path(BASE_DIR) / ".env"
+        if env_path.is_file():
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                k, sep, v = line.partition("=")
+                if sep and k.strip() == "TEACHER_USERNAME":
+                    user = v.strip().strip("\"'") or user
+                elif sep and k.strip() == "TEACHER_PASSWORD":
+                    pw = v.strip().strip("\"'") or pw
     except Exception:
+        pass
+    return (user or "").strip(), pw or ""
+
+
+def check_teacher_credentials(username, password):
+    """Constant-time comparison against .env. Empty config never matches."""
+    want_user, want_pw = _teacher_creds()
+    if not want_user or not want_pw:
         return False
+    user_ok = hmac.compare_digest(username.strip().encode("utf-8"), want_user.encode("utf-8"))
+    pw_ok = hmac.compare_digest(password.encode("utf-8"), want_pw.encode("utf-8"))
+    return user_ok and pw_ok
 
 
 @app.before_request
@@ -1611,8 +1622,7 @@ def teacher_login():
     if request.method == "POST":
         username = request.form.get("username", "")
         password = request.form.get("password", "")
-        if hmac.compare_digest(username.encode("utf-8"), TEACHER_USERNAME.encode("utf-8")) \
-                and verify_teacher_password(password):
+        if check_teacher_credentials(username, password):
             session.clear()
             session.permanent = True
             session["is_teacher"] = True
@@ -2383,29 +2393,6 @@ def teacher_activity():
     return render_template("teacher_activity.html", logs=logs)
 
 
-@app.route("/teacher/change-password", methods=["GET", "POST"])
-@teacher_login_required
-@rate_limit("teacher_pw", 5, 600)
-def teacher_change_password():
-    if request.method == "POST":
-        current = request.form.get("current_password", "")
-        new_pw = request.form.get("new_password", "")
-        confirm = request.form.get("confirm_password", "")
-        if not verify_teacher_password(current):
-            flash("Current password is incorrect.", "error")
-        elif new_pw != confirm:
-            flash("New passwords do not match.", "error")
-        elif validate_password_strength(new_pw):
-            flash(validate_password_strength(new_pw), "error")
-        else:
-            _set_setting("teacher_password_hash", generate_password_hash(new_pw))
-            log_activity("teacher", "change_password", "Teacher password changed")
-            flash("Teacher password updated.", "success")
-            return redirect(url_for("teacher_dashboard"))
-        return redirect(url_for("teacher_change_password"))
-    return render_template("teacher_change_password.html")
-
-
 @app.errorhandler(404)
 def not_found(e):
     return render_template("error.html", code=404, message="Page not found."), 404
@@ -2578,7 +2565,9 @@ def api_push_unsubscribe():
 
 # Ensure tables exist on import (e.g. gunicorn / production)
 init_db()
-ensure_teacher_password_hash()
+if not all(_teacher_creds()):
+    logging.getLogger(__name__).warning(
+        "TEACHER_USERNAME / TEACHER_PASSWORD are not set in .env - teacher login is disabled until they are.")
 
 if __name__ == "__main__":
     app.run(debug=DEBUG_MODE, host="0.0.0.0", port=5000)

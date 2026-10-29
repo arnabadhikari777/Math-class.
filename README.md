@@ -20,26 +20,24 @@ Online notes, timed MCQ tests, and teacher admin panel.
    ```bash
    cp .env.example .env
    ```
-   Then edit `.env` and fill in real values (especially `SECRET_KEY`, `TEACHER_PASSWORD`, `EMAIL_APP_PASSWORD`).
+   Then edit `.env` and fill in real values (especially `SECRET_KEY`, `TEACHER_USERNAME`, `TEACHER_PASSWORD`, `EMAIL_APP_PASSWORD`).
 
 4. Run:
    ```bash
    python app.py
    ```
 
-Teacher default (change immediately via `.env`):
-- Username: `Arnab sir`
-- Password: `2026`
+Teacher login: set `TEACHER_USERNAME` and `TEACHER_PASSWORD` in `.env` (no default; login stays disabled until both are set).
 
 ## Important Security Notes
 - Never commit the real `.env` file to Git (it is already in `.gitignore`).
 - Use a strong random `SECRET_KEY`.
 - Use a Gmail **App Password**, not your normal Gmail password.
-- Change the teacher password from the default `2026`.
+- Use a strong teacher password in `.env`; keep `.env` private (never upload it to GitHub).
 
 ## Security (added)
 - CSRF tokens on every POST form and API call
-- Teacher password stored hashed (change it in Teacher panel -> Change Password)
+- Teacher username/password live only in `.env` (`TEACHER_USERNAME`, `TEACHER_PASSWORD`), compared in constant time and re-read on every login: edit `.env` and it applies immediately, no restart
 - Student/teacher passwords: min 8 chars, letters + numbers (existing accounts keep working)
 - Rate limits on login, teacher login, register, OTP verify/resend and contact
 - Debug off by default (`FLASK_DEBUG=1` only locally); HTTPS redirect + HSTS (`FORCE_HTTPS=0` for local http)
