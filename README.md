@@ -45,3 +45,16 @@ Teacher default (change immediately via `.env`):
 - Debug off by default (`FLASK_DEBUG=1` only locally); HTTPS redirect + HSTS (`FORCE_HTTPS=0` for local http)
 - Random `.secret_key` auto-created if `SECRET_KEY` is not set
 - Security headers (nosniff, frame protection, referrer policy)
+
+## Forgot Password (email OTP)
+- Login page -> **Forgot password?** -> enter email -> enter OTP + new password
+- OTP goes to **email only** (never mobile): 6 digits, valid 10 minutes, single use
+- Old OTP is invalidated whenever a new one is requested; OTPs are stored hashed (HMAC), not in plain text
+- Rate limits: 60s cooldown + max 5 OTP requests per email per hour (counted even for unknown emails) + 10 requests/hour per IP
+- Brute-force guard: an OTP is burned after 5 wrong guesses; reset failures all show one generic message
+- Same response whether or not the email has an account (no account leak); mail is sent in the background so timing doesn't leak either
+- Blocked / unverified accounts never receive a reset OTP
+- Strong-password rule (8+ chars, letters + numbers) is checked *before* the OTP is consumed
+- After a successful reset **every device is logged out** (`students.session_version`) and a "password changed" email is sent
+- Blocking a student now also ends their live session immediately
+- CSRF token on every form; new DB columns (`students.session_version`, `otp_codes.attempts`) are added automatically on first start

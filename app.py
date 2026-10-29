@@ -10,6 +10,9 @@ import os
 import hmac
 import time
 import secrets
+import hashlib
+import threading
+import logging
 from pathlib import Path
 
 # Load .env file if present (for local development)
@@ -75,6 +78,10 @@ EMAIL_APP_PASSWORD = os.environ.get("EMAIL_APP_PASSWORD", "")
 EMAIL_SENDER_NAME = os.environ.get("EMAIL_SENDER_NAME", "Arnab Math Class")
 
 OTP_EXPIRY_MINUTES = 10
+OTP_MAX_ATTEMPTS = 5            # wrong guesses allowed per OTP before it is burned
+RESET_EMAIL_PER_HOUR = 5        # forgot-password OTP requests per email per hour
+RESET_COOLDOWN_SECONDS = 60     # minimum gap between two OTP requests for one email
+EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 PASS_PERCENTAGE = 40
 SITE_NAME = "Arnab Math Class"
 
@@ -358,6 +365,12 @@ def init_db():
         """)
         c.execute("CREATE INDEX IF NOT EXISTS idx_rate_bucket ON rate_limit_hits(bucket, ts)")
 
+        # Password-reset support:
+        #  - session_version: bumping it logs the student out of every device
+        #  - attempts: counts wrong guesses on an OTP (brute-force protection)
+        _ensure_column(conn, "students", "session_version", "INTEGER DEFAULT 0")
+        _ensure_column(conn, "otp_codes", "attempts", "INTEGER DEFAULT 0")
+
         conn.commit()
 
 
@@ -381,25 +394,12 @@ def generate_otp():
     return "".join(secrets.choice(string.digits) for _ in range(6))
 
 
-def send_otp_email(to_email, otp_code, purpose="registration"):
-    """Send OTP via Gmail SMTP. Tries port 587 (STARTTLS) then 465 (SSL)."""
-    subject = f"Your Verification OTP - {SITE_NAME}"
-    body = f"""Hello,
-
-Welcome to {SITE_NAME}!
-
-Your One-Time Password (OTP) is: {otp_code}
-
-This code is valid for the next {OTP_EXPIRY_MINUTES} minutes.
-Do not share it with anyone.
-
-OTP is sent only to your email address (not to mobile).
-
-If you did not request this, ignore this email.
-
-Best regards,
-{EMAIL_SENDER_NAME}
-"""
+def _send_email(to_email, subject, body):
+    """Send a plain-text email via Gmail SMTP (587 STARTTLS, then 465 SSL).
+    Returns (ok, error_text). Never prints OTPs or passwords to the logs."""
+    to_email = (to_email or "").strip()
+    if not EMAIL_RE.match(to_email):  # also blocks header-injection (\r\n)
+        return False, "invalid recipient"
     msg = MIMEText(body, "plain", "utf-8")
     msg["Subject"] = subject
     msg["From"] = f"{EMAIL_SENDER_NAME} <{EMAIL_ADDRESS}>"
@@ -430,14 +430,51 @@ Best regards,
     except Exception as e:
         last_err = e
 
-    print("=" * 50)
-    print(f"[EMAIL FAILED] OTP for {to_email}: {otp_code}")
-    print(f"Error: {last_err}")
-    print("=" * 50)
+    logging.getLogger(__name__).error("[EMAIL FAILED] to=%s error=%s", to_email, last_err)
     return False, str(last_err)
 
 
-def create_and_send_otp(email, purpose="registration"):
+def _send_email_async(to_email, subject, body):
+    """Send in a background thread so the response time is identical whether or
+    not the email address belongs to a real account (no account enumeration)."""
+    threading.Thread(target=_send_email, args=(to_email, subject, body), daemon=True).start()
+
+
+def send_otp_email(to_email, otp_code, purpose="registration"):
+    if purpose == "password_reset":
+        subject = f"Password Reset OTP - {SITE_NAME}"
+        intro = (f"We received a request to reset the password of your {SITE_NAME} account.\n\n"
+                 f"Your One-Time Password (OTP) is: {otp_code}")
+        outro = ("If you did NOT request this, ignore this email — your password will not "
+                 "change. Never share this code with anyone.")
+    else:
+        subject = f"Your Verification OTP - {SITE_NAME}"
+        intro = f"Welcome to {SITE_NAME}!\n\nYour One-Time Password (OTP) is: {otp_code}"
+        outro = "If you did not request this, ignore this email."
+    body = f"""Hello,
+
+{intro}
+
+This code is valid for the next {OTP_EXPIRY_MINUTES} minutes and can be used only once.
+Do not share it with anyone.
+
+OTP is sent only to your email address (not to mobile).
+
+{outro}
+
+Best regards,
+{EMAIL_SENDER_NAME}
+"""
+    return _send_email(to_email, subject, body)
+
+
+def _otp_hash(email, purpose, code):
+    """OTPs are stored as an HMAC, never in plain text."""
+    key = app.secret_key.encode("utf-8") if isinstance(app.secret_key, str) else app.secret_key
+    return hmac.new(key, f"{email}|{purpose}|{code}".encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def create_and_send_otp(email, purpose="registration", background=False, cooldown=True):
     """
     Create OTP, invalidate older unused codes for same email+purpose,
     enforce a short resend cooldown, then send email.
@@ -450,19 +487,20 @@ def create_and_send_otp(email, purpose="registration"):
     now = datetime.now()
     with get_db() as conn:
         # Cooldown: block resend within 60 seconds
-        recent = conn.execute(
-            """SELECT created_at FROM otp_codes
-               WHERE email=? AND purpose=? ORDER BY id DESC LIMIT 1""",
-            (email, purpose)
-        ).fetchone()
-        if recent:
-            try:
-                created = datetime.fromisoformat(recent["created_at"])
-                if (now - created).total_seconds() < 60:
-                    wait = 60 - int((now - created).total_seconds())
-                    return False, f"Please wait {wait} seconds before requesting another OTP.", None
-            except Exception:
-                pass
+        if cooldown:
+            recent = conn.execute(
+                """SELECT created_at FROM otp_codes
+                   WHERE email=? AND purpose=? ORDER BY id DESC LIMIT 1""",
+                (email, purpose)
+            ).fetchone()
+            if recent:
+                try:
+                    created = datetime.fromisoformat(recent["created_at"])
+                    if (now - created).total_seconds() < RESET_COOLDOWN_SECONDS:
+                        wait = RESET_COOLDOWN_SECONDS - int((now - created).total_seconds())
+                        return False, f"Please wait {wait} seconds before requesting another OTP.", None
+                except Exception:
+                    pass
 
         # Invalidate previous unused OTPs for this email+purpose
         conn.execute(
@@ -473,26 +511,38 @@ def create_and_send_otp(email, purpose="registration"):
         otp_code = generate_otp()
         expires = now + timedelta(minutes=OTP_EXPIRY_MINUTES)
         conn.execute(
-            """INSERT INTO otp_codes (email, otp_code, purpose, created_at, expires_at, is_used)
-               VALUES (?,?,?,?,?,0)""",
-            (email, otp_code, purpose, now.isoformat(), expires.isoformat())
+            """INSERT INTO otp_codes (email, otp_code, purpose, created_at, expires_at, is_used, attempts)
+               VALUES (?,?,?,?,?,0,0)""",
+            (email, _otp_hash(email, purpose, otp_code), purpose, now.isoformat(), expires.isoformat())
         )
         conn.commit()
+
+    if background:
+        # Fire-and-forget (used by forgot-password so timing never leaks anything)
+        threading.Thread(target=send_otp_email, args=(email, otp_code, purpose), daemon=True).start()
+        return True, "OTP sent.", None
 
     ok, err = send_otp_email(email, otp_code, purpose)
     if ok:
         return True, "OTP sent to your email. Check inbox and spam folder.", otp_code
-    # Email failed — still keep OTP in DB so teacher can verify manually if needed
+    # Email failed — keep the technical reason in the server log only (not shown to the user)
     return False, (
         "Could not send email right now (Gmail limit or configuration). "
         "Please try again in a few minutes, or ask Sir to verify your account."
-        + (f" Technical: {err}" if err else "")
     ), otp_code
 
 
-def verify_otp_code(email, entered_code, purpose="registration"):
+def verify_otp_code(email, entered_code, purpose="registration", generic=False):
+    """Check an OTP. Single use, expires, and is burned after OTP_MAX_ATTEMPTS
+    wrong guesses. With generic=True every failure returns the same message
+    (so nobody can tell whether an account/OTP exists)."""
     email = (email or "").strip().lower()
     entered = (entered_code or "").strip()
+    generic_msg = "Invalid or expired OTP. Please request a new one."
+
+    def fail(msg):
+        return False, (generic_msg if generic else msg)
+
     with get_db() as conn:
         row = conn.execute(
             """SELECT * FROM otp_codes WHERE email=? AND purpose=? AND is_used=0
@@ -500,16 +550,39 @@ def verify_otp_code(email, entered_code, purpose="registration"):
             (email, purpose)
         ).fetchone()
         if row is None:
-            return False, "No OTP found. Please request a new one."
-        if row["otp_code"] != entered:
-            return False, "Incorrect OTP."
+            return fail("No OTP found. Please request a new one.")
         try:
-            if datetime.now() > datetime.fromisoformat(row["expires_at"]):
-                return False, "OTP expired. Request a new code."
+            expired = datetime.now() > datetime.fromisoformat(row["expires_at"])
         except Exception:
-            return False, "OTP expired. Request a new code."
-        conn.execute("UPDATE otp_codes SET is_used=1 WHERE id=?", (row["id"],))
+            expired = True
+        if expired:
+            conn.execute("UPDATE otp_codes SET is_used=1 WHERE id=?", (row["id"],))
+            conn.commit()
+            return fail("OTP expired. Request a new code.")
+        attempts = row["attempts"] or 0
+        if attempts >= OTP_MAX_ATTEMPTS:
+            conn.execute("UPDATE otp_codes SET is_used=1 WHERE id=?", (row["id"],))
+            conn.commit()
+            return fail("Too many wrong attempts. Request a new code.")
+
+        stored = row["otp_code"] or ""
+        match = hmac.compare_digest(stored, _otp_hash(email, purpose, entered))
+        if not match and len(stored) == 6 and stored.isdigit():  # OTPs created before hashing
+            match = hmac.compare_digest(stored, entered)
+        if not match:
+            attempts += 1
+            conn.execute(
+                "UPDATE otp_codes SET attempts=?, is_used=? WHERE id=?",
+                (attempts, 1 if attempts >= OTP_MAX_ATTEMPTS else 0, row["id"])
+            )
+            conn.commit()
+            return fail("Incorrect OTP.")
+
+        # Mark used atomically so the same OTP can never succeed twice
+        cur = conn.execute("UPDATE otp_codes SET is_used=1 WHERE id=? AND is_used=0", (row["id"],))
         conn.commit()
+        if cur.rowcount != 1:
+            return fail("No OTP found. Please request a new one.")
     return True, "Verification successful."
 
 
@@ -895,9 +968,9 @@ def add_security_headers(resp):
     return resp
 
 
-def _rate_ok(name, limit, window_seconds):
-    """SQLite-backed sliding window (works across multiple workers)."""
-    bucket = f"{name}:{request.remote_addr or 'unknown'}"
+def _bucket_ok(bucket, limit, window_seconds):
+    """SQLite-backed sliding window for an arbitrary bucket key
+    (works across multiple workers). Records a hit when allowed."""
     now = time.time()
     try:
         with get_db() as conn:
@@ -914,6 +987,11 @@ def _rate_ok(name, limit, window_seconds):
     except Exception:
         return True  # never lock everyone out because of a DB hiccup
     return True
+
+
+def _rate_ok(name, limit, window_seconds):
+    """Per-IP rate limit."""
+    return _bucket_ok(f"{name}:{request.remote_addr or 'unknown'}", limit, window_seconds)
 
 
 def rate_limit(name, limit, window_seconds, methods=("POST",)):
@@ -971,6 +1049,31 @@ def verify_teacher_password(password):
         return check_password_hash(stored, password)
     except Exception:
         return False
+
+
+@app.before_request
+def validate_student_session():
+    """Ends a student session when the password was reset (session_version
+    changed) or the account got blocked/deleted — this is what makes
+    'logout from all devices' work with cookie-based sessions."""
+    sid = session.get("student_id")
+    if not sid or request.endpoint in (None, "static", "manifest", "service_worker"):
+        return None
+    try:
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT session_version, is_blocked FROM students WHERE id=?", (sid,)
+            ).fetchone()
+    except Exception:
+        return None
+    if row is not None and not row["is_blocked"] and (row["session_version"] or 0) == session.get("sv", 0):
+        return None
+    for k in ("student_id", "student_name", "student_class", "sv", "impersonating"):
+        session.pop(k, None)
+    if request.path.startswith("/api/"):
+        return jsonify({"ok": False, "error": "Session ended. Please log in again."}), 401
+    flash("Your session has ended. Please log in again.", "error")
+    return redirect(url_for("login"))
 
 
 def student_login_required(f):
@@ -1065,6 +1168,9 @@ def register():
         if not name or not class_name or not email or not password:
             flash("Please fill all required fields.", "error")
             return redirect(url_for("register"))
+        if not EMAIL_RE.match(email):
+            flash("Please enter a valid email address.", "error")
+            return redirect(url_for("register"))
         if not mobile or len(mobile) < 10:
             flash("A valid 10-digit mobile number is mandatory.", "error")
             return redirect(url_for("register"))
@@ -1135,6 +1241,118 @@ def resend_otp():
     return redirect(url_for("verify_otp"))
 
 
+# ---------------------------------------------------------------------------
+# Forgot password (email OTP only)
+# ---------------------------------------------------------------------------
+RESET_GENERIC_MSG = ("If an account exists for this email, an OTP has been sent. "
+                     "Check your inbox and spam folder.")
+
+
+def _request_password_reset(email):
+    """Rate-limit per email (counted even for unknown emails, so limits and
+    messages look identical for everyone), then send an OTP only when a
+    verified, unblocked account exists. Returns (allowed, message)."""
+    h = hashlib.sha256(email.encode("utf-8")).hexdigest()[:32]
+    if not _bucket_ok(f"forgot_cd:{h}", 1, RESET_COOLDOWN_SECONDS):
+        return False, f"Please wait {RESET_COOLDOWN_SECONDS} seconds before requesting another OTP."
+    if not _bucket_ok(f"forgot_hr:{h}", RESET_EMAIL_PER_HOUR, 3600):
+        return False, "Too many OTP requests for this email. Please try again after an hour."
+    with get_db() as conn:
+        student = conn.execute(
+            "SELECT is_verified, is_blocked FROM students WHERE email=?", (email,)
+        ).fetchone()
+    if student and student["is_verified"] == 1 and not student["is_blocked"]:
+        create_and_send_otp(email, purpose="password_reset", background=True, cooldown=False)
+    return True, RESET_GENERIC_MSG
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+@rate_limit("forgot_ip", 10, 3600)
+def forgot_password():
+    if session.get("student_id") and not session.get("is_teacher"):
+        return redirect(url_for("student_dashboard"))
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        if not EMAIL_RE.match(email):
+            flash("Please enter a valid email address.", "error")
+            return redirect(url_for("forgot_password"))
+        ok, msg = _request_password_reset(email)
+        flash(msg, "success" if ok else "error")
+        session["reset_email"] = email
+        return redirect(url_for("reset_password"))
+    return render_template("forgot_password.html", email=session.get("reset_email", ""))
+
+
+@app.route("/forgot-password/resend", methods=["POST"])
+@rate_limit("forgot_ip", 10, 3600)
+def forgot_password_resend():
+    email = (session.get("reset_email") or request.form.get("email", "")).strip().lower()
+    if not EMAIL_RE.match(email):
+        return redirect(url_for("forgot_password"))
+    ok, msg = _request_password_reset(email)
+    flash(msg, "success" if ok else "error")
+    session["reset_email"] = email
+    return redirect(url_for("reset_password"))
+
+
+@app.route("/reset-password", methods=["GET", "POST"])
+@rate_limit("reset_pw", 15, 600)
+def reset_password():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        otp = request.form.get("otp_code", "").strip()
+        new_pw = request.form.get("password", "")
+        confirm = request.form.get("confirm_password", "")
+        if not EMAIL_RE.match(email) or not otp or not new_pw:
+            flash("Please fill all fields.", "error")
+            return redirect(url_for("reset_password"))
+        # Check the password first so a typo never burns a valid OTP
+        if new_pw != confirm:
+            flash("Passwords do not match.", "error")
+            return redirect(url_for("reset_password"))
+        pw_err = validate_password_strength(new_pw)
+        if pw_err:
+            flash(pw_err, "error")
+            return redirect(url_for("reset_password"))
+
+        ok, msg = verify_otp_code(email, otp, purpose="password_reset", generic=True)
+        if not ok:
+            flash(msg, "error")
+            return redirect(url_for("reset_password"))
+
+        with get_db() as conn:
+            student = conn.execute(
+                "SELECT id, name FROM students WHERE email=? AND is_verified=1 AND is_blocked=0",
+                (email,)
+            ).fetchone()
+            if student is None:
+                flash("Invalid or expired OTP. Please request a new one.", "error")
+                return redirect(url_for("reset_password"))
+            conn.execute(
+                """UPDATE students SET password_hash=?,
+                       session_version=COALESCE(session_version,0)+1
+                   WHERE id=?""",
+                (generate_password_hash(new_pw), student["id"])
+            )
+            conn.execute(
+                "UPDATE otp_codes SET is_used=1 WHERE email=? AND purpose='password_reset'",
+                (email,)
+            )
+            conn.commit()
+        session.pop("reset_email", None)
+        log_activity("student", "password_reset", f"{student['name']} (id={student['id']})")
+        _send_email_async(
+            email, f"Your password was changed - {SITE_NAME}",
+            f"Hello {student['name']},\n\nThe password of your {SITE_NAME} account was just "
+            f"changed using an email OTP, and you were logged out from all devices.\n\n"
+            f"If this was not you, contact Sir immediately.\n\nBest regards,\n{EMAIL_SENDER_NAME}\n"
+        )
+        flash("Password changed successfully. You were logged out from all devices — "
+              "please log in with your new password.", "success")
+        return redirect(url_for("login"))
+    return render_template("reset_password.html", email=session.get("reset_email", ""))
+
+
 @app.route("/login", methods=["GET", "POST"])
 @rate_limit("login", 10, 600)
 def login():
@@ -1165,6 +1383,7 @@ def login():
         session["student_id"] = student["id"]
         session["student_name"] = student["name"]
         session["student_class"] = student["class_name"]
+        session["sv"] = student["session_version"] or 0
         session.pop("is_teacher", None)
         session.pop("impersonating", None)
         ip_addr = request.headers.get("X-Forwarded-For", request.remote_addr)
@@ -1595,6 +1814,7 @@ def login_as_student(student_id):
     session["student_id"] = student["id"]
     session["student_name"] = student["name"]
     session["student_class"] = student["class_name"]
+    session["sv"] = student["session_version"] or 0
     session["impersonating"] = True
     session["is_teacher"] = True
     ip_addr = request.headers.get("X-Forwarded-For", request.remote_addr)
