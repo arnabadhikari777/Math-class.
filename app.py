@@ -2569,5 +2569,9 @@ if not all(_teacher_creds()):
     logging.getLogger(__name__).warning(
         "TEACHER_USERNAME / TEACHER_PASSWORD are not set in .env - teacher login is disabled until they are.")
 
+# Modular backend (blueprints, API v1, migrations, guards) lives in backend/.
+from backend import register_backend
+register_backend(app)
+
 if __name__ == "__main__":
     app.run(debug=DEBUG_MODE, host="0.0.0.0", port=5000)

@@ -33,3 +33,6 @@ Thumbs.db
 
 # App secret generated automatically
 .secret_key
+
+# Database backups created by backend/migrations.py
+backups/

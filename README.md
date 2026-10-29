@@ -56,3 +56,9 @@ Teacher login: set `TEACHER_USERNAME` and `TEACHER_PASSWORD` in `.env` (no defau
 - After a successful reset **every device is logged out** (`students.session_version`) and a "password changed" email is sent
 - Blocking a student now also ends their live session immediately
 - CSRF token on every form; new DB columns (`students.session_version`, `otp_codes.attempts`) are added automatically on first start
+
+## Modular backend (added)
+- `backend/` package: JSON API v1, attendance, migrations, access guards. `app.py` only calls `register_backend(app)`.
+- Docs: `BACKEND_AUDIT.md`, `BACKEND_ARCHITECTURE.md`, `BACKEND_FEATURES.md`, `API_DOCUMENTATION.md`, `MIGRATION_NOTES.md`, `TEST_REPORT.md`.
+- Tests: `python -m unittest discover -s tests -v` (runs on a temp copy; never touches `database.db`).
+- Migrations: `python -m backend.migrations status|backup|migrate|rollback <id>`.

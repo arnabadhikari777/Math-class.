@@ -1,4 +1,4 @@
-const CACHE_NAME = 'math-class-v6';
+const CACHE_NAME = 'math-class-v7';
 
 // Only truly static, non-login-dependent assets are safe to precache.
 // '/' and '/download' were removed on purpose: those pages render
@@ -68,38 +68,26 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
-  const isStaticAsset = url.pathname.startsWith('/static/');
+  if (url.origin !== self.location.origin) return;
 
-  if (isStaticAsset) {
-    // Static files never change per-student, so cache-first is fine and fast.
-    event.respondWith(
-      caches.match(event.request).then((cached) => {
-        const networked = fetch(event.request).then((response) => {
-          if (response && response.status === 200 && response.type === 'basic') {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        }).catch(() => cached);
-        return cached || networked;
-      })
-    );
-    return;
-  }
+  // Only public, per-user-independent files under /static/ are cached
+  // (stale-while-revalidate). EVERYTHING else (pages, /api/*, results,
+  // notes, PDFs, teacher panel) goes straight to the network and is never
+  // stored, so one student's data can never be shown to the next person who
+  // uses the same device, or after logout. (v6 cached every page - the v7
+  // activate step above deletes that old cache.)
+  if (!url.pathname.startsWith('/static/')) return;
 
-  // Every other page (/, /login, /student/dashboard, /take-test, etc.) depends
-  // on the student's login/session state, so it must always be requested
-  // fresh from the server first. Cache is only a fallback for when the
-  // student has no internet connection at all.
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
+    caches.match(event.request).then((cached) => {
+      const networked = fetch(event.request).then((response) => {
         if (response && response.status === 200 && response.type === 'basic') {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return response;
-      })
-      .catch(() => caches.match(event.request))
+      }).catch(() => cached);
+      return cached || networked;
+    })
   );
 });
