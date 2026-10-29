@@ -9,12 +9,30 @@ Online notes, timed MCQ tests, and teacher admin panel.
 - **Contact Sir** form (teacher mobile never shown)
 - Contact inbox, activity log, announcements, leaderboards, answer review, dark mode, PWA
 
-## Run
-```bash
-cd "Math Class"
-pip install -r requirements.txt
-export SECRET_KEY="random"
-export TEACHER_PASSWORD="strong"
-python app.py
-```
-Teacher default: username `Arnab sir`, password `2026` (change via env).
+## Setup
+
+1. Clone / extract the project
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Create your environment file:
+   ```bash
+   cp .env.example .env
+   ```
+   Then edit `.env` and fill in real values (especially `SECRET_KEY`, `TEACHER_PASSWORD`, `EMAIL_APP_PASSWORD`).
+
+4. Run:
+   ```bash
+   python app.py
+   ```
+
+Teacher default (change immediately via `.env`):
+- Username: `Arnab sir`
+- Password: `2026`
+
+## Important Security Notes
+- Never commit the real `.env` file to Git (it is already in `.gitignore`).
+- Use a strong random `SECRET_KEY`.
+- Use a Gmail **App Password**, not your normal Gmail password.
+- Change the teacher password from the default `2026`.

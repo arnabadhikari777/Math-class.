@@ -7,6 +7,15 @@ announcements, leaderboards, answer review, dark mode, PWA, activity log.
 """
 
 import os
+from pathlib import Path
+
+# Load .env file if present (for local development)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent / ".env")
+except ImportError:
+    pass  # python-dotenv not installed; rely on real environment variables
+
 import re
 import sqlite3
 import random
