@@ -9,6 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.png') }}">
 <link rel="icon" href="{{ url_for('static', filename='icon-192.png') }}">
+<meta name="csrf-token" content="{{ csrf_token() }}">
 <title>{% block title %}Math Class{% endblock %} · Arnab Math Class</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Bengali:wght@400;600;700&display=swap" rel="stylesheet">
@@ -819,7 +820,7 @@
         }
         await fetch('/api/push/subscribe', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
           body: JSON.stringify(sub.toJSON())
         });
         setBtnState(true);
@@ -839,7 +840,7 @@
           if (sub) {
             await fetch('/api/push/subscribe', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
               body: JSON.stringify(sub.toJSON())
             }).catch(() => {});
             setBtnState(true);
@@ -882,7 +883,7 @@
     function markRead(ids) {
       fetch('/api/notifications/mark-read', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}'},
         body: JSON.stringify(ids ? {ids: ids} : {})
       }).then(function() {
         const badge = document.getElementById('notifBadge');

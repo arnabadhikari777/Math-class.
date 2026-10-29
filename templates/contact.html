@@ -4,7 +4,7 @@
 <div class="card" style="max-width:560px;margin:0 auto">
   <h2>📩 Contact Sir</h2>
   <p class="text-muted">Send a message to the teacher. The teacher’s mobile number is never shown on this site.</p>
-  <form method="POST">
+  <form method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Your Name *</label>
     <input type="text" name="name" required value="{{ session.get('student_name','') }}">
     <label>Email</label>

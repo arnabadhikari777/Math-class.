@@ -4,7 +4,7 @@
 <div class="card" style="max-width:480px;margin:0 auto">
   <h2>Student Registration</h2>
   <p class="text-muted mb-1">OTP is sent only to your <strong>email</strong>. Mobile is mandatory for display/contact but never receives OTP.</p>
-  <form method="POST">
+  <form method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Full Name *</label>
     <input type="text" name="name" required>
     <label>Class *</label>
@@ -17,7 +17,8 @@
     <input type="text" name="mobile" required pattern="[0-9]{10,15}" placeholder="9876543210" maxlength="15">
     <p class="text-muted" style="font-size:.8rem;margin-top:4px">Displayed on your profile for Sir. No OTP is sent to mobile.</p>
     <label>Password *</label>
-    <input type="password" name="password" required minlength="6">
+    <input type="password" name="password" required minlength="8" pattern="(?=.*[A-Za-z])(?=.*\d).{8,}" title="At least 8 characters with letters and numbers">
+    <p class="text-muted" style="font-size:.8rem;margin-top:4px">Minimum 8 characters, with letters and numbers.</p>
     <label>Confirm Password *</label>
     <input type="password" name="confirm_password" required>
     <button type="submit" class="btn btn-primary mt-2" style="width:100%">Register</button>

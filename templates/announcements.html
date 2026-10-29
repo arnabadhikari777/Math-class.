@@ -3,7 +3,7 @@
 {% block content %}
 <div class="card">
   <h2>📢 Post a Notice</h2>
-  <form method="POST">
+  <form method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Title</label>
     <input type="text" name="title" required placeholder="e.g. Extra class on Friday">
     <label>Content</label>
@@ -38,10 +38,10 @@
         </td>
         <td class="text-muted">{{ a.created_at[:16].replace('T',' ') }}</td>
         <td class="flex gap-1">
-          <form method="POST" action="{{ url_for('toggle_announcement', aid=a.id) }}">
+          <form method="POST" action="{{ url_for('toggle_announcement', aid=a.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-sm btn-outline">{{ 'Hide' if a.is_active else 'Show' }}</button>
           </form>
-          <form method="POST" action="{{ url_for('delete_announcement', aid=a.id) }}" onsubmit="return confirm('Delete this notice?')">
+          <form method="POST" action="{{ url_for('delete_announcement', aid=a.id) }}" onsubmit="return confirm('Delete this notice?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-sm btn-danger">Delete</button>
           </form>
         </td>

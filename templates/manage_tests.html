@@ -26,13 +26,13 @@
       <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
         <a class="btn btn-sm" href="{{ url_for('add_questions', test_id=item.test.id) }}">Manage Questions</a>
         <a class="btn btn-sm btn-secondary" href="{{ url_for('test_results_view', test_id=item.test.id) }}">View Results</a>
-        <form method="POST" action="{{ url_for('toggle_test', test_id=item.test.id) }}">
+        <form method="POST" action="{{ url_for('toggle_test', test_id=item.test.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="btn btn-sm {% if item.test.is_active %}btn-outline{% endif %}" type="submit">
             {% if item.test.is_active %}Deactivate{% else %}Activate{% endif %}
           </button>
         </form>
         <form method="POST" action="{{ url_for('delete_test', test_id=item.test.id) }}"
-              onsubmit="return confirm('Permanently delete this test, all its questions, and all student submissions? This cannot be undone.');">
+              onsubmit="return confirm('Permanently delete this test, all its questions, and all student submissions? This cannot be undone.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="btn btn-sm btn-danger" type="submit">Delete permanently</button>
         </form>
       </div>

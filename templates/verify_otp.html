@@ -7,7 +7,7 @@
     A 6-digit OTP code has been sent to your email address:<br><strong>{{ email }}</strong>
   </p>
 
-  <form method="POST" action="{{ url_for('verify_otp') }}">
+  <form method="POST" action="{{ url_for('verify_otp') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="text" name="otp_code" maxlength="6" required
            placeholder="Enter 6-digit code"
            style="text-align:center; font-size:1.4rem; letter-spacing:6px;">

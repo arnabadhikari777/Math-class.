@@ -26,12 +26,12 @@
   {% if r.teacher_reply %}
   <div class="announce mt-1"><strong>Your reply:</strong><div>{{ r.teacher_reply }}</div></div>
   {% else %}
-  <form method="POST" action="{{ url_for('reply_contact', cid=r.id) }}" class="mt-1">
+  <form method="POST" action="{{ url_for('reply_contact', cid=r.id) }}" class="mt-1"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <textarea name="reply" placeholder="Write a reply note (stored for your records)…" rows="2"></textarea>
     <button class="btn btn-sm btn-primary mt-1">Save Reply</button>
   </form>
   {% endif %}
-  <form method="POST" action="{{ url_for('close_contact', cid=r.id) }}" class="mt-1">
+  <form method="POST" action="{{ url_for('close_contact', cid=r.id) }}" class="mt-1"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button class="btn btn-sm btn-outline">Mark Closed</button>
   </form>
 </div>

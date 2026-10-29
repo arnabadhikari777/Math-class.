@@ -36,3 +36,12 @@ Teacher default (change immediately via `.env`):
 - Use a strong random `SECRET_KEY`.
 - Use a Gmail **App Password**, not your normal Gmail password.
 - Change the teacher password from the default `2026`.
+
+## Security (added)
+- CSRF tokens on every POST form and API call
+- Teacher password stored hashed (change it in Teacher panel -> Change Password)
+- Student/teacher passwords: min 8 chars, letters + numbers (existing accounts keep working)
+- Rate limits on login, teacher login, register, OTP verify/resend and contact
+- Debug off by default (`FLASK_DEBUG=1` only locally); HTTPS redirect + HSTS (`FORCE_HTTPS=0` for local http)
+- Random `.secret_key` auto-created if `SECRET_KEY` is not set
+- Security headers (nosniff, frame protection, referrer policy)

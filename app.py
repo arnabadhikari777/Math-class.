@@ -7,6 +7,9 @@ announcements, leaderboards, answer review, dark mode, PWA, activity log.
 """
 
 import os
+import hmac
+import time
+import secrets
 from pathlib import Path
 
 # Load .env file if present (for local development)
@@ -35,6 +38,7 @@ from flask import (
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # Web Push (real phone/browser notifications for students who allow it)
 try:
@@ -62,12 +66,12 @@ STATIC_FOLDER = os.path.join(BASE_DIR, "static")
 ALLOWED_EXTENSIONS = {"pdf"}
 MAX_CONTENT_LENGTH = 15 * 1024 * 1024
 
-TEACHER_USERNAME = os.environ.get("TEACHER_USERNAME", "Arnab sir")
-TEACHER_PASSWORD = os.environ.get("TEACHER_PASSWORD", "2026")
+TEACHER_USERNAME = os.environ.get("TEACHER_USERNAME", "")
+TEACHER_PASSWORD = os.environ.get("TEACHER_PASSWORD", "")
 TEACHER_MOBILE = os.environ.get("TEACHER_MOBILE", "")
 
-EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS", "arnabadhikari125117y@gmail.com")
-EMAIL_APP_PASSWORD = os.environ.get("EMAIL_APP_PASSWORD", "fghzwxzficwqqhpr")
+EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS", "")
+EMAIL_APP_PASSWORD = os.environ.get("EMAIL_APP_PASSWORD", "")
 EMAIL_SENDER_NAME = os.environ.get("EMAIL_SENDER_NAME", "Arnab Math Class")
 
 OTP_EXPIRY_MINUTES = 10
@@ -84,16 +88,49 @@ SITE_NAME = "Arnab Math Class"
 # every previously-subscribed browser resubscribe).
 VAPID_PUBLIC_KEY = os.environ.get(
     "VAPID_PUBLIC_KEY",
-    "BM03GIFjfMkXkHoIn8OD7OFebxcRb3ETgY-ZfpnqTzFF_S8t73v2lmGPDg8xhAi_LMhqKeNUCnjuenHx7znBy_M"
+    ""
 )
 VAPID_PRIVATE_KEY = os.environ.get(
     "VAPID_PRIVATE_KEY",
-    "yqPSNEFX6FsoThsYcOE5Ulp0Dk_hfAp_wKZY8SMoAHU"
+    ""
 )
 VAPID_CLAIMS_EMAIL = os.environ.get("VAPID_CLAIMS_EMAIL", EMAIL_ADDRESS)
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "CHANGE_THIS_TO_A_RANDOM_SECRET_KEY_1234567890")
+
+
+def _load_secret_key():
+    """Use SECRET_KEY from env; otherwise create + reuse a random key file
+    (never fall back to a publicly known default)."""
+    key = os.environ.get("SECRET_KEY", "").strip()
+    if key and key != "CHANGE_THIS_TO_A_RANDOM_SECRET_KEY_1234567890":
+        return key
+    path = os.path.join(BASE_DIR, ".secret_key")
+    try:
+        if os.path.isfile(path):
+            with open(path, "r", encoding="utf-8") as fh:
+                saved = fh.read().strip()
+            if saved:
+                return saved
+        new_key = secrets.token_hex(32)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(new_key)
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+        return new_key
+    except OSError:
+        return secrets.token_hex(32)
+
+
+app.secret_key = _load_secret_key()
+DEBUG_MODE = os.environ.get("FLASK_DEBUG", "0").strip().lower() in ("1", "true", "yes")
+# Redirect http -> https (localhost is always exempt). Set FORCE_HTTPS=0 to disable.
+FORCE_HTTPS = os.environ.get("FORCE_HTTPS", "1").strip().lower() not in ("0", "false", "no")
+# Trust the proxy's X-Forwarded-For / X-Forwarded-Proto (PythonAnywhere etc.)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
+app.config["SESSION_COOKIE_SECURE"] = FORCE_HTTPS and not DEBUG_MODE
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 # Keep users logged in across browser restarts / PWA launches (30 days)
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
@@ -312,6 +349,15 @@ def init_db():
             )
         """)
 
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS rate_limit_hits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bucket TEXT NOT NULL,
+                ts REAL NOT NULL
+            )
+        """)
+        c.execute("CREATE INDEX IF NOT EXISTS idx_rate_bucket ON rate_limit_hits(bucket, ts)")
+
         conn.commit()
 
 
@@ -332,7 +378,7 @@ def allowed_file(filename):
 
 
 def generate_otp():
-    return "".join(random.choices(string.digits, k=6))
+    return "".join(secrets.choice(string.digits) for _ in range(6))
 
 
 def send_otp_email(to_email, otp_code, purpose="registration"):
@@ -796,6 +842,137 @@ def normalize_mobile(m):
     return digits[-10:] if len(digits) >= 10 else digits
 
 
+
+# ---------------------------------------------------------------------------
+# Security helpers: CSRF, rate limiting, password rules, teacher password hash
+# ---------------------------------------------------------------------------
+def get_csrf_token():
+    token = session.get("_csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["_csrf_token"] = token
+    return token
+
+
+app.jinja_env.globals["csrf_token"] = get_csrf_token
+
+
+def _is_local_host():
+    host = (request.host or "").split(":")[0].lower()
+    return host in ("localhost", "127.0.0.1", "[::1]", "::1")
+
+
+@app.before_request
+def enforce_https():
+    if FORCE_HTTPS and not DEBUG_MODE and not request.is_secure and not _is_local_host():
+        return redirect(request.url.replace("http://", "https://", 1), code=301)
+
+
+@app.before_request
+def csrf_protect():
+    if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
+        return None
+    if request.endpoint == "static":
+        return None
+    sent = request.form.get("csrf_token") or request.headers.get("X-CSRFToken") or ""
+    expected = session.get("_csrf_token") or ""
+    if expected and sent and hmac.compare_digest(sent, expected):
+        return None
+    if request.path.startswith("/api/") or request.is_json:
+        return jsonify({"ok": False, "error": "CSRF token missing or invalid."}), 400
+    flash("Your session expired or the form was invalid. Please try again.", "error")
+    return redirect(request.referrer or url_for("index"))
+
+
+@app.after_request
+def add_security_headers(resp):
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    if FORCE_HTTPS and request.is_secure:
+        resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+    return resp
+
+
+def _rate_ok(name, limit, window_seconds):
+    """SQLite-backed sliding window (works across multiple workers)."""
+    bucket = f"{name}:{request.remote_addr or 'unknown'}"
+    now = time.time()
+    try:
+        with get_db() as conn:
+            conn.execute("DELETE FROM rate_limit_hits WHERE ts < ?", (now - 86400,))
+            used = conn.execute(
+                "SELECT COUNT(*) FROM rate_limit_hits WHERE bucket=? AND ts>?",
+                (bucket, now - window_seconds)
+            ).fetchone()[0]
+            if used >= limit:
+                conn.commit()
+                return False
+            conn.execute("INSERT INTO rate_limit_hits (bucket, ts) VALUES (?,?)", (bucket, now))
+            conn.commit()
+    except Exception:
+        return True  # never lock everyone out because of a DB hiccup
+    return True
+
+
+def rate_limit(name, limit, window_seconds, methods=("POST",)):
+    def deco(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            if request.method in methods and not _rate_ok(name, limit, window_seconds):
+                minutes = max(1, window_seconds // 60)
+                flash(f"Too many attempts. Please wait about {minutes} minute(s) and try again.", "error")
+                return redirect(url_for("index") if request.method != "POST" else request.path)
+            return f(*args, **kwargs)
+        return wrapper
+    return deco
+
+
+def validate_password_strength(password):
+    """Returns an error message, or None when the password is acceptable."""
+    if len(password) < 8:
+        return "Password must be at least 8 characters."
+    if len(password) > 128:
+        return "Password is too long (max 128 characters)."
+    if not re.search(r"[A-Za-z]", password) or not re.search(r"\d", password):
+        return "Password must contain both letters and numbers."
+    return None
+
+
+def _get_setting(key):
+    with get_db() as conn:
+        row = conn.execute("SELECT value FROM site_settings WHERE key=?", (key,)).fetchone()
+    return row["value"] if row else None
+
+
+def _set_setting(key, value):
+    with get_db() as conn:
+        conn.execute("INSERT OR REPLACE INTO site_settings (key, value) VALUES (?,?)", (key, value))
+        conn.commit()
+
+
+def ensure_teacher_password_hash():
+    """Teacher password is stored hashed (like students). Seeded once from
+    TEACHER_PASSWORD_HASH or TEACHER_PASSWORD in .env; after that it can be
+    changed from the Teacher panel."""
+    if _get_setting("teacher_password_hash"):
+        return
+    preset = os.environ.get("TEACHER_PASSWORD_HASH", "").strip()
+    _set_setting("teacher_password_hash", preset or generate_password_hash(TEACHER_PASSWORD))
+
+
+def verify_teacher_password(password):
+    stored = _get_setting("teacher_password_hash")
+    if not stored:
+        ensure_teacher_password_hash()
+        stored = _get_setting("teacher_password_hash")
+    try:
+        return check_password_hash(stored, password)
+    except Exception:
+        return False
+
+
 def student_login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -848,6 +1025,7 @@ def download_app():
 
 
 @app.route("/contact", methods=["GET", "POST"])
+@rate_limit("contact", 5, 3600)
 def contact():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
@@ -874,6 +1052,7 @@ def contact():
 
 
 @app.route("/register", methods=["GET", "POST"])
+@rate_limit("register", 10, 3600)
 def register():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
@@ -892,8 +1071,9 @@ def register():
         if password != confirm_password:
             flash("Passwords do not match.", "error")
             return redirect(url_for("register"))
-        if len(password) < 6:
-            flash("Password must be at least 6 characters.", "error")
+        pw_err = validate_password_strength(password)
+        if pw_err:
+            flash(pw_err, "error")
             return redirect(url_for("register"))
         with get_db() as conn:
             existing = conn.execute("SELECT * FROM students WHERE email=?", (email,)).fetchone()
@@ -923,6 +1103,7 @@ def register():
 
 
 @app.route("/verify-otp", methods=["GET", "POST"])
+@rate_limit("verify_otp", 10, 600)
 def verify_otp():
     email = session.get("pending_email")
     if not email:
@@ -944,6 +1125,7 @@ def verify_otp():
 
 
 @app.route("/resend-otp")
+@rate_limit("resend_otp", 5, 3600, methods=("GET",))
 def resend_otp():
     email = session.get("pending_email")
     if not email:
@@ -954,6 +1136,7 @@ def resend_otp():
 
 
 @app.route("/login", methods=["GET", "POST"])
+@rate_limit("login", 10, 600)
 def login():
     # Already logged in → go to dashboard (persistent session)
     if session.get("student_id") and not session.get("is_teacher"):
@@ -1202,13 +1385,15 @@ def test_leaderboard(test_id):
 
 
 @app.route("/teacher/login", methods=["GET", "POST"])
+@rate_limit("teacher_login", 5, 600)
 def teacher_login():
     if session.get("is_teacher") and not session.get("student_id"):
         return redirect(url_for("teacher_dashboard"))
     if request.method == "POST":
         username = request.form.get("username", "")
         password = request.form.get("password", "")
-        if username == TEACHER_USERNAME and password == TEACHER_PASSWORD:
+        if hmac.compare_digest(username.encode("utf-8"), TEACHER_USERNAME.encode("utf-8")) \
+                and verify_teacher_password(password):
             session.clear()
             session.permanent = True
             session["is_teacher"] = True
@@ -1297,6 +1482,10 @@ def admit_student():
             return redirect(url_for("admit_student"))
         if not mobile or len(mobile) < 10:
             flash("Valid 10-digit mobile is mandatory.", "error")
+            return redirect(url_for("admit_student"))
+        pw_err = validate_password_strength(password)
+        if pw_err:
+            flash(pw_err, "error")
             return redirect(url_for("admit_student"))
         with get_db() as conn:
             existing = conn.execute("SELECT id FROM students WHERE email=?", (email,)).fetchone()
@@ -1974,6 +2163,39 @@ def teacher_activity():
     return render_template("teacher_activity.html", logs=logs)
 
 
+@app.route("/teacher/change-password", methods=["GET", "POST"])
+@teacher_login_required
+@rate_limit("teacher_pw", 5, 600)
+def teacher_change_password():
+    if request.method == "POST":
+        current = request.form.get("current_password", "")
+        new_pw = request.form.get("new_password", "")
+        confirm = request.form.get("confirm_password", "")
+        if not verify_teacher_password(current):
+            flash("Current password is incorrect.", "error")
+        elif new_pw != confirm:
+            flash("New passwords do not match.", "error")
+        elif validate_password_strength(new_pw):
+            flash(validate_password_strength(new_pw), "error")
+        else:
+            _set_setting("teacher_password_hash", generate_password_hash(new_pw))
+            log_activity("teacher", "change_password", "Teacher password changed")
+            flash("Teacher password updated.", "success")
+            return redirect(url_for("teacher_dashboard"))
+        return redirect(url_for("teacher_change_password"))
+    return render_template("teacher_change_password.html")
+
+
+@app.errorhandler(404)
+def not_found(e):
+    return render_template("error.html", code=404, message="Page not found."), 404
+
+
+@app.errorhandler(500)
+def server_error(e):
+    return render_template("error.html", code=500, message="Something went wrong on our side."), 500
+
+
 @app.route("/manifest.json")
 def manifest():
     return send_from_directory(STATIC_FOLDER, "manifest.json")
@@ -2136,6 +2358,7 @@ def api_push_unsubscribe():
 
 # Ensure tables exist on import (e.g. gunicorn / production)
 init_db()
+ensure_teacher_password_hash()
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=DEBUG_MODE, host="0.0.0.0", port=5000)

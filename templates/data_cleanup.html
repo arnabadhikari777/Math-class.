@@ -37,7 +37,7 @@
         <span class="helper-text"> · Class {{ t.class_name }} · {{ t.q_count }} questions · {{ t.r_count }} submissions</span>
       </div>
       <form method="POST" action="{{ url_for('delete_test', test_id=t.id) }}"
-            onsubmit="return confirm('Permanently delete «{{ t.title }}» and all related data?');">
+            onsubmit="return confirm('Permanently delete «{{ t.title }}» and all related data?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-sm btn-danger" type="submit">Delete permanently</button>
       </form>
     </div>
@@ -51,37 +51,37 @@
   <h3>Bulk cleanup actions</h3>
   <div style="display:flex; flex-direction:column; gap:12px; max-width:520px;">
     <form method="POST" action="{{ url_for('cleanup_action') }}"
-          onsubmit="return confirm('Delete ALL inactive tests and their questions/results?');">
+          onsubmit="return confirm('Delete ALL inactive tests and their questions/results?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="delete_inactive_tests">
       <button class="btn btn-danger btn-full" type="submit">Delete all inactive tests ({{ counts.inactive_tests }})</button>
     </form>
 
     <form method="POST" action="{{ url_for('cleanup_action') }}"
-          onsubmit="return confirm('Delete all expired OTP codes?');">
+          onsubmit="return confirm('Delete all expired OTP codes?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="clear_otps">
       <button class="btn btn-outline btn-full" type="submit">Clear OTP codes ({{ counts.otp }})</button>
     </form>
 
     <form method="POST" action="{{ url_for('cleanup_action') }}"
-          onsubmit="return confirm('Delete login history older than 90 days?');">
+          onsubmit="return confirm('Delete login history older than 90 days?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="clear_old_logins">
       <button class="btn btn-outline btn-full" type="submit">Clear old login history (keep last 90 days)</button>
     </form>
 
     <form method="POST" action="{{ url_for('cleanup_action') }}"
-          onsubmit="return confirm('Delete activity log entries older than 90 days?');">
+          onsubmit="return confirm('Delete activity log entries older than 90 days?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="clear_old_activity">
       <button class="btn btn-outline btn-full" type="submit">Clear old activity log (keep last 90 days)</button>
     </form>
 
     <form method="POST" action="{{ url_for('cleanup_action') }}"
-          onsubmit="return confirm('Delete all read/handled contact messages?');">
+          onsubmit="return confirm('Delete all read/handled contact messages?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="clear_old_contacts">
       <button class="btn btn-outline btn-full" type="submit">Clear handled contact messages</button>
     </form>
 
     <form method="POST" action="{{ url_for('cleanup_action') }}"
-          onsubmit="return confirm('VACUUM the database to reclaim disk space?');">
+          onsubmit="return confirm('VACUUM the database to reclaim disk space?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="vacuum">
       <button class="btn btn-secondary btn-full" type="submit">Optimize database (VACUUM)</button>
     </form>

@@ -3,7 +3,7 @@
 {% block content %}
 <div class="card" style="max-width:420px; margin:0 auto;">
   <h2>Student Login</h2>
-  <form method="POST" action="{{ url_for('login') }}">
+  <form method="POST" action="{{ url_for('login') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Email Address</label>
     <input type="email" name="email" required placeholder="you@example.com">
 

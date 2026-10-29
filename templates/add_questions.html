@@ -12,7 +12,7 @@
     Enter the question text and four options, select the correct answer, then use <strong>+ Add another question</strong> to add more. Click <strong>Save all questions</strong> when done.
   </p>
 
-  <form method="POST" action="{{ url_for('add_questions', test_id=test.id) }}" accept-charset="UTF-8" id="questionsForm">
+  <form method="POST" action="{{ url_for('add_questions', test_id=test.id) }}" accept-charset="UTF-8" id="questionsForm"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div id="questionBlocks"></div>
 
     <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:16px;">
@@ -33,7 +33,7 @@
           Correct Answer: <span class="badge badge-green">{{ q.correct_option }}</span> | Marks: {{ q.marks }}
         </div>
         <form method="POST" action="{{ url_for('delete_question', question_id=q.id, test_id=test.id) }}"
-              onsubmit="return confirm('Delete this question?');">
+              onsubmit="return confirm('Delete this question?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="btn btn-sm btn-danger" type="submit">Delete</button>
         </form>
       </div>

@@ -55,19 +55,19 @@
             <a href="{{ url_for('edit_student', student_id=s.id) }}" class="btn btn-sm btn-primary">Edit</a>
             <a href="{{ url_for('student_history', student_id=s.id) }}" class="btn btn-sm btn-outline">History</a>
             {% if not s.is_verified %}
-            <form method="POST" action="{{ url_for('verify_student', student_id=s.id) }}">
+            <form method="POST" action="{{ url_for('verify_student', student_id=s.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="btn btn-sm btn-primary">Verify</button>
             </form>
             {% endif %}
             {% if s.is_verified and not s.is_blocked %}
-            <form method="POST" action="{{ url_for('login_as_student', student_id=s.id) }}">
+            <form method="POST" action="{{ url_for('login_as_student', student_id=s.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="btn btn-sm btn-accent" title="Login as this student">Login as</button>
             </form>
             {% endif %}
-            <form method="POST" action="{{ url_for('block_student', student_id=s.id) }}">
+            <form method="POST" action="{{ url_for('block_student', student_id=s.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="btn btn-sm btn-outline">{{ 'Unblock' if s.is_blocked else 'Block' }}</button>
             </form>
-            <form method="POST" action="{{ url_for('delete_student', student_id=s.id) }}" onsubmit="return confirm('Permanently delete {{ s.name }}?')">
+            <form method="POST" action="{{ url_for('delete_student', student_id=s.id) }}" onsubmit="return confirm('Permanently delete {{ s.name }}?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="btn btn-sm btn-danger">Delete</button>
             </form>
           </div>
