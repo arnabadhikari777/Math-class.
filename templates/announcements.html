@@ -2,7 +2,7 @@
 {% block title %}Announcements{% endblock %}
 {% block content %}
 <div class="card">
-  <h2>📢 Post a Notice</h2>
+  <h2>Post a Notice</h2>
   <form method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Title</label>
     <input type="text" name="title" required placeholder="e.g. Extra class on Friday">

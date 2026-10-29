@@ -2,7 +2,7 @@
 {% block title %}Create Test{% endblock %}
 {% block content %}
 <div class="card" style="max-width:480px;">
-  <h2>📝 Create a New Test</h2>
+  <h2>Create a New Test</h2>
   <form method="POST" action="{{ url_for('create_test') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Test Title</label>
     <input type="text" name="title" required placeholder="e.g., Algebra - Model Test 1">

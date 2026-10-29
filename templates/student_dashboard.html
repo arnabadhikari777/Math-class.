@@ -2,7 +2,7 @@
 {% block title %}Dashboard{% endblock %}
 {% block content %}
 <div class="card">
-  <h2>Hello, {{ student.name }}! 👋</h2>
+  <h2>Hello, {{ student.name }}</h2>
   <p class="text-muted">Class: <strong>{{ student.class_name }}</strong>
     {% if student.roll %} · Roll: {{ student.roll }}{% endif %}
   </p>
@@ -25,7 +25,7 @@
 
 {% if announcements %}
 <div class="card">
-  <h3>📢 Notices for you</h3>
+  <h3>Notices for you</h3>
   {% for a in announcements %}
   <div class="announce">
     <strong>{{ a.title }}</strong>
@@ -36,8 +36,9 @@
 {% endif %}
 
 <div class="card">
-  <h2>📝 Available Tests</h2>
+  <h2>Available Tests</h2>
   {% if tests %}
+  <div style="overflow-x:auto">
   <table>
     <thead>
       <tr><th>Title</th><th>Subject</th><th>Duration</th><th>Action</th></tr>
@@ -51,7 +52,7 @@
         <td>
           {% if t.id in attempted_test_ids %}
             <a href="{{ url_for('test_result', test_id=t.id) }}" class="btn btn-sm btn-outline">View Result</a>
-            <a href="{{ url_for('test_leaderboard', test_id=t.id) }}" class="btn btn-sm btn-outline">🏆 Board</a>
+            <a href="{{ url_for('test_leaderboard', test_id=t.id) }}" class="btn btn-sm btn-outline">Leaderboard</a>
           {% else %}
             <a href="{{ url_for('take_test', test_id=t.id) }}" class="btn btn-sm btn-primary">Start Test</a>
           {% endif %}
@@ -60,14 +61,16 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% else %}
-  <p class="text-muted">No active tests for your class right now.</p>
+  <p class="text-muted empty-state">No active tests for your class right now.</p>
   {% endif %}
 </div>
 
 {% if my_results %}
 <div class="card">
-  <h2>📊 Your Recent Results</h2>
+  <h2>Your Recent Results</h2>
+  <div style="overflow-x:auto">
   <table>
     <thead>
       <tr><th>Test</th><th>Score</th><th>%</th><th>Date</th><th></th></tr>
@@ -89,6 +92,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 {% endif %}
 {% endblock %}

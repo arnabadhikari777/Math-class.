@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Teacher Login{% endblock %}
 {% block content %}
-<div class="card" style="max-width:400px; margin:0 auto;">
-  <h2>🧑‍🏫 Teacher Login</h2>
+<div class="card" style="max-width:400px;margin:0 auto">
+  <h2>Teacher Login</h2>
   <form method="POST" action="{{ url_for('teacher_login') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Username</label>
-    <input type="text" name="username" required>
+    <input type="text" name="username" required autocomplete="username">
 
     <label>Password</label>
-    <input type="password" name="password" required>
+    <input type="password" name="password" required autocomplete="current-password">
 
-    <button class="btn btn-full" type="submit">Login</button>
+    <button class="btn btn-primary btn-full mt-2" type="submit" style="width:100%">Login</button>
   </form>
 </div>
 {% endblock %}

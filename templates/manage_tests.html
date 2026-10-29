@@ -4,7 +4,7 @@
 <div class="card">
   <h2>All Tests</h2>
   <div style="display:flex; gap:10px; flex-wrap:wrap;">
-    <a class="btn" href="{{ url_for('create_test') }}">+ Create a New Test</a>
+    <a class="btn btn-primary" href="{{ url_for('create_test') }}">+ Create a New Test</a>
     <a class="btn btn-outline" href="{{ url_for('data_cleanup') }}">Data Cleanup</a>
   </div>
 </div>
@@ -24,7 +24,7 @@
         Questions: {{ item.q_count }} | Submitted by: {{ item.r_count }} students
       </p>
       <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
-        <a class="btn btn-sm" href="{{ url_for('add_questions', test_id=item.test.id) }}">Manage Questions</a>
+        <a class="btn btn-sm btn-primary" href="{{ url_for('add_questions', test_id=item.test.id) }}">Manage Questions</a>
         <a class="btn btn-sm btn-secondary" href="{{ url_for('test_results_view', test_id=item.test.id) }}">View Results</a>
         <form method="POST" action="{{ url_for('toggle_test', test_id=item.test.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="btn btn-sm {% if item.test.is_active %}btn-outline{% endif %}" type="submit">

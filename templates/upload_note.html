@@ -2,7 +2,7 @@
 {% block title %}Upload Note{% endblock %}
 {% block content %}
 <div class="card" style="max-width:520px;">
-  <h2>📤 Upload a New Note</h2>
+  <h2>Upload a New Note</h2>
   <form method="POST" action="{{ url_for('upload_note') }}" enctype="multipart/form-data" id="noteForm"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Note Title</label>
     <input type="text" name="title" required placeholder="e.g., Trigonometry - Chapter 5">
@@ -26,7 +26,7 @@
 </div>
 
 <div class="card">
-  <h3>📚 All Uploaded Notes</h3>
+  <h3>All Uploaded Notes</h3>
   {% if notes %}
     <table>
       <tr><th>Title</th><th>Subject</th><th>Class</th><th>Upload Date</th><th>Action</th></tr>
