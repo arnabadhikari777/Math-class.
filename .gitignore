@@ -15,7 +15,7 @@ env/
 ENV/
 
 # Database (optional — uncomment if you don't want to commit DB)
-# database.db
+database.db
 
 # Uploads (keep structure, ignore files)
 uploads/notes/*
