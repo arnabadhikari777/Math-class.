@@ -5,8 +5,8 @@
   <div class="cd-card {{ j.id }}" data-state="{{ j.state }}">
     <div class="cd-top">
       <div>
-        <div class="cd-title">🎯 {{ j.label }}</div>
-        <div class="cd-date">📅 {{ j.date_text }}</div>
+        <div class="cd-title"><i class="fa-solid fa-bullseye" aria-hidden="true"></i> {{ j.label }}</div>
+        <div class="cd-date"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i> {{ j.date_text }}</div>
       </div>
       <span class="cd-pill">{% if j.state == 'live' %}LIVE{% elif j.state == 'done' %}DONE{% else %}{{ j.days_left }} days{% endif %}</span>
     </div>

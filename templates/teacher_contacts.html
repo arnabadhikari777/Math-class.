@@ -2,7 +2,7 @@
 {% block title %}Inbox{% endblock %}
 {% block content %}
 <div class="card">
-  <h2>📩 Contact Requests</h2>
+  <h2><i class="fa-solid fa-envelope" aria-hidden="true"></i> Contact Requests</h2>
   <div class="flex gap-1 mt-1">
     <a href="?status=all" class="btn btn-sm {{ 'btn-primary' if status=='all' else 'btn-outline' }}">All</a>
     <a href="?status=new" class="btn btn-sm {{ 'btn-primary' if status=='new' else 'btn-outline' }}">New</a>

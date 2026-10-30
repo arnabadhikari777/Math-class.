@@ -6,12 +6,12 @@
 <div class="card">
   <div class="welcome">
     <div>
-      <h2>Hello, {{ student.name }} 👋</h2>
+      <h2>Hello, {{ student.name }} <i class="fa-solid fa-hand" aria-hidden="true"></i></h2>
       <p class="text-muted">Class <strong>{{ class_display(student.class_name) }}</strong>{% if student.roll %} · Roll {{ student.roll }}{% endif %}</p>
       <div class="chip-row">
-        <span class="chip lvl">⭐ Level {{ I.level }} · {{ I.xp }} XP</span>
-        {% if I.streak %}<span class="chip fire">🔥 {{ I.streak }}-day streak</span>{% endif %}
-        {% if I.rank %}<span class="chip">🏅 Rank #{{ I.rank }} of {{ I.class_size }} in class</span>{% endif %}
+        <span class="chip lvl"><i class="fa-solid fa-star" aria-hidden="true"></i> Level {{ I.level }} · {{ I.xp }} XP</span>
+        {% if I.streak %}<span class="chip fire"><i class="fa-solid fa-fire" aria-hidden="true"></i> {{ I.streak }}-day streak</span>{% endif %}
+        {% if I.rank %}<span class="chip"><i class="fa-solid fa-award" aria-hidden="true"></i> Rank #{{ I.rank }} of {{ I.class_size }} in class</span>{% endif %}
       </div>
     </div>
     <div class="ring-wrap" title="Average score">
@@ -35,9 +35,9 @@
 
 {% if I.tips %}
 <div class="card">
-  <div class="card-head"><h2>🧠 Smart coach</h2><span class="badge badge-info">personalised</span></div>
+  <div class="card-head"><h2><i class="fa-solid fa-brain" aria-hidden="true"></i> Smart coach</h2><span class="badge badge-info">personalised</span></div>
   {% for t in I.tips %}
-  <div class="tip {{ t.kind }}"><span class="ic">{{ t.icon }}</span><div><b>{{ t.title }}</b><p>{{ t.text }}</p></div></div>
+  <div class="tip {{ t.kind }}{% if t.jee %} jee-only{% endif %}"><span class="ic"><i class="fa-solid fa-{{ t.icon }}" aria-hidden="true"></i></span><div><b>{{ t.title }}</b><p>{{ t.text }}</p></div></div>
   {% endfor %}
 </div>
 {% endif %}
@@ -47,9 +47,9 @@
   {% if I.pcts %}
   <div class="card">
     <div class="card-head">
-      <h3>📈 Score trend</h3>
-      {% if I.trend == 'up' %}<span class="badge badge-success">▲ +{{ I.delta|abs|round|int }} pts</span>
-      {% elif I.trend == 'down' %}<span class="badge badge-danger">▼ −{{ I.delta|abs|round|int }} pts</span>
+      <h3><i class="fa-solid fa-arrow-trend-up" aria-hidden="true"></i> Score trend</h3>
+      {% if I.trend == 'up' %}<span class="badge badge-success"><i class="fa-solid fa-caret-up" aria-hidden="true"></i> +{{ I.delta|abs|round|int }} pts</span>
+      {% elif I.trend == 'down' %}<span class="badge badge-danger"><i class="fa-solid fa-caret-down" aria-hidden="true"></i> −{{ I.delta|abs|round|int }} pts</span>
       {% elif I.trend == 'flat' %}<span class="badge badge-gray">steady</span>{% endif %}
     </div>
     <div class="spark">
@@ -60,7 +60,7 @@
   {% endif %}
   {% if I.subjects %}
   <div class="card">
-    <h3>🎯 Subject strength</h3>
+    <h3><i class="fa-solid fa-bullseye" aria-hidden="true"></i> Subject strength</h3>
     {% for s in I.subjects %}
     <div class="bar-row">
       <span class="nm" title="{{ s.name }}">{{ s.name }}</span>
@@ -76,7 +76,7 @@
 
 {% if announcements %}
 <div class="card">
-  <h3>📣 Notices for you</h3>
+  <h3><i class="fa-solid fa-bullhorn" aria-hidden="true"></i> Notices for you</h3>
   {% for a in announcements %}
   <div class="announce">
     <strong>{{ a.title }}</strong>
@@ -87,32 +87,32 @@
 {% endif %}
 
 <div class="card" id="tests">
-  <div class="card-head"><h2>📝 Available Tests</h2><span class="badge badge-info">{{ tests|length }}</span></div>
+  <div class="card-head"><h2><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Available Tests</h2><span class="badge badge-info">{{ tests|length }}</span></div>
   {% if tests %}
     {% for t in tests %}
     <div class="test-item">
       <div>
         <div class="ttl">{{ t.title }}</div>
-        <div class="meta">{{ t.subject or 'General' }} · ⏱ {{ t.duration_minutes }} min</div>
+        <div class="meta">{{ t.subject or 'General' }} · <i class="fa-solid fa-stopwatch" aria-hidden="true"></i> {{ t.duration_minutes }} min</div>
       </div>
       <div class="flex gap-1 flex-wrap" style="justify-content:flex-end">
         {% if t.id in attempted_test_ids %}
           <a href="{{ url_for('test_result', test_id=t.id) }}" class="btn btn-sm btn-outline">Result</a>
-          <a href="{{ url_for('test_leaderboard', test_id=t.id) }}" class="btn btn-sm btn-outline">🏆</a>
+          <a href="{{ url_for('test_leaderboard', test_id=t.id) }}" class="btn btn-sm btn-outline"><i class="fa-solid fa-trophy" aria-hidden="true"></i></a>
         {% else %}
-          <a href="{{ url_for('take_test', test_id=t.id) }}" class="btn btn-sm btn-primary">Start ▶</a>
+          <a href="{{ url_for('take_test', test_id=t.id) }}" class="btn btn-sm btn-primary">Start <i class="fa-solid fa-play" aria-hidden="true"></i></a>
         {% endif %}
       </div>
     </div>
     {% endfor %}
   {% else %}
-  <p class="text-muted empty-state">No active tests for your class right now. 🎉</p>
+  <p class="text-muted empty-state">No active tests for your class right now. <i class="fa-solid fa-circle-check" aria-hidden="true"></i></p>
   {% endif %}
 </div>
 
 {% if my_results %}
 <div class="card">
-  <h2>🗂 Your Recent Results</h2>
+  <h2><i class="fa-solid fa-folder-open" aria-hidden="true"></i> Your Recent Results</h2>
   <div style="overflow-x:auto">
   <table>
     <thead><tr><th>Test</th><th>Score</th><th>%</th><th>Date</th><th></th></tr></thead>

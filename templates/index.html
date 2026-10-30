@@ -11,7 +11,7 @@
       <a href="{{ url_for('register') }}" class="btn btn-primary">Register as Student</a>
       <a href="{{ url_for('login') }}" class="btn btn-outline">Student Login</a>
     {% endif %}
-    <a href="{{ url_for('download_app') }}" class="btn btn-outline">📲 Get the App</a>
+    <a href="{{ url_for('download_app') }}" class="btn btn-outline"><i class="fa-solid fa-mobile-screen-button" aria-hidden="true"></i> Get the App</a>
   </div>
 </div>
 
@@ -25,7 +25,7 @@
 
 {% if announcements %}
 <div class="card">
-  <h2>📣 Latest Notices</h2>
+  <h2><i class="fa-solid fa-bullhorn" aria-hidden="true"></i> Latest Notices</h2>
   {% for a in announcements %}
   <div class="announce">
     <strong>{{ a.title }}</strong>
@@ -39,32 +39,32 @@
 <div class="section-title">What you get</div>
 <div class="grid-2">
   <div class="card hoverable">
-    <div class="feature-ic">📚</div>
+    <div class="feature-ic"><i class="fa-solid fa-book-open" aria-hidden="true"></i></div>
     <h3>Class Notes</h3>
     <p class="text-muted">Chapter-wise PDF notes uploaded by Sir. Download anytime, search in seconds.</p>
   </div>
   <div class="card hoverable">
-    <div class="feature-ic">⏱️</div>
+    <div class="feature-ic"><i class="fa-solid fa-stopwatch" aria-hidden="true"></i></div>
     <h3>Timed Tests</h3>
     <p class="text-muted">MCQ tests with a live timer, question navigator, instant score and full answer review.</p>
   </div>
   <div class="card hoverable">
-    <div class="feature-ic">🧠</div>
+    <div class="feature-ic"><i class="fa-solid fa-brain" aria-hidden="true"></i></div>
     <h3>Smart Insights</h3>
     <p class="text-muted">Your dashboard finds weak subjects, tracks your trend and streak, and suggests what to do next.</p>
   </div>
   <div class="card hoverable">
-    <div class="feature-ic">🏆</div>
+    <div class="feature-ic"><i class="fa-solid fa-trophy" aria-hidden="true"></i></div>
     <h3>Leaderboard &amp; Rank</h3>
     <p class="text-muted">See your rank and percentile after every test and climb the class leaderboard.</p>
   </div>
   <div class="card hoverable">
-    <div class="feature-ic">🌗</div>
+    <div class="feature-ic"><i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i></div>
     <h3>Light &amp; Dark Mode</h3>
     <p class="text-muted">Switch between Auto, Light and Dark from the top bar. Easy on the eyes at night.</p>
   </div>
   <div class="card hoverable">
-    <div class="feature-ic">🤖</div>
+    <div class="feature-ic"><i class="fa-solid fa-robot" aria-hidden="true"></i></div>
     <h3>AI Assistant</h3>
     <p class="text-muted">Stuck on a concept? Ask the built-in assistant. Sir can review the chats.</p>
   </div>

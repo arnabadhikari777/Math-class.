@@ -10,7 +10,7 @@
 </div>
 
 <div class="card">
-  <h3>🕒 Login History ({{ history|length }})</h3>
+  <h3><i class="fa-solid fa-clock" aria-hidden="true"></i> Login History ({{ history|length }})</h3>
   {% if history %}
     <table>
       <tr><th>Login Time</th><th>IP Address</th></tr>
@@ -27,7 +27,7 @@
 </div>
 
 <div class="card">
-  <h3>📊 Test Results</h3>
+  <h3><i class="fa-solid fa-chart-column" aria-hidden="true"></i> Test Results</h3>
   {% if results %}
     <table>
       <tr><th>Test Name</th><th>Score</th><th>Submission Time</th></tr>

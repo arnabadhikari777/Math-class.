@@ -2,15 +2,15 @@
 {% block title %}Student Answers · {{ test.title }}{% endblock %}
 {% block content %}
 <div class="card">
-  <h2>📝 {{ student.name }} — Answer Sheet</h2>
+  <h2><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> {{ student.name }} — Answer Sheet</h2>
   <p class="helper-text">
     Test: <strong>{{ test.title }}</strong> · Class: {{ student.class_name }} ·
     Roll: {{ student.roll or '-' }} · Score: <strong>{{ result.score }} / {{ result.total_marks }}</strong>
     ({{ pct }}%) · Submitted: {{ result.submitted_at[:16].replace('T',' ') }}
   </p>
   <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
-    <a class="btn" href="{{ url_for('download_student_result_pdf', test_id=test.id, result_id=result.id) }}">📄 Download PDF</a>
-    <a class="btn btn-secondary" href="{{ url_for('test_results_view', test_id=test.id) }}">← Back to Results</a>
+    <a class="btn" href="{{ url_for('download_student_result_pdf', test_id=test.id, result_id=result.id) }}"><i class="fa-solid fa-file-pdf" aria-hidden="true"></i> Download PDF</a>
+    <a class="btn btn-secondary" href="{{ url_for('test_results_view', test_id=test.id) }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to Results</a>
   </div>
 </div>
 
@@ -36,9 +36,9 @@
     ">
       <span>
         <strong>{{ letter }}.</strong> {{ a[opt] }}
-        {% if letter == a.correct_option %} ✓ Correct{% endif %}
+        {% if letter == a.correct_option %} <i class="fa-solid fa-check" aria-hidden="true"></i> Correct{% endif %}
         {% if letter == a.selected_option %}
-          <strong style="color:var(--primary);"> ← Student's choice</strong>
+          <strong style="color:var(--primary);"> <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Student's choice</strong>
         {% endif %}
       </span>
     </div>

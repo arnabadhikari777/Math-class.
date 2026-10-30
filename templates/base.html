@@ -23,10 +23,16 @@
       document.documentElement.setAttribute('data-theme-pref', pref || 'auto');
     } catch (e) {}
   })();
+  /* JEE countdown is opt-in: shown only if this device switched it on. */
+  (function () {
+    try { document.documentElement.setAttribute('data-jee', localStorage.getItem('jeeCountdown') === '1' ? 'on' : 'off'); }
+    catch (e) { document.documentElement.setAttribute('data-jee', 'off'); }
+  })();
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Bengali:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
 <style>
   /* ═════════════ Design tokens ═════════════ */
   :root, [data-theme="light"] {
@@ -140,6 +146,13 @@
   .jee-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 var(--accent); animation: ping 2s infinite; }
   .jee-chip[data-state="live"] .dot { background: #ef4444; }
   @keyframes ping { 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+  html[data-jee="off"] .jee-chip, html[data-jee="off"] .cd-grid, html[data-jee="off"] .jee-only { display: none !important; }
+  .jee-toggle { display: inline-flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); padding: 3px 10px; border-radius: 999px; font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+  .jee-toggle:hover { color: var(--primary); border-color: var(--primary); }
+  html[data-jee="on"] .jee-toggle { color: var(--primary); background: var(--primary-soft); border-color: transparent; }
+  .jee-toggle .on-txt { display: none; }
+  html[data-jee="on"] .jee-toggle .on-txt { display: inline; }
+  html[data-jee="on"] .jee-toggle .off-txt { display: none; }
   .top-right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .top-link { color: var(--text-muted); text-decoration: none; font-weight: 500; }
   .top-link:hover { color: var(--primary); text-decoration: none; }
@@ -348,7 +361,8 @@
   .bar-row .pc { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 
   .tip { display: flex; gap: .75rem; align-items: flex-start; padding: .75rem .85rem; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-soft); margin-bottom: .55rem; }
-  .tip .ic { font-size: 1.3rem; line-height: 1.2; }
+  .tip .ic { font-size: 1.15rem; line-height: 1.2; width: 1.5rem; text-align: center; color: var(--primary); }
+  .tip.good .ic { color: var(--success); } .tip.warn .ic { color: var(--warning); }
   .tip b { display: block; font-size: .92rem; }
   .tip p { font-size: .84rem; color: var(--text-muted); margin-top: 1px; }
   .tip.good { background: var(--success-soft); border-color: transparent; } .tip.good b { color: var(--success); }
@@ -447,24 +461,30 @@
 </head>
 <body class="{% if session.get('student_id') or session.get('is_teacher') %}has-bottom-nav{% endif %}">
 {% set ep = request.endpoint or '' %}
-<!-- Top utility bar: JEE countdown chips + quick links -->
+<!-- Top utility bar: optional JEE countdown (off by default) + quick links -->
+{% set teacher_area = session.get('is_teacher') and not session.get('student_id') %}
 <div class="top-utility">
   <div class="top-left">
+    {% if not teacher_area %}
+    <button type="button" class="jee-toggle" id="jeeToggle" aria-pressed="false" title="Show or hide the JEE Main countdown on this device">
+      <i class="fa-solid fa-hourglass-half" aria-hidden="true"></i><span class="off-txt">Show JEE countdown</span><span class="on-txt">Hide JEE countdown</span>
+    </button>
     {% for j in jee_sessions %}{% if j.state != 'done' %}
     <span class="jee-chip" data-countdown="{{ j.iso }}" data-cd-mode="chip" data-cd-window-days="{{ j.window_days }}" data-state="{{ j.state }}" title="{{ j.label }} · {{ j.date_text }}">
       <span class="dot"></span><span class="lbl">JEE Main {{ j.short }}</span><span class="lbl-s">{{ j.id|upper }}</span>
       <b class="cd-text">{% if j.state == 'live' %}Live now{% else %}{{ j.days_left }}d{% endif %}</b>
     </span>
     {% endif %}{% endfor %}
+    {% endif %}
   </div>
   <div class="top-right">
-    <a href="{{ url_for('download_app') }}" class="top-link">📲 Get App</a>
-    <a href="{{ url_for('contact') }}" class="top-link">📩 Contact Sir</a>
+    <a href="{{ url_for('download_app') }}" class="top-link"><i class="fa-solid fa-mobile-screen-button" aria-hidden="true"></i> Get App</a>
+    <a href="{{ url_for('contact') }}" class="top-link"><i class="fa-solid fa-envelope" aria-hidden="true"></i> Contact Sir</a>
     {% if session.get('student_id') %}
-    <a href="{{ url_for('notes_list') }}" class="top-link top-download">⬇ Notes</a>
+    <a href="{{ url_for('notes_list') }}" class="top-link top-download"><i class="fa-solid fa-download" aria-hidden="true"></i> Notes</a>
     {% endif %}
     {% if not session.get('is_teacher') %}
-    <a href="{{ url_for('teacher_login') }}" class="top-link top-teacher">🧑‍🏫 Teacher</a>
+    <a href="{{ url_for('teacher_login') }}" class="top-link top-teacher"><i class="fa-solid fa-chalkboard-user" aria-hidden="true"></i> Teacher</a>
     {% endif %}
   </div>
 </div>
@@ -475,19 +495,19 @@
   </button>
   <div class="nav-links" id="navLinks">
     {% if session.get('impersonating') %}
-      <span class="nav-name" style="background:var(--warning-soft);color:var(--warning)">👁 Viewing as {{ session.get('student_name') }}</span>
+      <span class="nav-name" style="background:var(--warning-soft);color:var(--warning)"><i class="fa-solid fa-eye" aria-hidden="true"></i> Viewing as {{ session.get('student_name') }}</span>
     {% endif %}
     {% if session.get('student_id') and not session.get('is_teacher') %}
       <span class="nav-name">{{ session.get('student_name', 'Student') }}</span>
       <div class="notif-wrap" id="notifWrap">
         <button type="button" class="notif-btn" id="notifBtn" aria-label="Notifications" title="Notifications">
-          🔔{% if unread_notif_count %}<span class="notif-badge" id="notifBadge">{{ unread_notif_count }}</span>{% endif %}
+          <i class="fa-solid fa-bell" aria-hidden="true"></i>{% if unread_notif_count %}<span class="notif-badge" id="notifBadge">{{ unread_notif_count }}</span>{% endif %}
         </button>
         <div class="notif-panel" id="notifPanel" hidden>
           <div class="notif-panel-head">
             <strong>Notifications</strong>
             <div class="flex gap-1">
-              <button type="button" class="btn btn-sm btn-outline" id="pushSubBtn" title="Get notifications on this phone/browser even when the app is closed">🔔 Enable alerts</button>
+              <button type="button" class="btn btn-sm btn-outline" id="pushSubBtn" title="Get notifications on this phone/browser even when the app is closed"><i class="fa-solid fa-bell" aria-hidden="true"></i> Enable alerts</button>
               <button type="button" class="btn btn-sm btn-outline" id="markAllReadBtn">Mark all read</button>
             </div>
           </div>
@@ -522,16 +542,16 @@
       <a href="{{ url_for('teacher_logout') }}" class="btn-logout">Logout</a>
     {% elif session.get('is_teacher') and session.get('student_id') %}
       <a href="{{ url_for('student_dashboard') }}">Student view</a>
-      <a href="{{ url_for('logout') }}" class="btn-logout">↩ Exit to Teacher</a>
+      <a href="{{ url_for('logout') }}" class="btn-logout"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Exit to Teacher</a>
     {% else %}
       <a href="{{ url_for('login') }}" class="{{ 'active' if ep == 'login' }}">Student Login</a>
       <a href="{{ url_for('register') }}" class="{{ 'active' if ep == 'register' }}">Register</a>
       <a href="{{ url_for('contact') }}" class="{{ 'active' if ep == 'contact' }}">Contact</a>
     {% endif %}
     <div class="theme-seg" role="group" aria-label="Colour theme">
-      <button type="button" data-mode="auto"  aria-pressed="false" title="Match device" aria-label="Match device theme">🖥</button>
-      <button type="button" data-mode="light" aria-pressed="false" title="Light mode" aria-label="Light mode">☀️</button>
-      <button type="button" data-mode="dark"  aria-pressed="false" title="Dark mode" aria-label="Dark mode">🌙</button>
+      <button type="button" data-mode="auto"  aria-pressed="false" title="Match device" aria-label="Match device theme"><i class="fa-solid fa-desktop" aria-hidden="true"></i></button>
+      <button type="button" data-mode="light" aria-pressed="false" title="Light mode" aria-label="Light mode"><i class="fa-solid fa-sun" aria-hidden="true"></i></button>
+      <button type="button" data-mode="dark"  aria-pressed="false" title="Dark mode" aria-label="Dark mode"><i class="fa-solid fa-moon" aria-hidden="true"></i></button>
     </div>
   </div>
 </nav>
@@ -558,28 +578,43 @@
 {# Mobile bottom navigation #}
 {% if session.get('student_id') and not session.get('is_teacher') %}
 <nav class="bottom-nav" aria-label="Main">
-  <a href="{{ url_for('student_dashboard') }}" class="{{ 'active' if ep == 'student_dashboard' }}"><span class="bi">🏠</span>Home</a>
-  <a href="{{ url_for('student_dashboard') }}#tests"><span class="bi">📝</span>Tests</a>
-  <a href="{{ url_for('notes_list') }}" class="{{ 'active' if ep == 'notes_list' }}"><span class="bi">📚</span>Notes</a>
-  <a href="{{ url_for('student_profile') }}" class="{{ 'active' if ep == 'student_profile' }}"><span class="bi">👤</span>Profile</a>
+  <a href="{{ url_for('student_dashboard') }}" class="{{ 'active' if ep == 'student_dashboard' }}"><span class="bi"><i class="fa-solid fa-house" aria-hidden="true"></i></span>Home</a>
+  <a href="{{ url_for('student_dashboard') }}#tests"><span class="bi"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i></span>Tests</a>
+  <a href="{{ url_for('notes_list') }}" class="{{ 'active' if ep == 'notes_list' }}"><span class="bi"><i class="fa-solid fa-book-open" aria-hidden="true"></i></span>Notes</a>
+  <a href="{{ url_for('student_profile') }}" class="{{ 'active' if ep == 'student_profile' }}"><span class="bi"><i class="fa-solid fa-user" aria-hidden="true"></i></span>Profile</a>
 </nav>
 {% elif session.get('is_teacher') and not session.get('student_id') %}
 <nav class="bottom-nav" aria-label="Main">
-  <a href="{{ url_for('teacher_dashboard') }}" class="{{ 'active' if ep == 'teacher_dashboard' }}"><span class="bi">📊</span>Home</a>
-  <a href="{{ url_for('students_list') }}" class="{{ 'active' if ep == 'students_list' }}"><span class="bi">👥</span>Students</a>
-  <a href="{{ url_for('manage_tests') }}" class="{{ 'active' if ep == 'manage_tests' }}"><span class="bi">📝</span>Tests</a>
-  <a href="{{ url_for('manage_announcements') }}" class="{{ 'active' if ep == 'manage_announcements' }}"><span class="bi">📣</span>Notices</a>
-  <a href="{{ url_for('teacher_contacts') }}" class="{{ 'active' if ep == 'teacher_contacts' }}"><span class="bi">✉️</span>Inbox</a>
+  <a href="{{ url_for('teacher_dashboard') }}" class="{{ 'active' if ep == 'teacher_dashboard' }}"><span class="bi"><i class="fa-solid fa-chart-column" aria-hidden="true"></i></span>Home</a>
+  <a href="{{ url_for('students_list') }}" class="{{ 'active' if ep == 'students_list' }}"><span class="bi"><i class="fa-solid fa-users" aria-hidden="true"></i></span>Students</a>
+  <a href="{{ url_for('manage_tests') }}" class="{{ 'active' if ep == 'manage_tests' }}"><span class="bi"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i></span>Tests</a>
+  <a href="{{ url_for('manage_announcements') }}" class="{{ 'active' if ep == 'manage_announcements' }}"><span class="bi"><i class="fa-solid fa-bullhorn" aria-hidden="true"></i></span>Notices</a>
+  <a href="{{ url_for('teacher_contacts') }}" class="{{ 'active' if ep == 'teacher_contacts' }}"><span class="bi"><i class="fa-solid fa-envelope" aria-hidden="true"></i></span>Inbox</a>
 </nav>
 {% endif %}
 
 <canvas id="confetti"></canvas>
 
 {% if session.get('student_id') and not session.get('is_teacher') %}
-<link rel="stylesheet" href="{{ url_for('static', filename='ai-widget.css') }}?v=8">
-<script src="{{ url_for('static', filename='ai-widget.js') }}?v=8" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='ai-widget.css') }}?v=9">
+<script src="{{ url_for('static', filename='ai-widget.js') }}?v=9" defer></script>
 {% endif %}
-<script src="{{ url_for('static', filename='countdown.js') }}?v=1" defer></script>
+<script src="{{ url_for('static', filename='countdown.js') }}?v=2" defer></script>
+<script>
+  // Optional JEE countdown: remembered per device, off by default.
+  (function () {
+    var btn = document.getElementById('jeeToggle');
+    if (!btn) return;
+    function sync() { btn.setAttribute('aria-pressed', document.documentElement.getAttribute('data-jee') === 'on' ? 'true' : 'false'); }
+    btn.addEventListener('click', function () {
+      var on = document.documentElement.getAttribute('data-jee') !== 'on';
+      document.documentElement.setAttribute('data-jee', on ? 'on' : 'off');
+      try { localStorage.setItem('jeeCountdown', on ? '1' : '0'); } catch (e) {}
+      sync();
+    });
+    sync();
+  })();
+</script>
 
 <script>
   // ── Theme: Auto (device) / Light / Dark ──
@@ -650,12 +685,12 @@
     function setBtnState(subscribed) {
       if (!subBtn) return;
       if (Notification && Notification.permission === 'denied') {
-        subBtn.textContent = '🔕 Notifications blocked';
+        subBtn.innerHTML = '<i class="fa-solid fa-bell-slash" aria-hidden="true"></i> Notifications blocked';
         subBtn.disabled = true;
       } else if (subscribed) {
-        subBtn.textContent = '✅ Alerts enabled';
+        subBtn.innerHTML = '<i class="fa-solid fa-circle-check" aria-hidden="true"></i> Alerts enabled';
       } else {
-        subBtn.textContent = '🔔 Enable alerts';
+        subBtn.innerHTML = '<i class="fa-solid fa-bell" aria-hidden="true"></i> Enable alerts';
       }
     }
 

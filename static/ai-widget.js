@@ -22,6 +22,13 @@
   function storeGet() { try { return sessionStorage.getItem(STORE_KEY); } catch (e) { return null; } }
   function storeSet(v) { try { if (v == null) sessionStorage.removeItem(STORE_KEY); else sessionStorage.setItem(STORE_KEY, String(v)); } catch (e) {} }
 
+  function icon(name) {
+    var i = document.createElement('i');
+    i.className = 'fa-solid fa-' + name;
+    i.setAttribute('aria-hidden', 'true');
+    return i;
+  }
+
   function el(tag, cls, text) {
     var n = document.createElement(tag);
     if (cls) n.className = cls;
@@ -50,7 +57,7 @@
     });
   }
 
-  var fab = el('button', 'aiw-fab', '💬');
+  var fab = el('button', 'aiw-fab'); fab.appendChild(icon('comment-dots'));
   fab.type = 'button';
   fab.setAttribute('aria-label', 'Open AI assistant');
   fab.setAttribute('aria-expanded', 'false');
@@ -62,7 +69,7 @@
   head.appendChild(el('b', null, 'AI Assistant'));
   var histBtn = el('button', null, 'History'); histBtn.type = 'button';
   var newBtn = el('button', null, 'New chat'); newBtn.type = 'button';
-  var closeBtn = el('button', null, '✕'); closeBtn.type = 'button'; closeBtn.setAttribute('aria-label', 'Close');
+  var closeBtn = el('button', null); closeBtn.appendChild(icon('xmark')); closeBtn.type = 'button'; closeBtn.setAttribute('aria-label', 'Close');
   head.appendChild(histBtn); head.appendChild(newBtn); head.appendChild(closeBtn);
   var note = el('div', 'aiw-note', 'Your teacher can review these chats. Don\u2019t share passwords or private details.');
   var testBar = el('div', 'aiw-test', 'A test is open: I can explain concepts but I won\u2019t solve its questions.');

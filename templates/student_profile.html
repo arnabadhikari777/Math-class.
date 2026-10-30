@@ -2,9 +2,9 @@
 {% block title %}My Profile{% endblock %}
 {% block content %}
 <div class="card">
-  <h2>👤 {{ student.name }}</h2>
+  <h2><i class="fa-solid fa-user" aria-hidden="true"></i> {{ student.name }}</h2>
   <p class="text-muted">
-    {{ student.email }}{% if student.mobile %} · 📱 {{ student.mobile }}{% endif %} · Class {{ student.class_name }}
+    {{ student.email }}{% if student.mobile %} · <i class="fa-solid fa-mobile-screen" aria-hidden="true"></i> {{ student.mobile }}{% endif %} · Class {{ student.class_name }}
     {% if student.roll %} · Roll {{ student.roll }}{% endif %}<br>
     Registered: {{ student.registered_at[:16].replace('T',' ') }}
   </p>

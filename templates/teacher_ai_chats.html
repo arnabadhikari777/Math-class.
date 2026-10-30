@@ -147,8 +147,13 @@
         if(!r.data.results.length){out.appendChild(el('div','aic-empty','No AI has a key or a saved name in .env yet.'));return;}
         r.data.results.forEach(function(x){
           var w=el('div','aic-msg '+(x.status==='ok'?'assistant':'user'));
-          var icon=x.status==='ok'?'✅ ':(x.status==='failed'?'❌ ':'⚪ ');
-          w.appendChild(el('div','aic-meta',icon+x.provider+'  →  students see: '+x.shown_as+(x.ms!=null?'  ·  '+x.ms+' ms':'')));
+          var ic=document.createElement('i');
+          ic.className=x.status==='ok'?'fa-solid fa-circle-check':(x.status==='failed'?'fa-solid fa-circle-xmark':'fa-regular fa-circle');
+          ic.setAttribute('aria-hidden','true');
+          var meta=el('div','aic-meta');
+          meta.appendChild(ic);
+          meta.appendChild(document.createTextNode(' '+x.provider+'  \u2192  students see: '+x.shown_as+(x.ms!=null?'  \u00b7  '+x.ms+' ms':'')));
+          w.appendChild(meta);
           w.appendChild(document.createTextNode(x.detail));
           out.appendChild(w);
         });

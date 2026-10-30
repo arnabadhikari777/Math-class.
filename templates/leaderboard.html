@@ -2,7 +2,7 @@
 {% block title %}Leaderboard · {{ test.title }}{% endblock %}
 {% block content %}
 <div class="card">
-  <h2>🏆 Leaderboard — {{ test.title }}</h2>
+  <h2><i class="fa-solid fa-trophy" aria-hidden="true"></i> Leaderboard — {{ test.title }}</h2>
   <p class="text-muted mb-1">Ranked by score (higher is better), then by earliest submission.</p>
   {% if rows %}
   <table>
@@ -21,9 +21,9 @@
       {% for r in rows %}
       <tr>
         <td>
-          {% if loop.index == 1 %}🥇
-          {% elif loop.index == 2 %}🥈
-          {% elif loop.index == 3 %}🥉
+          {% if loop.index == 1 %}<i class="fa-solid fa-medal" style="color:#f59e0b" aria-hidden="true"></i>
+          {% elif loop.index == 2 %}<i class="fa-solid fa-medal" style="color:#94a3b8" aria-hidden="true"></i>
+          {% elif loop.index == 3 %}<i class="fa-solid fa-medal" style="color:#b45309" aria-hidden="true"></i>
           {% else %}{{ loop.index }}{% endif %}
         </td>
         <td><strong>{{ r.name }}</strong></td>
@@ -43,7 +43,7 @@
   <p class="text-muted">No submissions yet. Be the first!</p>
   {% endif %}
   <div class="mt-2">
-    <a href="{{ url_for('student_dashboard') }}" class="btn btn-outline">← Dashboard</a>
+    <a href="{{ url_for('student_dashboard') }}" class="btn btn-outline"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Dashboard</a>
   </div>
 </div>
 {% endblock %}

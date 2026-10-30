@@ -15,8 +15,6 @@
   </div>
 </div>
 
-{% include "_jee_cards.html" %}
-
 <div class="stats">
   <div class="stat"><div class="num">{{ total_students }}</div><div class="label">Verified Students</div></div>
   <div class="stat"><div class="num">{{ T.active_7d }}</div><div class="label">Active (7 days)</div></div>
@@ -27,7 +25,7 @@
 </div>
 
 <div class="card">
-  <h3>⚡ Quick Actions</h3>
+  <h3><i class="fa-solid fa-bolt" aria-hidden="true"></i> Quick Actions</h3>
   <div class="flex gap-1 flex-wrap mt-1">
     <a href="{{ url_for('students_list') }}" class="btn btn-primary">Students</a>
     <a href="{{ url_for('admit_student') }}" class="btn btn-primary">Admit Student</a>
@@ -44,7 +42,7 @@
 
 <div class="grid-auto">
   <div class="card">
-    <h3>📊 Submissions, last 7 days</h3>
+    <h3><i class="fa-solid fa-chart-column" aria-hidden="true"></i> Submissions, last 7 days</h3>
     <div class="spark" style="height:90px">
       {% for d in T.daily %}<i style="height: {{ d.h }}%" data-v="{{ d.n }}" title="{{ d.label }}: {{ d.n }}"></i>{% endfor %}
     </div>
@@ -54,7 +52,7 @@
   </div>
 
   <div class="card">
-    <h3>🧪 Average by recent test</h3>
+    <h3><i class="fa-solid fa-flask" aria-hidden="true"></i> Average by recent test</h3>
     {% if T.test_avgs %}
       {% for x in T.test_avgs %}
       <div class="bar-row">
@@ -69,24 +67,24 @@
 
 <div class="grid-auto">
   <div class="card">
-    <h3>🚨 Students needing attention</h3>
+    <h3><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Students needing attention</h3>
     {% if T.at_risk %}
       {% for s in T.at_risk %}
       <div class="tip warn">
-        <span class="ic">⚠️</span>
+        <span class="ic"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i></span>
         <div><b>{{ s.name }} <span class="text-muted" style="font-weight:500">· {{ class_display(s.class_name) }}</span></b>
         <p>Average {{ s.avg|round|int }}% · {{ s.reason }}</p></div>
       </div>
       {% endfor %}
-    {% else %}<p class="text-muted">Nobody is flagged right now. 👏</p>{% endif %}
+    {% else %}<p class="text-muted">Nobody is flagged right now. <i class="fa-solid fa-thumbs-up" aria-hidden="true"></i></p>{% endif %}
   </div>
 
   <div class="card">
-    <h3>🌟 Top performers</h3>
+    <h3><i class="fa-solid fa-star" aria-hidden="true"></i> Top performers</h3>
     {% if T.top %}
       {% for s in T.top %}
       <div class="bar-row" style="grid-template-columns: 24px 1fr 44px">
-        <span>{{ ['🥇','🥈','🥉','4','5'][loop.index0] }}</span>
+        <span>{{ ['<i class="fa-solid fa-medal" style="color:#f59e0b" aria-hidden="true"></i>','<i class="fa-solid fa-medal" style="color:#94a3b8" aria-hidden="true"></i>','<i class="fa-solid fa-medal" style="color:#b45309" aria-hidden="true"></i>','4','5'][loop.index0]|safe }}</span>
         <span class="nm">{{ s.name }} <span class="text-muted" style="font-weight:500">· {{ s.n }} test{{ '' if s.n == 1 else 's' }}</span></span>
         <span class="pc">{{ s.avg|round|int }}%</span>
       </div>
@@ -97,10 +95,10 @@
 
 {% if T.hard_questions %}
 <div class="card">
-  <h3>🧩 Hardest questions (lowest accuracy)</h3>
+  <h3><i class="fa-solid fa-puzzle-piece" aria-hidden="true"></i> Hardest questions (lowest accuracy)</h3>
   {% for q in T.hard_questions %}
   <div class="tip">
-    <span class="ic">❓</span>
+    <span class="ic"><i class="fa-solid fa-circle-question" aria-hidden="true"></i></span>
     <div><b>{{ q.text }}{% if q.text|length >= 90 %}…{% endif %}</b>
     <p>{{ q.test }} · only {{ q.acc }}% correct ({{ q.n }} answers). Worth re-teaching.</p></div>
   </div>
@@ -110,7 +108,7 @@
 
 <div class="grid-auto">
   <div class="card">
-    <h3>🔐 Recent Student Logins</h3>
+    <h3><i class="fa-solid fa-lock" aria-hidden="true"></i> Recent Student Logins</h3>
     {% if recent_logins %}
     <table>
       <thead><tr><th>Name</th><th>Class</th><th>Time</th><th></th></tr></thead>
@@ -132,7 +130,7 @@
 
   {% if announcements %}
   <div class="card">
-    <h3>📣 Latest Notices</h3>
+    <h3><i class="fa-solid fa-bullhorn" aria-hidden="true"></i> Latest Notices</h3>
     {% for a in announcements %}
     <div class="announce">
       <strong>{{ a.title }}</strong>

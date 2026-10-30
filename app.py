@@ -828,38 +828,38 @@ def build_student_insights(conn, student, my_results, tests, attempted_test_ids)
         ins["next_jee"] = nxt
         tips = []
         if not rows:
-            tips.append(("info", "🚀", "Take your first test",
+            tips.append(("info", "rocket", "Take your first test",
                          "One test unlocks your personal analytics: strengths, weak areas and rank."))
         else:
             if ins["trend"] == "up":
-                tips.append(("good", "📈", "You are improving",
+                tips.append(("good", "arrow-trend-up", "You are improving",
                              "Your last scores are %.0f points higher than before. Keep this rhythm." % abs(ins["delta"])))
             elif ins["trend"] == "down":
-                tips.append(("warn", "📉", "Scores slipped a little",
+                tips.append(("warn", "arrow-trend-down", "Scores slipped a little",
                              "Recent tests are %.0f points lower. Re-read your wrong answers before the next test." % abs(ins["delta"])))
             if ins["weakest"] and ins["weakest"]["avg"] < 60:
                 w = ins["weakest"]
-                tips.append(("warn", "🎯", "Focus on " + w["name"],
+                tips.append(("warn", "bullseye", "Focus on " + w["name"],
                              "Your average there is %.0f%%, the lowest of your subjects. Practise 10 questions today." % w["avg"]))
             if ins["wrong_total"] >= 5:
-                tips.append(("info", "🧠", "Mistake bank: %d" % ins["wrong_total"],
+                tips.append(("info", "brain", "Mistake bank: %d" % ins["wrong_total"],
                              "Open your latest result and redo every question you got wrong. This is the fastest way to jump marks."))
             if ins["streak"] >= 3:
-                tips.append(("good", "🔥", "%d-day streak" % ins["streak"], "Do not break the chain. One short test today keeps it alive."))
+                tips.append(("good", "fire", "%d-day streak" % ins["streak"], "Do not break the chain. One short test today keeps it alive."))
             elif ins["streak"] == 0 and rows:
-                tips.append(("info", "⏰", "Start a streak", "Attempt a test today and build a daily habit."))
+                tips.append(("info", "clock", "Start a streak", "Attempt a test today and build a daily habit."))
             if ins["pending"]:
-                tips.append(("info", "📝", "%d test%s waiting" % (ins["pending"], "" if ins["pending"] == 1 else "s"),
+                tips.append(("info", "pen-to-square", "%d test%s waiting" % (ins["pending"], "" if ins["pending"] == 1 else "s"),
                              "New tests are ready for your class. Start with the oldest one."))
         if nxt:
             d = nxt["days_left"]
             if d <= 14:
-                tips.append(("warn", "⏳", "%d days to %s" % (d, nxt["short"]),
+                tips.append(("warn", "hourglass-half", "%d days to %s" % (d, nxt["short"]),
                              "Time for full-length mocks, error-log revision and 7+ hours of sleep."))
             elif d <= 60:
-                tips.append(("info", "⏳", "%d days to %s" % (d, nxt["short"]),
+                tips.append(("info", "hourglass-half", "%d days to %s" % (d, nxt["short"]),
                              "Aim for %d timed tests every week and revise formulae daily." % ins["week_goal"]))
-        ins["tips"] = [dict(kind=k, icon=i, title=t, text=x) for k, i, t, x in tips[:5]]
+        ins["tips"] = [dict(kind=k, icon=i, title=t, text=x, jee=(i == "hourglass-half")) for k, i, t, x in tips[:5]]
     except Exception:
         app.logger.exception("build_student_insights failed")
     return ins
