@@ -3,7 +3,7 @@
 {% block content %}
 <div class="hero">
   <h1>Welcome to <strong>Arnab Math Class</strong></h1>
-  <p>Download notes, take timed online tests, track your progress, and climb the leaderboard — all in one place.</p>
+  <p>Notes, timed tests and smart analytics in one place. Know your weak chapters, track your rank and get ready for JEE Main.</p>
   <div class="hero-actions">
     {% if session.get('student_id') %}
       <a href="{{ url_for('student_dashboard') }}" class="btn btn-primary">Go to Dashboard</a>
@@ -11,28 +11,21 @@
       <a href="{{ url_for('register') }}" class="btn btn-primary">Register as Student</a>
       <a href="{{ url_for('login') }}" class="btn btn-outline">Student Login</a>
     {% endif %}
-    <a href="{{ url_for('download_app') }}" class="btn btn-outline">Get the App</a>
+    <a href="{{ url_for('download_app') }}" class="btn btn-outline">📲 Get the App</a>
   </div>
 </div>
 
+{% include "_jee_cards.html" %}
+
 <div class="stats">
-  <div class="stat">
-    <div class="num">{{ total_students }}+</div>
-    <div class="label">Registered Students</div>
-  </div>
-  <div class="stat">
-    <div class="num">{{ total_tests }}+</div>
-    <div class="label">Live Tests</div>
-  </div>
-  <div class="stat">
-    <div class="num">{{ total_notes }}+</div>
-    <div class="label">Notes Available</div>
-  </div>
+  <div class="stat"><div class="num">{{ total_students }}+</div><div class="label">Registered Students</div></div>
+  <div class="stat"><div class="num">{{ total_tests }}+</div><div class="label">Live Tests</div></div>
+  <div class="stat"><div class="num">{{ total_notes }}+</div><div class="label">Notes Available</div></div>
 </div>
 
 {% if announcements %}
 <div class="card">
-  <h2>Latest Notices</h2>
+  <h2>📣 Latest Notices</h2>
   {% for a in announcements %}
   <div class="announce">
     <strong>{{ a.title }}</strong>
@@ -43,46 +36,43 @@
 </div>
 {% endif %}
 
+<div class="section-title">What you get</div>
 <div class="grid-2">
-  <div class="card">
-    <h3>Notes</h3>
-    <p class="text-muted">Class-wise PDF notes uploaded by Sir. Download anytime.</p>
+  <div class="card hoverable">
+    <div class="feature-ic">📚</div>
+    <h3>Class Notes</h3>
+    <p class="text-muted">Chapter-wise PDF notes uploaded by Sir. Download anytime, search in seconds.</p>
   </div>
-  <div class="card">
+  <div class="card hoverable">
+    <div class="feature-ic">⏱️</div>
     <h3>Timed Tests</h3>
-    <p class="text-muted">MCQ tests with countdown timer, instant scoring and answer review.</p>
+    <p class="text-muted">MCQ tests with a live timer, question navigator, instant score and full answer review.</p>
   </div>
-  <div class="card">
-    <h3>Leaderboard</h3>
-    <p class="text-muted">See how you rank against classmates after every test.</p>
+  <div class="card hoverable">
+    <div class="feature-ic">🧠</div>
+    <h3>Smart Insights</h3>
+    <p class="text-muted">Your dashboard finds weak subjects, tracks your trend and streak, and suggests what to do next.</p>
   </div>
-  <div class="card">
-    <h3>Dark Mode</h3>
-    <p class="text-muted">Study comfortably day or night. Toggle from the navbar.</p>
+  <div class="card hoverable">
+    <div class="feature-ic">🏆</div>
+    <h3>Leaderboard &amp; Rank</h3>
+    <p class="text-muted">See your rank and percentile after every test and climb the class leaderboard.</p>
   </div>
-</div>
-
-<div class="card">
-  <h2>Why Students Love This Class</h2>
-  <div class="grid-3">
-    <div class="item-box">
-      <div class="item-title">Instant Results</div>
-      <div class="item-meta">See your score, correct answers, and explanations the moment you submit a test.</div>
-    </div>
-    <div class="item-box">
-      <div class="item-title">Learn Anywhere</div>
-      <div class="item-meta">Install the app on your phone and study offline-friendly, right from your home screen.</div>
-    </div>
-    <div class="item-box">
-      <div class="item-title">Never Miss an Update</div>
-      <div class="item-meta">Class notices and new tests show up on your dashboard as soon as Sir posts them.</div>
-    </div>
+  <div class="card hoverable">
+    <div class="feature-ic">🌗</div>
+    <h3>Light &amp; Dark Mode</h3>
+    <p class="text-muted">Switch between Auto, Light and Dark from the top bar. Easy on the eyes at night.</p>
+  </div>
+  <div class="card hoverable">
+    <div class="feature-ic">🤖</div>
+    <h3>AI Assistant</h3>
+    <p class="text-muted">Stuck on a concept? Ask the built-in assistant. Sir can review the chats.</p>
   </div>
 </div>
 
 <div class="card text-center">
   <h2>Take Math Class With You</h2>
-  <p class="text-muted mb-1">Install the app on your phone or laptop for quick, one-tap access to notes and tests.</p>
+  <p class="text-muted mb-1">Install the app on your phone for one-tap access to notes, tests and alerts.</p>
   <a href="{{ url_for('download_app') }}" class="btn btn-primary mt-1">Download / Install App</a>
 </div>
 {% endblock %}
