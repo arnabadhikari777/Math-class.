@@ -1,40 +1,60 @@
 {% extends "base.html" %}
 {% block title %}Result · {{ test.title }}{% endblock %}
 {% block content %}
-<div class="card text-center" style="padding:2rem">
+{% set I = insights %}
+<div class="card text-center" style="padding:1.8rem 1.2rem">
   <h2>{{ test.title }}</h2>
-  <div style="font-size:2.8rem;font-weight:800;margin:.6rem 0;color:var(--primary)">
-    {{ result.score }} / {{ result.total_marks }}
+  <div class="ring {{ 'good' if pct >= 70 else 'warn' if passed else 'bad' }}" style="--p: {{ pct }}; --size:132px; margin:.6rem auto">
+    <span style="font-size:1.7rem">{{ pct|round|int }}%</span>
   </div>
-  <div style="font-size:1.4rem;margin-bottom:.8rem">
-    <span class="badge {{ 'badge-success' if passed else 'badge-danger' }}" style="font-size:1rem;padding:.35rem .9rem">
-      {{ pct }}% · {{ 'Passed 🎉' if passed else 'Keep practicing' }}
+  <div style="font-size:2rem;font-weight:800;letter-spacing:-0.02em">{{ result.score }} <span class="text-muted" style="font-weight:600">/ {{ result.total_marks }}</span></div>
+  <div style="margin:.6rem 0">
+    <span class="badge {{ 'badge-success' if passed else 'badge-danger' }}" style="font-size:.95rem;padding:.35rem .95rem">
+      {{ 'Passed 🎉' if passed else 'Keep practicing 💪' }}
     </span>
   </div>
-  <p class="text-muted">Pass mark: {{ pass_pct }}% · Submitted {{ result.submitted_at[:16].replace('T',' ') }}</p>
-  <div class="flex gap-1 justify-between flex-wrap mt-2" style="justify-content:center">
-    <a href="{{ url_for('test_leaderboard', test_id=test.id) }}" class="btn btn-accent">🏆 Leaderboard</a>
+  <p class="text-muted">Pass mark {{ pass_pct }}% · Submitted {{ result.submitted_at[:16].replace('T',' ') }}</p>
+  <div class="flex gap-1 flex-wrap mt-2" style="justify-content:center">
+    <a href="{{ url_for('test_leaderboard', test_id=test.id) }}" class="btn btn-primary">🏆 Leaderboard</a>
     <a href="{{ url_for('student_dashboard') }}" class="btn btn-outline">Back to Dashboard</a>
   </div>
 </div>
 
 {% if answers %}
+<div class="stats">
+  <div class="stat"><div class="num">{{ I.correct }}</div><div class="label">Correct</div></div>
+  <div class="stat"><div class="num">{{ I.wrong }}</div><div class="label">Wrong</div></div>
+  <div class="stat"><div class="num">{{ I.accuracy }}%</div><div class="label">Accuracy</div></div>
+  {% if I.rank and I.participants > 1 %}<div class="stat"><div class="num">#{{ I.rank }}</div><div class="label">Rank of {{ I.participants }}</div></div>{% endif %}
+  {% if I.percentile is not none %}<div class="stat"><div class="num">{{ I.percentile }}</div><div class="label">Percentile</div></div>{% endif %}
+  {% if I.class_avg is not none and I.participants > 1 %}<div class="stat"><div class="num">{{ I.class_avg|round|int }}%</div><div class="label">Class average</div></div>{% endif %}
+</div>
+
+<div class="card">
+  <h3>🧠 What this means</h3>
+  <div class="tip {{ I.kind if I.kind != 'info' else '' }}"><span class="ic">{{ '🌟' if I.kind == 'good' else '⚠️' if I.kind == 'warn' else '💡' }}</span><div><b>{{ I.message }}</b>
+    {% if I.vs_avg is not none %}<p>You are {{ '%.0f'|format(I.vs_avg|abs) }} points {{ 'above' if I.vs_avg >= 0 else 'below' }} the class average on this test.</p>{% endif %}
+  </div></div>
+  {% if I.wrong_numbers %}
+  <div class="helper-text" style="margin-top:.6rem">Redo these questions first:</div>
+  <div class="qnav">
+    {% for n in I.wrong_numbers %}<a href="#q{{ n }}">{{ n }}</a>{% endfor %}
+  </div>
+  {% endif %}
+</div>
+
 <div class="card">
   <h2>Answer Review</h2>
   {% for a in answers %}
-  <div class="q-card {{ 'correct' if a.is_correct else 'wrong' }}">
+  <div class="q-card {{ 'correct' if a.is_correct else 'wrong' }}" id="q{{ loop.index }}">
     <div style="font-weight:700;margin-bottom:.5rem;font-family:'Noto Sans Bengali',Inter,sans-serif">
       Q{{ loop.index }}. {{ a.question_text }}
-      {% if a.is_correct %}
-        <span class="badge badge-success">Correct</span>
-      {% else %}
-        <span class="badge badge-danger">Incorrect</span>
-      {% endif %}
+      {% if a.is_correct %}<span class="badge badge-success">Correct</span>{% else %}<span class="badge badge-danger">Incorrect</span>{% endif %}
     </div>
     {% for opt, letter in [('option_a','A'),('option_b','B'),('option_c','C'),('option_d','D')] %}
     <div class="option-label" style="cursor:default;font-family:'Noto Sans Bengali',Inter,sans-serif
-      {% if letter == a.correct_option %};background:rgba(5,150,105,.15);font-weight:600{% endif %}
-      {% if letter == a.selected_option and not a.is_correct %};background:rgba(220,38,38,.12){% endif %}
+      {% if letter == a.correct_option %};background:color-mix(in srgb, var(--success) 18%, transparent);font-weight:700{% endif %}
+      {% if letter == a.selected_option and not a.is_correct %};background:color-mix(in srgb, var(--danger) 16%, transparent){% endif %}
     ">
       <span>
         <strong>{{ letter }}.</strong> {{ a[opt] }}
@@ -43,7 +63,6 @@
       </span>
     </div>
     {% endfor %}
-
   </div>
   {% endfor %}
 </div>
