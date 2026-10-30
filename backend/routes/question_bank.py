@@ -28,7 +28,7 @@ bp = Blueprint("qbank", __name__, url_prefix="/teacher/bank")
 MAX_FILES_PER_UPLOAD = 10
 MAX_IMPORT_AT_ONCE = 200
 LIST_LIMIT = 300
-PICKER_LIMIT = 500
+PICKER_LIMIT = 2000
 
 
 def teacher_page(f):
@@ -165,7 +165,7 @@ def image_upload():
     for f in files:
         data = f.read(cdn.max_bytes() + 1)
         try:
-            info = cdn.upload_image(f.filename, data)
+            info = cdn.upload_image(f.filename, data, category=cat["name"])
         except cdn.CloudinaryError as exc:
             errors.append(str(exc))
             if not cdn.is_configured():

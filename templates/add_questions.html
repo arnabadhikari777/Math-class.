@@ -9,13 +9,16 @@
 <div class="card">
   <h3>Question Bank</h3>
   <p class="helper-text">Question Bank থেকে এক বা একাধিক প্রশ্ন একসঙ্গে এই Test-এ যোগ করুন।</p>
-  <a class="btn btn-primary" href="{{ url_for('qbank.import_to_test', test_id=test.id) }}">📚 Question Bank থেকে যোগ করুন</a>
+  <div class="flex gap-1 flex-wrap">
+    <a class="btn btn-primary" href="{{ url_for('qbank.import_to_test', test_id=test.id) }}">📚 Question Bank থেকে যোগ করুন</a>
+    <a class="btn btn-outline" href="{{ url_for('qbank.images') }}">🖼️ Image Library পরিচালনা করুন</a>
+  </div>
 </div>
 
 <div class="card">
   <h3>Add MCQ Questions</h3>
   <p class="helper-text" style="margin-bottom:14px;">
-    Enter the question text and four options, select the correct answer, then use <strong>+ Add another question</strong> to add more. Click <strong>Save all questions</strong> when done.
+    Enter the question text, optionally choose one image from the Image Library, and fill four options. Then use <strong>+ Add another question</strong> to add more. Click <strong>Save all questions</strong> when done.
   </p>
 
   <form method="POST" action="{{ url_for('add_questions', test_id=test.id) }}" accept-charset="UTF-8" id="questionsForm"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -34,6 +37,7 @@
     {% for q in questions %}
       <div class="item-box" style="margin-bottom:12px;">
         <div class="item-title" style="font-family:'Noto Sans Bengali',Inter,sans-serif;">{{ loop.index }}. {{ q.question_text }}</div>
+        {% if q.image_url %}<img src="{{ q.image_url }}" alt="Question image" loading="lazy" style="max-width:240px;max-height:160px;object-fit:contain;background:#fff;border-radius:8px;margin:8px 0">{% endif %}
         <div class="item-meta" style="font-family:'Noto Sans Bengali',Inter,sans-serif;">
           A) {{ q.option_a }} &nbsp; B) {{ q.option_b }} &nbsp; C) {{ q.option_c }} &nbsp; D) {{ q.option_d }}<br>
           Correct Answer: <span class="badge badge-green">{{ q.correct_option }}</span> | Marks: {{ q.marks }}
@@ -58,6 +62,7 @@
   const container = document.getElementById('questionBlocks');
   const addBtn = document.getElementById('addBlockBtn');
   let index = 0;
+  const imageLibrary = {{ image_library|tojson }};
 
   function makeBlock(i) {
     const div = document.createElement('div');
@@ -71,6 +76,11 @@
       </div>
       <label>Question Text</label>
       <textarea name="question_text[]" required rows="2" placeholder="Type your question here..." style="font-family:'Noto Sans Bengali',Inter,sans-serif;"></textarea>
+      <label>Question Image (ঐচ্ছিক — Image Library থেকে)</label>
+      <select name="image_id[]" class="question-image-select">
+        <option value="">কোনো ছবি নয়</option>
+      </select>
+      <div class="question-image-preview" style="margin:6px 0 12px;"></div>
       <label>Option A</label>
       <input type="text" name="option_a[]" required style="font-family:'Noto Sans Bengali',Inter,sans-serif;">
       <label>Option B</label>
@@ -95,6 +105,27 @@
         </div>
       </div>
     `;
+    const imageSelect = div.querySelector('.question-image-select');
+    const preview = div.querySelector('.question-image-preview');
+    imageLibrary.forEach(function (image) {
+      const option = document.createElement('option');
+      option.value = String(image.id);
+      option.textContent = image.category_name + ' — ' + (image.original_name || ('Image #' + image.id));
+      option.dataset.url = image.url;
+      imageSelect.appendChild(option);
+    });
+    imageSelect.addEventListener('change', function () {
+      preview.innerHTML = '';
+      const selected = imageSelect.options[imageSelect.selectedIndex];
+      if (selected && selected.dataset.url) {
+        const img = document.createElement('img');
+        img.src = selected.dataset.url;
+        img.alt = 'Selected question image';
+        img.loading = 'lazy';
+        img.style.cssText = 'max-width:220px;max-height:150px;object-fit:contain;background:#fff;border-radius:8px;';
+        preview.appendChild(img);
+      }
+    });
     div.querySelector('.remove-btn').addEventListener('click', function () {
       div.remove();
       renumber();

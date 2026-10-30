@@ -67,7 +67,9 @@ DB_PATH = os.path.join(BASE_DIR, "database.db")
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads", "notes")
 STATIC_FOLDER = os.path.join(BASE_DIR, "static")
 ALLOWED_EXTENSIONS = {"pdf"}
-MAX_CONTENT_LENGTH = 15 * 1024 * 1024
+# Image Library supports up to 10 x 5 MB files per upload batch.
+# PDF notes retain their own 15 MB limit in upload_note().
+MAX_CONTENT_LENGTH = 55 * 1024 * 1024
 
 TEACHER_MOBILE = os.environ.get("TEACHER_MOBILE", "")
 
@@ -2249,6 +2251,12 @@ def upload_note():
         if not allowed_file(file.filename):
             flash("Only PDF files are allowed.", "error")
             return redirect(url_for("upload_note"))
+        # Keep the original PDF-note limit while allowing larger image batches.
+        pdf_data = file.stream.read(15 * 1024 * 1024 + 1)
+        if len(pdf_data) > 15 * 1024 * 1024:
+            flash("PDF ফাইলের সাইজ সর্বোচ্চ 15 MB হতে পারবে।", "error")
+            return redirect(url_for("upload_note"))
+        file.stream.seek(0)
         os.makedirs(UPLOAD_FOLDER, exist_ok=True)
         original = secure_filename(file.filename) or "note.pdf"
         if not original.lower().endswith(".pdf"):
@@ -2371,6 +2379,7 @@ def add_questions(test_id):
         test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
         if test is None:
             abort(404)
+
         if request.method == "POST":
             q_texts = request.form.getlist("question_text[]")
             opt_a = request.form.getlist("option_a[]")
@@ -2379,40 +2388,72 @@ def add_questions(test_id):
             opt_d = request.form.getlist("option_d[]")
             corrects = request.form.getlist("correct_option[]")
             marks_list = request.form.getlist("marks[]")
-            n = len(q_texts)
-            added = 0
-            for i in range(n):
-                qt = (q_texts[i] if i < len(q_texts) else "").strip()
+            image_ids = request.form.getlist("image_id[]")
+            added, errors = 0, []
+
+            for i, raw_text in enumerate(q_texts):
+                qt = (raw_text or "").strip()
                 a = (opt_a[i] if i < len(opt_a) else "").strip()
                 b = (opt_b[i] if i < len(opt_b) else "").strip()
                 c = (opt_c[i] if i < len(opt_c) else "").strip()
                 d = (opt_d[i] if i < len(opt_d) else "").strip()
-                co = (corrects[i] if i < len(corrects) else "").strip()
+                co = (corrects[i] if i < len(corrects) else "").strip().upper()
                 mk = (marks_list[i] if i < len(marks_list) else "1").strip()
-                if not all([qt, a, b, c, d, co]):
-                    continue
-                if co not in ("A", "B", "C", "D"):
-                    continue
+                raw_image_id = image_ids[i] if i < len(image_ids) else ""
                 try:
-                    marks = max(1, int(mk))
-                except ValueError:
+                    image_id = int(raw_image_id) if raw_image_id else None
+                except (TypeError, ValueError):
+                    image_id = None
+
+                if not all([qt, a, b, c, d]) or co not in ("A", "B", "C", "D"):
+                    continue
+
+                image_url = None
+                if image_id is not None:
+                    image_row = conn.execute(
+                        "SELECT url FROM bank_images WHERE id=?", (image_id,)
+                    ).fetchone()
+                    if image_row is None:
+                        errors.append("একটি নির্বাচিত ছবি Library-তে পাওয়া যায়নি; সেই প্রশ্নটি যোগ হয়নি।")
+                        continue
+                    image_url = image_row["url"]
+
+                try:
+                    marks = max(1, min(100, int(mk)))
+                except (TypeError, ValueError):
                     marks = 1
+
                 conn.execute(
                     """INSERT INTO questions
-                       (test_id, question_text, option_a, option_b, option_c, option_d, correct_option, marks)
-                       VALUES (?,?,?,?,?,?,?,?)""",
-                    (test_id, qt, a, b, c, d, co, marks)
+                       (test_id, question_text, option_a, option_b, option_c, option_d,
+                        correct_option, marks, image_url, bank_image_id)
+                       VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                    (test_id, qt, a, b, c, d, co, marks, image_url, image_id)
                 )
                 added += 1
+
             conn.commit()
             if added:
                 flash(f"{added} question(s) added successfully!", "success")
-            else:
-                flash("No valid questions were submitted. Please fill all fields.", "error")
+            for message in errors:
+                flash(message, "error")
+            if not added and not errors:
+                flash("কোনো বৈধ প্রশ্ন যোগ হয়নি। প্রশ্ন ও চারটি Option পূরণ করুন।", "error")
             return redirect(url_for("add_questions", test_id=test_id))
-        questions = conn.execute("SELECT * FROM questions WHERE test_id=? ORDER BY id", (test_id,)).fetchall()
-    return render_template("add_questions.html", test=test, questions=questions)
 
+        questions = conn.execute(
+            "SELECT * FROM questions WHERE test_id=? ORDER BY id", (test_id,)
+        ).fetchall()
+        image_library = conn.execute(
+            """SELECT i.id, i.url, i.original_name, c.name AS category_name
+               FROM bank_images i JOIN bank_categories c ON c.id=i.category_id
+               ORDER BY c.name COLLATE NOCASE, i.id DESC LIMIT 2000"""
+        ).fetchall()
+
+    return render_template(
+        "add_questions.html", test=test, questions=questions,
+        image_library=[dict(row) for row in image_library]
+    )
 
 @app.route("/teacher/questions/delete/<int:question_id>/<int:test_id>", methods=["POST"])
 @teacher_login_required

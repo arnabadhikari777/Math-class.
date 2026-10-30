@@ -16,6 +16,7 @@ Optional:
 """
 import hashlib
 import os
+import re
 import time
 
 import requests
@@ -86,15 +87,18 @@ def validate_image(filename, data):
     return kind
 
 
-def upload_image(filename, data):
-    """Upload bytes to Cloudinary. Returns dict(url, public_id, width, height, bytes, format)."""
+def upload_image(filename, data, category=None):
+    """Upload bytes to Cloudinary, optionally into a category-specific subfolder.
+    Returns dict(url, public_id, width, height, bytes, format)."""
     validate_image(filename, data)
     c = _cfg()
     if not is_configured():
         raise CloudinaryError("Cloudinary সেট করা নেই (.env-এ CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET দিন)।")
     params = {"timestamp": str(int(time.time()))}
-    if c["folder"]:
-        params["folder"] = c["folder"]
+    safe_category = re.sub(r"[^A-Za-z0-9_-]+", "-", str(category or "")).strip("-_")[:60]
+    folder_parts = [part for part in (c["folder"], safe_category) if part]
+    if folder_parts:
+        params["folder"] = "/".join(folder_parts)
     payload = dict(params, api_key=c["key"], signature=_sign(params, c["secret"]))
     try:
         resp = requests.post(
