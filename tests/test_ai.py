@@ -435,6 +435,27 @@ class AITests(unittest.TestCase):
             self.assertNotIn(QKEY, body)
         self.assertNotIn(GKEY, self.teacher_client().get("/teacher/ai-chats").get_data(as_text=True))
 
+
+    def test_72_status_reports_disabled_without_keys_and_widget_never_hides_button(self):
+        c = self.student_client(self.sa)
+        with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "", "GROQ_API_KEY": ""}):
+            st = c.get("/api/v1/ai/status").get_json()["data"]
+        self.assertFalse(st["enabled"])
+        with open(os.path.join(self.proj, "static", "ai-widget.js"), encoding="utf-8") as fh:
+            js = fh.read()
+        self.assertNotIn("fab.style.display", js)   # regression: button used to vanish when AI was off
+        self.assertIn("ai-widget.js?v=", c.get("/dashboard").get_data(as_text=True))
+
+    def test_73_real_provider_call_failure_is_safe(self):
+        """No mock: keys are fake and the sandbox has no network, so both providers really fail."""
+        c = self.student_client(self.sa)
+        with mock.patch.dict(os.environ, {"AI_TIMEOUT_SECONDS": "5"}):
+            r = c.post("/api/v1/ai/chat", data=json.dumps({"message": "real call"}),
+                       content_type="application/json", headers={"X-CSRFToken": CSRF})
+        self.assertEqual(r.status_code, 503)
+        self.assertEqual(r.get_json()["error"]["code"], "ai_unavailable")
+        self.assertNotIn(GKEY, r.get_data(as_text=True))
+
     # ------------------------------------------------------------ database
     def test_80_migration_006_is_additive_idempotent_reversible(self):
         from backend import migrations

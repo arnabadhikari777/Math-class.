@@ -757,8 +757,8 @@
 <canvas id="confetti"></canvas>
 
 {% if session.get('student_id') and not session.get('is_teacher') %}
-<link rel="stylesheet" href="{{ url_for('static', filename='ai-widget.css') }}">
-<script src="{{ url_for('static', filename='ai-widget.js') }}" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='ai-widget.css') }}?v=2">
+<script src="{{ url_for('static', filename='ai-widget.js') }}?v=2" defer></script>
 {% endif %}
 
 <script>

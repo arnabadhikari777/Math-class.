@@ -62,6 +62,7 @@
   head.appendChild(newBtn); head.appendChild(closeBtn);
   var note = el('div', 'aiw-note', 'Your teacher can review these chats. Don\u2019t share passwords or private details.');
   var testBar = el('div', 'aiw-test', 'A test is open: I can explain concepts but I won\u2019t solve its questions.');
+  var offBar = el('div', 'aiw-test', 'AI assistant is not set up yet. Please tell your teacher.');
   var log = el('div', 'aiw-log');
   log.setAttribute('aria-live', 'polite');
   var form = el('form', 'aiw-form');
@@ -69,7 +70,7 @@
   input.setAttribute('aria-label', 'Message');
   var send = el('button', null, 'Send'); send.type = 'submit';
   form.appendChild(input); form.appendChild(send);
-  panel.appendChild(head); panel.appendChild(note); panel.appendChild(testBar); panel.appendChild(log); panel.appendChild(form);
+  panel.appendChild(head); panel.appendChild(note); panel.appendChild(testBar); panel.appendChild(offBar); panel.appendChild(log); panel.appendChild(form);
   document.body.appendChild(panel);
   document.body.appendChild(fab);
 
@@ -91,7 +92,7 @@
     }
     log.appendChild(e); scrollDown();
   }
-  function setBusy(v) { busy = v; send.disabled = v; input.disabled = v; }
+  function setBusy(v) { busy = v; send.disabled = v || aiOff; input.disabled = v || aiOff; }
 
   function api(path, opts) {
     opts = opts || {};
@@ -119,11 +120,19 @@
   }
   function greet() { addMsg('assistant', 'Hi! Ask me about any maths concept, a mistake you made, or what to revise.'); }
 
+  var aiOff = false;
+  function setOff(v) {
+    aiOff = v;
+    offBar.classList.toggle('on', v);
+    send.disabled = v || busy;
+    input.disabled = v || busy;
+    input.placeholder = v ? 'AI is not available right now' : 'Ask a maths question…';
+  }
   function refreshStatus() {
     api('/status').then(function (res) {
       if (res.status !== 200 || !res.body || !res.body.ok) return;
       testBar.classList.toggle('on', !!res.body.data.test_mode);
-      if (!res.body.data.enabled || res.body.data.viewing_as_teacher) { fab.style.display = 'none'; panel.classList.remove('open'); }
+      setOff(!res.body.data.enabled || !!res.body.data.viewing_as_teacher);
     }).catch(function () {});
   }
 
@@ -153,7 +162,10 @@
       } else if (res.status === 404 && conversationId) {
         conversationId = null; storeSet(null); showErr('That chat is no longer available. Tap Retry to start a new one.', true);
       } else {
-        showErr(errText(res), res.status !== 403 && res.status !== 429 && res.status !== 413);
+        var code = res.body && res.body.error && res.body.error.code;
+        if (code === 'ai_not_configured') setOff(true);
+        var noRetry = ['forbidden', 'rate_limited', 'too_large', 'ai_not_configured', 'conversation_full', 'invalid_param'];
+        showErr(errText(res), noRetry.indexOf(code) === -1);
       }
     }).catch(function () {
       typing.remove(); setBusy(false);
@@ -178,7 +190,7 @@
   form.addEventListener('submit', function (e) { e.preventDefault(); submit(input.value, false); });
   input.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(input.value, false); }
-    e.stopPropagation(); // never leak keystrokes to the test form's shortcuts
+    if (e.key !== 'Escape') e.stopPropagation(); // keep keystrokes away from the page, but let Esc close the chat
   });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && panel.classList.contains('open')) close(); });
 })();
