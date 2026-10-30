@@ -21,6 +21,7 @@
       Q{{ loop.index }}. {{ q.question_text }}
       <span class="badge badge-info">{{ q.marks }} mark{{ 's' if q.marks != 1 else '' }}</span>
     </div>
+    {% if q.image_url %}<img src="{{ q.image_url }}" alt="Question image" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;margin:0 0 .8rem;background:#fff">{% endif %}
     {% for opt, letter in [('option_a','A'),('option_b','B'),('option_c','C'),('option_d','D')] %}
     <label class="option-label" style="font-family:'Noto Sans Bengali',Inter,sans-serif">
       <input type="radio" name="q_{{ q.id }}" value="{{ letter }}" required>

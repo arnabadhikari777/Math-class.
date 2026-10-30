@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Question Bank{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>📚 Question Bank</h2>
+  <p class="helper-text">মোট প্রশ্ন: {{ total }}</p>
+  <div class="flex gap-1 flex-wrap mt-1">
+    <a class="btn btn-primary" href="{{ url_for('qbank.question_new') }}">+ নতুন প্রশ্ন</a>
+    <a class="btn btn-outline" href="{{ url_for('qbank.images') }}">Image Library</a>
+    <a class="btn btn-outline" href="{{ url_for('manage_tests') }}">Manage Tests</a>
+    <a class="btn btn-outline" href="{{ url_for('teacher_dashboard') }}">Dashboard</a>
+  </div>
+</div>
+
+<div class="card">
+  <form method="GET" class="flex gap-1 flex-wrap items-center">
+    <input type="text" name="q" value="{{ q }}" placeholder="প্রশ্নের লেখায় খুঁজুন" style="flex:1;min-width:180px">
+    <select name="category" style="min-width:160px">
+      <option value="">ছবির Category: সব</option>
+      {% for c in categories %}<option value="{{ c.id }}" {{ 'selected' if selected == c.id }}>{{ c.name }}</option>{% endfor %}
+    </select>
+    <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="with_image" value="1" {{ 'checked' if with_image }}> শুধু ছবিসহ</label>
+    <button class="btn btn-primary" type="submit">Filter</button>
+  </form>
+</div>
+
+<div class="card">
+  {% if rows %}
+  {% for r in rows %}
+  <div class="item-box" style="margin-bottom:12px">
+    <div class="item-title" style="font-family:'Noto Sans Bengali',Inter,sans-serif">{{ loop.index }}. {{ r.question_text }}</div>
+    {% if r.image_url %}<img src="{{ r.image_url|cdn_thumb(480) }}" loading="lazy" alt="" style="max-width:240px;max-height:160px;border-radius:8px;margin:6px 0;display:block;background:#fff"><div class="item-meta">Category: {{ r.category_name }}</div>{% endif %}
+    <div class="item-meta" style="font-family:'Noto Sans Bengali',Inter,sans-serif">
+      A) {{ r.option_a }} &nbsp; B) {{ r.option_b }} &nbsp; C) {{ r.option_c }} &nbsp; D) {{ r.option_d }}<br>
+      Correct: <span class="badge badge-green">{{ r.correct_option }}</span>
+    </div>
+    <div class="flex gap-1 flex-wrap mt-1">
+      <a class="btn btn-sm btn-outline" href="{{ url_for('qbank.question_edit', qid=r.id) }}">Edit</a>
+      <form method="POST" action="{{ url_for('qbank.question_delete', qid=r.id) }}" onsubmit="return confirm('প্রশ্নটি Question Bank থেকে মুছবেন? (Test-এ থাকা কপি অক্ষত থাকবে)');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+  {% else %}<div class="empty-state">কোনো প্রশ্ন পাওয়া যায়নি।</div>{% endif %}
+</div>
+{% endblock %}

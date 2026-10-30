@@ -7,6 +7,12 @@
 </div>
 
 <div class="card">
+  <h3>Question Bank</h3>
+  <p class="helper-text">Question Bank থেকে এক বা একাধিক প্রশ্ন একসঙ্গে এই Test-এ যোগ করুন।</p>
+  <a class="btn btn-primary" href="{{ url_for('qbank.import_to_test', test_id=test.id) }}">📚 Question Bank থেকে যোগ করুন</a>
+</div>
+
+<div class="card">
   <h3>Add MCQ Questions</h3>
   <p class="helper-text" style="margin-bottom:14px;">
     Enter the question text and four options, select the correct answer, then use <strong>+ Add another question</strong> to add more. Click <strong>Save all questions</strong> when done.

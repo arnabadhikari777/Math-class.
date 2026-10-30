@@ -4,8 +4,8 @@
 Rules this module follows (see MIGRATION_NOTES.md):
   * Only CREATE TABLE/INDEX IF NOT EXISTS. Never DROP/DELETE/UPDATE existing data.
   * Each migration has a ``down`` that removes ONLY what that migration created.
-  * Automatic app-start migrations do NOT take a backup.
-    Use CLI ``backup`` or pass backup=True to run_pending/rollback when you want one.
+  * A timestamped backup of the database is taken (SQLite online-backup API)
+    before the first pending migration is applied.
   * A unique index is created only when current data has no duplicates;
     otherwise it is skipped (and retried on next start) - data is never edited.
 
@@ -177,6 +177,67 @@ def _down_ai_chat(conn):
     conn.execute("DROP TABLE IF EXISTS ai_conversations")
 
 
+def _up_question_bank(conn):
+    """Question Bank + Cloudinary image library. NEW tables, plus two nullable
+    columns on questions so a bank question copied into a test can carry its image."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS bank_categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+            created_at TEXT NOT NULL
+        )""")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS bank_images (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category_id INTEGER NOT NULL,
+            url TEXT NOT NULL,
+            public_id TEXT NOT NULL UNIQUE,
+            original_name TEXT,
+            width INTEGER,
+            height INTEGER,
+            bytes INTEGER,
+            format TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (category_id) REFERENCES bank_categories(id) ON DELETE RESTRICT
+        )""")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS bank_questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            question_text TEXT NOT NULL DEFAULT '',
+            image_id INTEGER,
+            option_a TEXT NOT NULL,
+            option_b TEXT NOT NULL,
+            option_c TEXT NOT NULL,
+            option_d TEXT NOT NULL,
+            correct_option TEXT NOT NULL CHECK (correct_option IN ('A','B','C','D')),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (image_id) REFERENCES bank_images(id) ON DELETE RESTRICT
+        )""")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_bank_images_cat ON bank_images(category_id, id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_bank_questions_img ON bank_questions(image_id)")
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(questions)")}
+    if not cols:
+        return "SKIP: questions table missing (it is created by app.init_db(); will retry on next start)"
+    if "image_url" not in cols:
+        conn.execute("ALTER TABLE questions ADD COLUMN image_url TEXT")
+    if "bank_image_id" not in cols:
+        conn.execute("ALTER TABLE questions ADD COLUMN bank_image_id INTEGER")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_questions_bank_image ON questions(bank_image_id)")
+
+
+def _down_question_bank(conn):
+    # Removes only what 007 created. Needs SQLite >= 3.35 for DROP COLUMN.
+    conn.execute("DROP INDEX IF EXISTS idx_questions_bank_image")
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(questions)")}
+    for col in ("image_url", "bank_image_id"):
+        if col in cols:
+            conn.execute(f"ALTER TABLE questions DROP COLUMN {col}")
+    conn.execute("DROP TABLE IF EXISTS bank_questions")
+    conn.execute("DROP TABLE IF EXISTS bank_images")
+    conn.execute("DROP TABLE IF EXISTS bank_categories")
+
+
 MIGRATIONS = [
     ("001_test_attempts", "Record when a student opens a test (for timer checks)",
      _up_test_attempts, _down_test_attempts),
@@ -190,6 +251,8 @@ MIGRATIONS = [
      _up_normalize_classes, _down_normalize_classes),
     ("006_ai_chat", "AI assistant: ai_conversations + ai_messages (new tables only)",
      _up_ai_chat, _down_ai_chat),
+    ("007_question_bank", "Question Bank + image library tables; questions.image_url / bank_image_id (nullable)",
+     _up_question_bank, _down_question_bank),
 ]
 
 

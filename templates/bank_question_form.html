@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if editing else 'New' }} Bank Question{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>{{ 'প্রশ্ন Edit' if editing else 'নতুন প্রশ্ন' }}</h2>
+  <p class="helper-text">লেখা আর ছবি আলাদা — যেকোনো একটি দিলেই চলবে, দুটোও দেওয়া যায়। একটি প্রশ্নে সর্বোচ্চ একটি ছবি।</p>
+</div>
+<div class="card">
+  <form method="POST" accept-charset="UTF-8" id="qform">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="image_id" id="image_id" value="{{ item.image_id or '' }}">
+    <label>প্রশ্নের লেখা</label>
+    <textarea name="question_text" rows="3" style="font-family:'Noto Sans Bengali',Inter,sans-serif">{{ item.question_text or '' }}</textarea>
+
+    <label>ছবি (ঐচ্ছিক)</label>
+    <div id="chosen" class="helper-text" style="margin-bottom:6px">কোনো ছবি বাছা নেই</div>
+    <button type="button" class="btn btn-sm btn-outline" id="openPicker">Library থেকে ছবি বাছুন</button>
+    <button type="button" class="btn btn-sm btn-outline" id="clearImg" style="display:none">ছবি সরান</button>
+    <div id="picker" style="display:none;margin-top:10px">
+      <select id="pickCat" style="margin-bottom:8px">
+        <option value="">সব Category</option>
+        {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+      </select>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;max-height:340px;overflow:auto">
+        {% for im in images %}
+        <button type="button" class="pick" data-id="{{ im.id }}" data-cat="{{ im.category_id }}" data-src="{{ im.url|cdn_thumb(240) }}"
+                style="border:2px solid var(--border);border-radius:8px;padding:2px;background:#fff;cursor:pointer" title="{{ im.category_name }}">
+          <img src="{{ im.url|cdn_thumb(240) }}" loading="lazy" alt="" style="width:100%;height:90px;object-fit:contain">
+        </button>
+        {% else %}<div class="text-muted">Library-তে ছবি নেই। আগে <a href="{{ url_for('qbank.images') }}">ছবি আপলোড</a> করুন।</div>{% endfor %}
+      </div>
+    </div>
+
+    <label>Option A</label><input type="text" name="option_a" required value="{{ item.option_a or '' }}" style="font-family:'Noto Sans Bengali',Inter,sans-serif">
+    <label>Option B</label><input type="text" name="option_b" required value="{{ item.option_b or '' }}" style="font-family:'Noto Sans Bengali',Inter,sans-serif">
+    <label>Option C</label><input type="text" name="option_c" required value="{{ item.option_c or '' }}" style="font-family:'Noto Sans Bengali',Inter,sans-serif">
+    <label>Option D</label><input type="text" name="option_d" required value="{{ item.option_d or '' }}" style="font-family:'Noto Sans Bengali',Inter,sans-serif">
+    <label>সঠিক উত্তর</label>
+    <select name="correct_option" required>
+      {% for l in ['A','B','C','D'] %}<option value="{{ l }}" {{ 'selected' if item.correct_option == l }}>{{ l }}</option>{% endfor %}
+    </select>
+    <div class="flex gap-1 flex-wrap mt-2">
+      <button class="btn btn-primary" type="submit">Save</button>
+      {% if not editing %}<button class="btn btn-secondary" type="submit" name="save_and_new" value="1">Save ও আরেকটি</button>{% endif %}
+      <a class="btn btn-outline" href="{{ url_for('qbank.questions') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+  const idEl = document.getElementById('image_id'), chosen = document.getElementById('chosen');
+  const picker = document.getElementById('picker'), clearBtn = document.getElementById('clearImg');
+  const picks = Array.from(document.querySelectorAll('.pick'));
+  function show() {
+    const cur = idEl.value, hit = picks.find(p => p.dataset.id === cur);
+    chosen.innerHTML = '';
+    if (cur) {
+      if (hit) { const i = document.createElement('img'); i.src = hit.dataset.src; i.alt = ''; i.style.cssText = 'max-height:110px;max-width:100%;background:#fff;border-radius:8px'; chosen.appendChild(i); }
+      else chosen.textContent = 'ছবি #' + cur + ' বাছা আছে';
+    } else chosen.textContent = 'কোনো ছবি বাছা নেই';
+    clearBtn.style.display = cur ? '' : 'none';
+    picks.forEach(p => p.style.borderColor = (p.dataset.id === cur) ? 'var(--primary)' : 'var(--border)');
+  }
+  document.getElementById('openPicker').onclick = () => { picker.style.display = picker.style.display === 'none' ? '' : 'none'; };
+  clearBtn.onclick = () => { idEl.value = ''; show(); };
+  document.getElementById('pickCat').onchange = function () {
+    picks.forEach(p => p.style.display = (!this.value || p.dataset.cat === this.value) ? '' : 'none');
+  };
+  picks.forEach(p => p.onclick = () => { idEl.value = p.dataset.id; show(); });
+  show();
+})();
+</script>
+{% endblock %}

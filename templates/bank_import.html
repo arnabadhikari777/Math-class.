@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Question Bank → {{ test.title }}{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>Question Bank থেকে প্রশ্ন নিন</h2>
+  <p class="helper-text">Test: <strong>{{ test.title }}</strong> · একবারে সর্বোচ্চ {{ limit }} টি। প্রশ্নগুলো Test-এ কপি হবে; পরে Bank-এ বদলালে এই Test বদলাবে না।</p>
+  <div class="flex gap-1 flex-wrap mt-1">
+    <a class="btn btn-outline" href="{{ url_for('add_questions', test_id=test.id) }}">← Test-এ ফিরুন</a>
+    <a class="btn btn-outline" href="{{ url_for('qbank.question_new') }}">+ Bank-এ নতুন প্রশ্ন</a>
+  </div>
+</div>
+<div class="card">
+  <form method="GET" class="flex gap-1 flex-wrap items-center">
+    <input type="text" name="q" value="{{ q }}" placeholder="প্রশ্নের লেখায় খুঁজুন" style="flex:1;min-width:180px">
+    <select name="category" style="min-width:160px">
+      <option value="">ছবির Category: সব</option>
+      {% for c in categories %}<option value="{{ c.id }}" {{ 'selected' if selected == c.id }}>{{ c.name }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-primary" type="submit">Filter</button>
+  </form>
+</div>
+<div class="card">
+  {% if rows %}
+  <form method="POST" action="{{ url_for('qbank.import_to_test', test_id=test.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="flex gap-1 flex-wrap items-center" style="margin-bottom:10px">
+      <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="selAll"> এই তালিকার সব বাছুন</label>
+      <label style="display:flex;gap:6px;align-items:center">প্রতি প্রশ্নের Marks <input type="number" name="marks" value="1" min="1" max="100" style="width:80px"></label>
+      <button class="btn btn-primary" type="submit">বাছাই করা প্রশ্ন Test-এ যোগ করুন</button>
+    </div>
+    {% for r in rows %}
+    <label class="item-box" style="display:block;margin-bottom:10px;cursor:pointer">
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <input type="checkbox" class="pickq" name="question_id" value="{{ r.id }}" style="margin-top:4px">
+        <div style="min-width:0">
+          <div class="item-title" style="font-family:'Noto Sans Bengali',Inter,sans-serif">{{ r.question_text }}
+            {% if r.id in taken_ids %}<span class="badge badge-info">Test-এ আছে</span>{% endif %}</div>
+          {% if r.image_url %}<img src="{{ r.image_url|cdn_thumb(360) }}" loading="lazy" alt="" style="max-width:180px;max-height:120px;border-radius:8px;display:block;margin:4px 0;background:#fff">{% endif %}
+          <div class="item-meta" style="font-family:'Noto Sans Bengali',Inter,sans-serif">A) {{ r.option_a }} &nbsp; B) {{ r.option_b }} &nbsp; C) {{ r.option_c }} &nbsp; D) {{ r.option_d }} · Correct: {{ r.correct_option }}</div>
+        </div>
+      </div>
+    </label>
+    {% endfor %}
+  </form>
+  {% else %}<div class="empty-state">Bank-এ কোনো প্রশ্ন পাওয়া যায়নি।</div>{% endif %}
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+  const all = document.getElementById('selAll');
+  if (all) all.addEventListener('change', () => document.querySelectorAll('.pickq').forEach(c => c.checked = all.checked));
+})();
+</script>
+{% endblock %}
