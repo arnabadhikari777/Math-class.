@@ -16,6 +16,7 @@ Error text is never forwarded to students.
 """
 import logging
 import os
+import re
 import time
 
 import requests
@@ -130,11 +131,22 @@ def alias_of(provider_name_):
     return None, None
 
 
+def _explicit_name(provider):
+    return bool(_env("AI_NAME_" + provider.upper().replace("-", "_")))
+
+
 def student_choices():
-    """Only the choices that have at least one working key. Never contains real names."""
+    """Buttons students see: every AI whose NAME is saved in .env (even if its key is missing or it
+    is currently failing) plus every AI that has a working key. Never contains real names.
+    If a student picks one that cannot answer, the next working AI answers instead."""
     order = configured_order()
-    return [{"id": cid, "label": label} for cid, label, provs in _choices_table()
-            if any(p in order for p in provs)]
+    allowed = _csv(_env("AI_PROVIDER_ORDER"))
+    out = []
+    for cid, label, provs in _choices_table():
+        shown = [p for p in provs if p in order or (_explicit_name(p) and (not allowed or p in allowed))]
+        if shown:
+            out.append({"id": cid, "label": label})
+    return out
 
 
 def real_label(provider_name_):
@@ -144,17 +156,20 @@ def real_label(provider_name_):
 
 # ------------------------------------------------------------------ provider config
 def _route(name):
-    """Resolve url / key / model for one provider from the current environment."""
+    """Resolve (key, url, model) for one provider from the current environment."""
     spec = PROVIDERS[name]
     key = _env(spec["key_env"])
-    url = (_env(spec["url_env"]) if spec.get("url_env") else "") or spec.get("url", "")
+    url = spec.get("url", "")
+    custom_base = _env(spec["url_env"]) if spec.get("url_env") else ""
     model = _env(spec["model_env"])
-    if name == "qwen" and not key and _env("GROQ_API_KEY"):
-        key, url = _env("GROQ_API_KEY"), GROQ_URL
+    if custom_base:                      # QWEN_BASE_URL / CUSTOM_AI_BASE_URL: base or full endpoint
+        url = custom_base.rstrip("/")
+        if not url.endswith("/chat/completions"):
+            url += "/chat/completions"
+    elif name == "qwen" and not key and _env("GROQ_API_KEY"):
+        key, url = _env("GROQ_API_KEY"), GROQ_URL       # Qwen hosted on Groq
         model = model or spec["groq_fallback"]["model"]
-    elif name == "custom":
-        url = _env(spec["url_env"]).rstrip("/")
-    return key, url.rstrip("/") if name == "custom" else url, model or spec["model"]
+    return key, url, model or spec["model"]
 
 
 def _usable(name):
@@ -190,6 +205,63 @@ def _timeout():
         return 20
 
 
+# ------------------------------------------------------------------ error details (teacher/log only)
+_LONG_TOKEN = re.compile(r"[A-Za-z0-9_\-\.]{20,}")
+_MASKED = re.compile(r"\S*\*{2,}\S*")
+
+
+def _redact(text):
+    """Remove anything that looks like (part of) an API key from provider error text."""
+    text = _MASKED.sub("[hidden]", str(text))
+    text = _LONG_TOKEN.sub("[hidden]", text)
+    for var in {v["key_env"] for v in PROVIDERS.values()}:
+        k = _env(var)
+        if len(k) >= 6:
+            text = text.replace(k, "[hidden]")
+    return " ".join(text.split())
+
+
+def _http_failed(name, r):
+    """Build the failure message: HTTP status + the provider's own short reason."""
+    reason = ""
+    try:
+        body = r.json()
+        err = body.get("error", body) if isinstance(body, dict) else body
+        if isinstance(err, dict):
+            reason = err.get("message") or err.get("msg") or err.get("detail") or ""
+        elif isinstance(err, str):
+            reason = err
+        if not reason and isinstance(body, dict):
+            reason = body.get("message") or ""
+    except Exception:
+        reason = ""
+    return _ProviderFailed(f"{name} http {r.status_code}" + (": " + _redact(reason)[:140] if reason else ""))
+
+
+def explain_error(exc):
+    """Plain-language reason for the teacher (English), without secrets."""
+    text = str(exc)
+    low = text.lower()
+    if isinstance(exc, _ProviderFailed):
+        if " http 401" in low or " http 403" in low:
+            return text + " \u2192 the API key is wrong, expired, or not allowed for this model/region."
+        if " http 402" in low:
+            return text + " \u2192 no credit/balance on this account."
+        if " http 404" in low:
+            return text + " \u2192 model name or endpoint is wrong (set <NAME>_MODEL / QWEN_BASE_URL in .env)."
+        if " http 429" in low:
+            return text + " \u2192 rate limit or quota used up."
+        return text
+    if isinstance(exc, requests.exceptions.ProxyError) or "tunnel connection failed" in low:
+        return ("Blocked by the hosting network (free PythonAnywhere accounts can only reach allowlisted sites). "
+                "Upgrade the account or ask PythonAnywhere to allowlist this API domain.")
+    if isinstance(exc, requests.exceptions.Timeout):
+        return "Timed out: the AI did not answer in time."
+    if isinstance(exc, requests.exceptions.ConnectionError):
+        return "Could not connect to the AI server (network blocked or wrong URL)."
+    return f"{type(exc).__name__}: {_redact(text)[:120]}"
+
+
 # ------------------------------------------------------------------ API calls
 def _ask_gemini(name, system, turns, timeout):
     key, _url, model = _route(name)
@@ -201,7 +273,7 @@ def _ask_gemini(name, system, turns, timeout):
     r = requests.post(GEMINI_URL.format(model=model), headers={"x-goog-api-key": key},
                       json=payload, timeout=timeout)
     if r.status_code != 200:
-        raise _ProviderFailed(f"{name} http {r.status_code}")
+        raise _http_failed(name, r)
     cand = (r.json().get("candidates") or [{}])[0]
     text = "".join(p.get("text", "") for p in (cand.get("content") or {}).get("parts", [])).strip()
     if not text:
@@ -220,7 +292,7 @@ def _ask_anthropic(name, system, turns, timeout):
                                "content-type": "application/json"},
                       json=payload, timeout=timeout)
     if r.status_code != 200:
-        raise _ProviderFailed(f"{name} http {r.status_code}")
+        raise _http_failed(name, r)
     blocks = r.json().get("content") or []
     text = "".join(b.get("text", "") for b in blocks if isinstance(b, dict) and b.get("type") == "text").strip()
     if not text:
@@ -240,7 +312,7 @@ def _ask_openai_compat(name, system, turns, timeout):
         url += "/chat/completions"
     r = requests.post(url, headers={"Authorization": "Bearer " + key}, json=payload, timeout=timeout)
     if r.status_code != 200:
-        raise _ProviderFailed(f"{name} http {r.status_code}")
+        raise _http_failed(name, r)
     text = str(((r.json().get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
     if not text:
         raise _ProviderFailed(f"{name} empty")
@@ -274,7 +346,32 @@ def ask(system, turns, prefer=None):
             text = _CALLERS[PROVIDERS[name]["kind"]](name, sys_text, turns, t)
             return text, name
         except (_ProviderFailed, requests.RequestException, ValueError) as exc:
-            # class (+ status for our own error) only; never URL, headers or key
-            detail = str(exc)[:60] if isinstance(exc, _ProviderFailed) else type(exc).__name__
-            log.warning("AI provider %s failed: %s", name, detail)
+            # reason only; keys are redacted, nothing goes to the student
+            log.warning("AI provider %s failed: %s", name, explain_error(exc)[:220])
     raise AIError("ai_unavailable", "The AI is busy or not responding. Please try again in a moment.", 503)
+
+
+def diagnose():
+    """Teacher tool: send one tiny question to every AI that has a key (or a saved name) and report
+    what happened. Returns [{provider, shown_as, status: ok|failed|no_key, detail, ms}]. Never contains keys."""
+    out = []
+    turns = [{"role": "user", "text": "Reply with the single word OK."}]
+    allowed = _csv(_env("AI_PROVIDER_ORDER"))
+    for name in PROVIDERS:
+        if allowed and name not in allowed:
+            continue
+        has_key = _usable(name)
+        if not has_key and not _explicit_name(name):
+            continue
+        row = {"provider": real_label(name), "shown_as": provider_name(name), "status": "no_key",
+               "detail": "No API key in .env, so this AI is skipped (the next AI answers instead).", "ms": None}
+        if has_key:
+            t0 = time.monotonic()
+            try:
+                _CALLERS[PROVIDERS[name]["kind"]](name, "", turns, _timeout())
+                row.update(status="ok", detail="Working.")
+            except (_ProviderFailed, requests.RequestException, ValueError) as exc:
+                row.update(status="failed", detail=explain_error(exc)[:300])
+            row["ms"] = int((time.monotonic() - t0) * 1000)
+        out.append(row)
+    return out

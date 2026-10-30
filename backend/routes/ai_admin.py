@@ -36,6 +36,14 @@ def _student(row):
             "class_name": row["class_name"], "roll": row["roll"]}
 
 
+@bp.post("/api/v1/teacher/ai/test")
+@teacher_api
+def test_connections():
+    """Sir-only: ask every configured AI one tiny question and report which work and why one fails.
+    Real provider names and error reasons are shown here only (never to students); keys are never shown."""
+    return ok({"results": ai_provider.diagnose()})
+
+
 @bp.get("/api/v1/teacher/ai/students")
 @teacher_api
 def students():

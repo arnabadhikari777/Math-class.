@@ -29,7 +29,6 @@ class ProviderTests(unittest.TestCase):
     def test_no_keys_means_nothing_works(self):
         with run_env({"AI_NAME_OPENAI": "Rahul Sen"}):
             self.assertFalse(provider.is_enabled())
-            self.assertEqual(provider.student_choices(), [])
 
     def test_defaults_keep_old_ids_and_names(self):
         with run_env({"GEMINI_API_KEY": "g", "GROQ_API_KEY": "q"}):
@@ -42,12 +41,25 @@ class ProviderTests(unittest.TestCase):
         with run_env({"GEMINI_API_KEY": "g", "AI_NAME_GEMINI": "Teacher Bot"}):
             self.assertEqual(provider.student_choices(), [{"id": "anubhab", "label": "Teacher Bot"}])
 
-    def test_each_key_switches_only_its_own_ai_on(self):
+    def test_every_saved_name_is_shown_even_without_a_key(self):
         env = {"GEMINI_API_KEY": "g", "OPENAI_API_KEY": "o", "AI_NAME_OPENAI": "Rahul Sen",
-               "AI_NAME_MISTRAL": "Priya Das"}          # mistral has a name but NO key
+               "AI_NAME_MISTRAL": "Priya Das"}          # mistral has a name but NO key: still shown
         with run_env(env):
-            self.assertEqual(labels(), ["Anubhab Dutta", "Rahul Sen"])
+            self.assertEqual(labels(), ["Anubhab Dutta", "Rahul Sen", "Priya Das"])
             self.assertEqual(provider.alias_of("openai"), ("ai5", "Rahul Sen"))
+            self.assertEqual(provider.configured_order(), ["gemini", "openai"])   # but only keyed ones answer
+
+    def test_defaults_without_key_or_saved_name_stay_hidden(self):
+        with run_env({"GEMINI_API_KEY": "g"}):
+            self.assertEqual(labels(), ["Anubhab Dutta"])
+
+    def test_choosing_a_keyless_ai_falls_back_to_a_working_one(self):
+        def post(url, headers=None, json=None, timeout=None):
+            return Resp(200, {"candidates": [{"content": {"parts": [{"text": "from gemini"}]}}]})
+        with run_env({"GEMINI_API_KEY": "g", "AI_NAME_MISTRAL": "Priya Das"}), \
+                mock.patch("backend.ai.provider.requests.post", post):
+            text, used = provider.ask(None, [{"role": "user", "text": "hi"}], prefer="ai8")
+        self.assertEqual(used, "gemini")
 
     def test_same_name_merges_providers_into_one_choice(self):
         env = {"OPENAI_API_KEY": "o", "DEEPSEEK_API_KEY": "d", "AI_NAME_OPENAI": "Rahul Sen",
@@ -129,6 +141,44 @@ class ProviderTests(unittest.TestCase):
             self.assertFalse(provider.is_enabled())
         with run_env(dict(base, CUSTOM_AI_BASE_URL="https://x.example/v1", CUSTOM_AI_MODEL="m")):
             self.assertTrue(provider.is_enabled())
+
+    def test_error_reason_is_shown_to_teacher_and_keys_are_redacted(self):
+        def post(url, headers=None, json=None, timeout=None):
+            return Resp(401, {"error": {"message": "Incorrect API key provided: sk-abc123456789012345678901234xyz"}})
+        with run_env({"DEEPSEEK_API_KEY": "sk-abc123456789012345678901234xyz", "AI_NAME_DEEPSEEK": "Rahul"}), \
+                mock.patch("backend.ai.provider.requests.post", post):
+            rows = provider.diagnose()
+        self.assertEqual(rows[0]["status"], "failed")
+        self.assertIn("http 401", rows[0]["detail"])
+        self.assertIn("API key is wrong", rows[0]["detail"])
+        self.assertNotIn("sk-abc", repr(rows))
+
+    def test_diagnose_reports_ok_no_key_and_blocked_network(self):
+        import requests
+
+        def post(url, headers=None, json=None, timeout=None):
+            if "deepseek" in url:
+                raise requests.exceptions.ProxyError("Tunnel connection failed: 403 Forbidden")
+            return Resp(200, {"choices": [{"message": {"content": "OK"}}]})
+        env = {"OPENAI_API_KEY": "o", "DEEPSEEK_API_KEY": "d", "AI_NAME_OPENAI": "A", "AI_NAME_DEEPSEEK": "B",
+               "AI_NAME_MISTRAL": "C"}
+        with run_env(env), mock.patch("backend.ai.provider.requests.post", post):
+            rows = {r["provider"]: r for r in provider.diagnose()}
+        self.assertEqual(rows["OpenAI"]["status"], "ok")
+        self.assertEqual(rows["DeepSeek"]["status"], "failed")
+        self.assertIn("allowlist", rows["DeepSeek"]["detail"])
+        self.assertEqual(rows["Mistral"]["status"], "no_key")
+
+    def test_qwen_base_url_override_gets_endpoint_appended(self):
+        seen = []
+
+        def post(url, headers=None, json=None, timeout=None):
+            seen.append(url)
+            return Resp(200, {"choices": [{"message": {"content": "ok"}}]})
+        env = {"QWEN_API_KEY": "k", "QWEN_BASE_URL": "https://dashscope.aliyuncs.com/compatible-mode/v1/"}
+        with run_env(env), mock.patch("backend.ai.provider.requests.post", post):
+            provider.ask(None, [{"role": "user", "text": "hi"}])
+        self.assertEqual(seen[0], "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions")
 
 
 if __name__ == "__main__":

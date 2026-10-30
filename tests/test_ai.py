@@ -556,6 +556,30 @@ class AITests(unittest.TestCase):
         finally:
             shutil.copy(self.db + ".bak-test", self.db)                 # restore the temp copy for later tests
 
+    def test_92_every_saved_name_is_listed_and_unusable_pick_falls_back(self):
+        c = self.student_client(self.sa)
+        with mock.patch.dict(os.environ, {"AI_PROVIDER_ORDER": "", "AI_NAME_MISTRAL": "Priya Das"}):   # mistral: name, no key
+            data = c.get("/api/v1/ai/status").get_json()["data"]
+            labels = [x["label"] for x in data["choices"]]
+            self.assertIn("Priya Das", labels)
+            blob = repr(data).lower()
+            for real in ("mistral", "gemini", "groq", "openai", "deepseek"):
+                self.assertNotIn(real, blob)
+            r, _ = self.chat(c, {"message": "pick the keyless one", "ai": "ai8"})
+            self.assertEqual(r.status_code, 200)
+            self.assertTrue(r.get_json()["data"]["fallback"])          # a working AI answered instead
+
+    def test_93_teacher_ai_test_is_teacher_only_and_never_shows_keys(self):
+        hdr = {"X-CSRFToken": CSRF}
+        self.assertIn(self.student_client(self.sa).post("/api/v1/teacher/ai/test", headers=hdr).status_code, (401, 403))
+        with mock.patch("backend.ai.provider.requests.post", Router()):
+            r = self.teacher_client().post("/api/v1/teacher/ai/test", headers=hdr)
+        self.assertEqual(r.status_code, 200)
+        rows = r.get_json()["data"]["results"]
+        self.assertTrue(rows and all(x["status"] == "ok" for x in rows), rows)
+        self.assertNotIn(GKEY, r.get_data(as_text=True))
+        self.assertNotIn(QKEY, r.get_data(as_text=True))
+
     def test_99_original_records_untouched(self):
         now = _snapshot(self.db)
         for table, rows in self.original_snapshot.items():

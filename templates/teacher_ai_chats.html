@@ -25,6 +25,12 @@
 </style>
 <h2>Student AI Chats</h2>
 <p class="aic-empty">Read-only view. Messages are shown oldest to newest.</p>
+<div class="aic-card" style="margin-bottom:1rem">
+  <h3>AI connection test</h3>
+  <p class="aic-empty" style="padding:0 0 .5rem">Sends one tiny question to every AI in <code>.env</code> and shows which work. If one fails, the reason is shown here (only you can see this).</p>
+  <button id="aicTest" class="aic-in" type="button" style="cursor:pointer;width:auto;padding:.5rem 1rem">Test all AIs</button>
+  <div id="aicTestOut" style="margin-top:.6rem"></div>
+</div>
 <div class="aic-wrap">
   <div>
     <div class="aic-card">
@@ -129,6 +135,24 @@
         });
       });
     },350);
+  });
+  $('aicTest').addEventListener('click',function(){
+    var btn=this,out=$('aicTestOut');
+    btn.disabled=true;btn.textContent='Testing… (can take up to a minute)';out.textContent='';
+    var m=document.querySelector('meta[name="csrf-token"]');
+    fetch(B+'/test',{method:'POST',credentials:'same-origin',headers:{'X-CSRFToken':m?m.getAttribute('content'):'','Content-Type':'application/json'},body:'{}'})
+      .then(function(r){return r.json();}).then(function(r){
+        btn.disabled=false;btn.textContent='Test all AIs';
+        if(!r.ok){out.appendChild(el('div','aic-empty','Could not run the test.'));return;}
+        if(!r.data.results.length){out.appendChild(el('div','aic-empty','No AI has a key or a saved name in .env yet.'));return;}
+        r.data.results.forEach(function(x){
+          var w=el('div','aic-msg '+(x.status==='ok'?'assistant':'user'));
+          var icon=x.status==='ok'?'✅ ':(x.status==='failed'?'❌ ':'⚪ ');
+          w.appendChild(el('div','aic-meta',icon+x.provider+'  →  students see: '+x.shown_as+(x.ms!=null?'  ·  '+x.ms+' ms':'')));
+          w.appendChild(document.createTextNode(x.detail));
+          out.appendChild(w);
+        });
+      }).catch(function(){btn.disabled=false;btn.textContent='Test all AIs';out.appendChild(el('div','aic-empty','No connection.'));});
   });
   loadStudents(1);
 })();

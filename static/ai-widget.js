@@ -60,9 +60,10 @@
   panel.setAttribute('aria-label', 'AI assistant');
   var head = el('div', 'aiw-head');
   head.appendChild(el('b', null, 'AI Assistant'));
+  var histBtn = el('button', null, 'History'); histBtn.type = 'button';
   var newBtn = el('button', null, 'New chat'); newBtn.type = 'button';
   var closeBtn = el('button', null, '✕'); closeBtn.type = 'button'; closeBtn.setAttribute('aria-label', 'Close');
-  head.appendChild(newBtn); head.appendChild(closeBtn);
+  head.appendChild(histBtn); head.appendChild(newBtn); head.appendChild(closeBtn);
   var note = el('div', 'aiw-note', 'Your teacher can review these chats. Don\u2019t share passwords or private details.');
   var testBar = el('div', 'aiw-test', 'A test is open: I can explain concepts but I won\u2019t solve its questions.');
   var picker = el('div', 'aiw-pick');
@@ -70,12 +71,14 @@
   var offBar = el('div', 'aiw-test', 'AI assistant is not set up yet. Please tell your teacher.');
   var log = el('div', 'aiw-log');
   log.setAttribute('aria-live', 'polite');
+  var hist = el('div', 'aiw-hist');
+  hist.style.display = 'none';
   var form = el('form', 'aiw-form');
   var input = el('textarea'); input.rows = 1; input.maxLength = 2000; input.placeholder = 'Ask a maths question…';
   input.setAttribute('aria-label', 'Message');
   var send = el('button', null, 'Send'); send.type = 'submit';
   form.appendChild(input); form.appendChild(send);
-  panel.appendChild(head); panel.appendChild(picker); panel.appendChild(note); panel.appendChild(testBar); panel.appendChild(offBar); panel.appendChild(log); panel.appendChild(form);
+  panel.appendChild(head); panel.appendChild(picker); panel.appendChild(note); panel.appendChild(testBar); panel.appendChild(offBar); panel.appendChild(log); panel.appendChild(hist); panel.appendChild(form);
   document.body.appendChild(panel);
   document.body.appendChild(fab);
 
@@ -197,7 +200,7 @@
         conversationId = res.body.data.conversation_id; storeSet(conversationId);
         testBar.classList.toggle('on', !!res.body.data.test_mode);
         var note = (res.body.data.fallback && requested && labelOf(requested))
-          ? labelOf(requested) + ' was busy, so this answer is from ' + (res.body.data.message.answered_by ? res.body.data.message.answered_by.label : 'another AI') + '.'
+          ? labelOf(requested) + ' could not answer, so this answer is from ' + (res.body.data.message.answered_by ? res.body.data.message.answered_by.label : 'another AI') + '.'
           : null;
         addMsg('assistant', res.body.data.message.content, res.body.data.message.answered_by, note);
         input.focus();
@@ -214,6 +217,56 @@
       showErr('No connection. Check your internet and retry.', true);
     });
   }
+
+  // ---- My chat history: every past chat of THIS student (server checks ownership) ----
+  var histOpen = false;
+  function showHistory(v) {
+    histOpen = v;
+    hist.style.display = v ? 'block' : 'none';
+    log.style.display = v ? 'none' : '';
+    form.style.display = v ? 'none' : '';
+    histBtn.textContent = v ? 'Back' : 'History';
+  }
+  function openConversation(id) {
+    api('/conversations/' + encodeURIComponent(id) + '/messages').then(function (res) {
+      if (res.status === 200 && res.body && res.body.ok) {
+        conversationId = id; storeSet(id);
+        log.textContent = '';
+        res.body.data.forEach(function (m) { addMsg(m.role, m.content, m.answered_by); });
+        showHistory(false); scrollDown();
+      } else {
+        hist.appendChild(el('div', 'aiw-hist-empty', 'Could not open that chat. Please try again.'));
+      }
+    }).catch(function () { hist.appendChild(el('div', 'aiw-hist-empty', 'No connection. Check your internet.')); });
+  }
+  function loadHistoryList(page) {
+    if (page === 1) { hist.textContent = ''; hist.appendChild(el('div', 'aiw-hist-t', 'My previous chats')); }
+    var old = hist.querySelector('.aiw-hist-more'); if (old) old.remove();
+    api('/conversations?page=' + page + '&per_page=20').then(function (res) {
+      if (!(res.status === 200 && res.body && res.body.ok)) {
+        hist.appendChild(el('div', 'aiw-hist-empty', 'Could not load your chats.')); return;
+      }
+      var list = res.body.data || [], meta = res.body.meta || {};
+      if (page === 1 && !list.length) { hist.appendChild(el('div', 'aiw-hist-empty', 'No chats yet. Ask your first question!')); return; }
+      list.forEach(function (c) {
+        var b = el('button', 'aiw-hist-item'); b.type = 'button';
+        b.appendChild(el('span', 'aiw-hist-title', c.title || '(untitled)'));
+        b.appendChild(el('small', null, (c.updated_at || c.created_at || '').slice(0, 16)));
+        if (c.id === conversationId) b.classList.add('on');
+        b.addEventListener('click', function () { if (!busy) openConversation(c.id); });
+        hist.appendChild(b);
+      });
+      if (meta.page && meta.pages && meta.page < meta.pages) {
+        var more = el('button', 'aiw-hist-more', 'Show older chats'); more.type = 'button';
+        more.addEventListener('click', function () { loadHistoryList(meta.page + 1); });
+        hist.appendChild(more);
+      }
+    }).catch(function () { hist.appendChild(el('div', 'aiw-hist-empty', 'No connection. Check your internet.')); });
+  }
+  histBtn.addEventListener('click', function () {
+    if (histOpen) { showHistory(false); return; }
+    showHistory(true); loadHistoryList(1);
+  });
 
   var loaded = false;
   function open() {
@@ -232,7 +285,7 @@
   closeBtn.addEventListener('click', close);
   newBtn.addEventListener('click', function () {
     if (busy) return;
-    conversationId = null; storeSet(null); log.textContent = ''; greet();
+    conversationId = null; storeSet(null); log.textContent = ''; greet(); showHistory(false);
   });
   form.addEventListener('submit', function (e) { e.preventDefault(); submit(input.value, false); });
   input.addEventListener('keydown', function (e) {
