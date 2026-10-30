@@ -51,9 +51,26 @@ def _int_env(name, default):
         return default
 
 
+def _answered_by(provider_name):
+    """Student-facing alias only (never the real provider name)."""
+    cid, label = provider.alias_of(provider_name)
+    return {"id": cid, "label": label} if cid else None
+
+
 def _msg(row):
-    return {"id": row["id"], "role": row["role"], "content": row["content"],
-            "created_at": row["created_at"]}
+    out = {"id": row["id"], "role": row["role"], "content": row["content"],
+           "created_at": row["created_at"]}
+    if row["role"] == "assistant":
+        out["answered_by"] = _answered_by(row["provider"])
+    return out
+
+
+def _persona_prompt(base, provider_name):
+    _cid, label = provider.alias_of(provider_name)
+    if not label:
+        return base
+    return (base + f"\n\nYour name here is {label}. If asked who or what you are, say you are {label}, "
+            "the class AI assistant. Do not name any AI company, model or provider.")
 
 
 def _own_conversation(conn, cid, sid):
@@ -68,6 +85,7 @@ def status():
     with get_db() as conn:
         locked = context.active_test(conn, session["student_id"])
     return ok({"enabled": provider.is_enabled(),
+               "choices": provider.student_choices(),
                "test_mode": bool(locked) or False,
                "viewing_as_teacher": bool(session.get("impersonating"))})
 
@@ -94,7 +112,7 @@ def messages(cid):
         if _own_conversation(conn, cid, sid) is None:
             return fail("not_found", "Conversation not found.", 404)
         rows = conn.execute(
-            "SELECT id, role, content, created_at FROM ai_messages WHERE conversation_id=? "
+            "SELECT id, role, content, provider, created_at FROM ai_messages WHERE conversation_id=? "
             "ORDER BY id ASC LIMIT ?", (cid, MAX_MESSAGES_PER_CONVERSATION)).fetchall()
     return ok([_msg(r) for r in rows])
 
@@ -120,6 +138,10 @@ def chat():
     cid = body.get("conversation_id")
     if cid is not None and (not isinstance(cid, int) or isinstance(cid, bool)):
         return fail("invalid_param", "conversation_id must be a number.")
+    prefer = body.get("ai")
+    if prefer is not None:
+        if not isinstance(prefer, str) or prefer not in {c["id"] for c in provider.student_choices()}:
+            return fail("invalid_param", "That AI is not available.")
     hint_test = body.get("test_id")
     if hint_test is not None and (not isinstance(hint_test, int) or isinstance(hint_test, bool)):
         return fail("invalid_param", "test_id must be a number.")
@@ -160,7 +182,7 @@ def chat():
     turns = history + [{"role": "user", "text": text}]
 
     try:
-        answer, used = provider.ask(system, turns)
+        answer, used = provider.ask(lambda name: _persona_prompt(system, name), turns, prefer=prefer)
     except provider.AIError as exc:
         return fail(exc.code, exc.message, exc.status)
 
@@ -181,6 +203,9 @@ def chat():
             (cid, "assistant", answer, used, now))
         reply_id = cur.lastrowid
         conn.commit()
+    by = _answered_by(used)
     return ok({"conversation_id": cid,
                "test_mode": bool(locked) or False,
-               "message": {"id": reply_id, "role": "assistant", "content": answer, "created_at": now}})
+               "fallback": bool(prefer and by and by["id"] != prefer),
+               "message": {"id": reply_id, "role": "assistant", "content": answer, "created_at": now,
+                           "answered_by": by}})

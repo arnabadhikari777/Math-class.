@@ -456,6 +456,88 @@ class AITests(unittest.TestCase):
         self.assertEqual(r.get_json()["error"]["code"], "ai_unavailable")
         self.assertNotIn(GKEY, r.get_data(as_text=True))
 
+    # ------------------------------------------- AI choice + hidden real names
+    REAL = ("gemini", "groq", "gpt-oss", "qwen", "compound")
+
+    def assert_no_real_names(self, text):
+        """Real provider names must not appear in anything the server/JS adds. (The AI's own reply text is
+        its content; the mock answers here literally say 'Gemini answer', so 'content' is excluded.)"""
+        try:
+            def strip(x):
+                if isinstance(x, dict):
+                    return {k: strip(v) for k, v in x.items() if k != "content"}
+                if isinstance(x, list):
+                    return [strip(i) for i in x]
+                return x
+            text = json.dumps(strip(json.loads(text)))
+        except ValueError:
+            pass                                    # not JSON (e.g. the widget JS): check it whole
+        low = text.lower()
+        for word in self.REAL:
+            self.assertNotIn(word, low, f"real provider name '{word}' leaked to student: {text[:200]}")
+
+    def test_90_student_sees_only_alias_choices(self):
+        c = self.student_client(self.sa)
+        raw = c.get("/api/v1/ai/status").get_data(as_text=True)
+        data = json.loads(raw)["data"]
+        self.assertEqual([x["label"] for x in data["choices"]], ["Anubhab Dutta", "Arnab Adhikari"])
+        self.assert_no_real_names(raw)
+        self.assert_no_real_names(c.get("/static/ai-widget.js").get_data(as_text=True))
+
+    def test_91_choice_routes_to_right_provider_and_labels_alias(self):
+        c = self.student_client(self.sa)
+        r, router = self.chat(c, {"message": "use arnab", "ai": "arnab"})
+        d = r.get_json()["data"]
+        self.assertIn("groq.com", router.calls[0]["url"])
+        self.assertEqual(d["message"]["answered_by"]["label"], "Arnab Adhikari")
+        self.assertFalse(d["fallback"])
+        self.assert_no_real_names(r.get_data(as_text=True))
+        r, router = self.chat(c, {"message": "use anubhab", "ai": "anubhab"})
+        self.assertIn("googleapis.com", router.calls[0]["url"])
+        self.assertEqual(r.get_json()["data"]["message"]["answered_by"]["label"], "Anubhab Dutta")
+        self.assert_no_real_names(r.get_data(as_text=True))
+
+    def test_92_fallback_is_reported_with_aliases_only(self):
+        c = self.student_client(self.sa)
+        r, router = self.chat(c, {"message": "arnab is down", "ai": "arnab"}, Router(groq=FakeResp(500)))
+        d = r.get_json()["data"]
+        self.assertTrue(d["fallback"])
+        self.assertEqual(d["message"]["answered_by"]["label"], "Anubhab Dutta")
+        self.assertIn("googleapis.com", router.calls[-1]["url"])
+        self.assert_no_real_names(r.get_data(as_text=True))
+
+    def test_93_persona_name_in_prompt_matches_who_answers(self):
+        c = self.student_client(self.sa)
+        _, router = self.chat(c, {"message": "who are you", "ai": "arnab"})
+        self.assertIn("Arnab Adhikari", router.system_text())
+        _, router = self.chat(c, {"message": "who are you", "ai": "arnab"}, Router(groq=FakeResp(500)))
+        self.assertIn("Anubhab Dutta", router.system_text())       # fallback answered, so that persona is used
+
+    def test_94_invalid_or_unavailable_choice_rejected(self):
+        c = self.student_client(self.sa)
+        for bad in ["gemini", "groq", "x", 5, ["arnab"]]:
+            r, router = self.chat(c, {"message": "hi", "ai": bad})
+            self.assertEqual(r.status_code, 400, bad)
+            self.assertEqual(router.calls, [])
+        with mock.patch.dict(os.environ, {"GROQ_API_KEY": ""}):    # only Gemini has a key
+            st = c.get("/api/v1/ai/status").get_json()["data"]["choices"]
+            self.assertEqual([x["id"] for x in st], ["anubhab"])
+            r, _ = self.chat(c, {"message": "hi", "ai": "arnab"})
+            self.assertEqual(r.status_code, 400)
+
+    def test_95_history_for_student_has_alias_but_teacher_sees_real_names(self):
+        a = self.student_client(self.sa)
+        cid = self.chat(a, {"message": "history check", "ai": "arnab"})[0].get_json()["data"]["conversation_id"]
+        raw = a.get(f"/api/v1/ai/conversations/{cid}/messages").get_data(as_text=True)
+        self.assert_no_real_names(raw)
+        self.assertIn("Arnab Adhikari", raw)
+        t = self.teacher_client()
+        msgs = t.get(f"/api/v1/teacher/ai/conversations/{cid}/messages").get_json()["data"]["messages"]
+        bot = [m for m in msgs if m["role"] == "assistant"][0]
+        self.assertEqual(bot["provider"], "gpt-oss")
+        self.assertEqual(bot["provider_label"], "Groq \u00b7 gpt-oss")
+        self.assertIsNone([m for m in msgs if m["role"] == "user"][0]["provider_label"])
+
     # ------------------------------------------------------------ database
     def test_80_migration_006_is_additive_idempotent_reversible(self):
         from backend import migrations

@@ -40,3 +40,13 @@
 @media (max-width:520px){
   .aiw-panel{right:.5rem;left:.5rem;width:auto;bottom:5rem;height:calc(100vh - 6.5rem)}
 }
+
+.aiw-pick{align-items:center;gap:.4rem;flex-wrap:wrap;padding:.45rem .9rem;border-bottom:1px solid var(--border,#e2e8f0);background:var(--bg,#fff)}
+.aiw-pick-t{font-size:.74rem;color:var(--text-muted,#64748b)}
+.aiw-chip{border:1px solid var(--border-strong,#cbd5e1);background:var(--bg,#fff);color:var(--text,#0f172a);
+  border-radius:999px;padding:.22rem .7rem;font-size:.78rem;cursor:pointer}
+.aiw-chip.on{background:var(--primary,#2563eb);color:#fff;border-color:var(--primary,#2563eb)}
+.aiw-by{margin-top:.35rem;font-size:.7rem;color:var(--text-muted,#64748b)}
+.aiw-form{align-items:flex-end}
+.aiw-form textarea{box-sizing:border-box;min-height:44px!important;height:44px}
+.aiw-form button{height:44px}

@@ -103,7 +103,7 @@
       }
       d.messages.forEach(function(m){
         var w=el('div','aic-msg '+m.role);
-        w.appendChild(el('div','aic-meta',(m.role==='user'?d.student.name:'AI')+' · '+m.created_at));
+        w.appendChild(el('div','aic-meta',(m.role==='user'?d.student.name:'AI'+(m.provider_label?' ('+m.provider_label+')':''))+' · '+m.created_at));
         w.appendChild(document.createTextNode(m.content));
         box.appendChild(w);
       });

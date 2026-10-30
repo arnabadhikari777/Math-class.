@@ -11,6 +11,9 @@
   var conversationId = null;
   var lastText = '';
   var busy = false;
+  var AI_KEY = 'aiw_ai';
+  var choices = [];
+  var chosen = null;
 
   function csrf() {
     var m = document.querySelector('meta[name="csrf-token"]');
@@ -62,6 +65,8 @@
   head.appendChild(newBtn); head.appendChild(closeBtn);
   var note = el('div', 'aiw-note', 'Your teacher can review these chats. Don\u2019t share passwords or private details.');
   var testBar = el('div', 'aiw-test', 'A test is open: I can explain concepts but I won\u2019t solve its questions.');
+  var picker = el('div', 'aiw-pick');
+  picker.style.display = 'none';
   var offBar = el('div', 'aiw-test', 'AI assistant is not set up yet. Please tell your teacher.');
   var log = el('div', 'aiw-log');
   log.setAttribute('aria-live', 'polite');
@@ -70,16 +75,47 @@
   input.setAttribute('aria-label', 'Message');
   var send = el('button', null, 'Send'); send.type = 'submit';
   form.appendChild(input); form.appendChild(send);
-  panel.appendChild(head); panel.appendChild(note); panel.appendChild(testBar); panel.appendChild(offBar); panel.appendChild(log); panel.appendChild(form);
+  panel.appendChild(head); panel.appendChild(picker); panel.appendChild(note); panel.appendChild(testBar); panel.appendChild(offBar); panel.appendChild(log); panel.appendChild(form);
   document.body.appendChild(panel);
   document.body.appendChild(fab);
 
   function scrollDown() { log.scrollTop = log.scrollHeight; }
-  function addMsg(role, text) {
+  function addMsg(role, text, by, note) {
     var m = el('div', 'aiw-msg ' + (role === 'user' ? 'aiw-user' : 'aiw-bot'));
     fillRich(m, text);
+    if (role !== 'user' && by && by.label) m.appendChild(el('div', 'aiw-by', by.label));
+    if (note) m.appendChild(el('div', 'aiw-by', note));
     log.appendChild(m); scrollDown();
     return m;
+  }
+  function labelOf(id) {
+    for (var i = 0; i < choices.length; i++) if (choices[i].id === id) return choices[i].label;
+    return '';
+  }
+  function renderPicker() {
+    picker.textContent = '';
+    if (choices.length < 2) { picker.style.display = 'none'; return; }
+    picker.style.display = 'flex';
+    picker.appendChild(el('span', 'aiw-pick-t', 'Answer by:'));
+    choices.forEach(function (c) {
+      var b = el('button', 'aiw-chip' + (c.id === chosen ? ' on' : ''), c.label);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', c.id === chosen ? 'true' : 'false');
+      b.addEventListener('click', function () {
+        chosen = c.id;
+        try { sessionStorage.setItem(AI_KEY, chosen); } catch (e) {}
+        renderPicker();
+      });
+      picker.appendChild(b);
+    });
+  }
+  function setChoices(list) {
+    choices = list || [];
+    var saved = null;
+    try { saved = sessionStorage.getItem(AI_KEY); } catch (e) {}
+    var ids = choices.map(function (c) { return c.id; });
+    chosen = ids.indexOf(chosen) !== -1 ? chosen : (ids.indexOf(saved) !== -1 ? saved : (ids[0] || null));
+    renderPicker();
   }
   function clearErr() { var e = log.querySelector('.aiw-err'); if (e) e.remove(); }
   function showErr(text, retry) {
@@ -113,7 +149,7 @@
     api('/conversations/' + encodeURIComponent(saved) + '/messages').then(function (res) {
       if (res.status === 200 && res.body && res.body.ok) {
         conversationId = parseInt(saved, 10);
-        res.body.data.forEach(function (m) { addMsg(m.role, m.content); });
+        res.body.data.forEach(function (m) { addMsg(m.role, m.content, m.answered_by); });
         if (!res.body.data.length) greet();
       } else { storeSet(null); greet(); }
     }).catch(function () { greet(); });
@@ -132,6 +168,7 @@
     api('/status').then(function (res) {
       if (res.status !== 200 || !res.body || !res.body.ok) return;
       testBar.classList.toggle('on', !!res.body.data.test_mode);
+      setChoices(res.body.data.choices);
       setOff(!res.body.data.enabled || !!res.body.data.viewing_as_teacher);
     }).catch(function () {});
   }
@@ -150,6 +187,8 @@
     setBusy(true);
     var typing = el('div', 'aiw-typing', 'Thinking…'); log.appendChild(typing); scrollDown();
     var payload = { message: text };
+    var requested = chosen;
+    if (chosen) payload.ai = chosen;
     if (conversationId) payload.conversation_id = conversationId;
     else { var h = testHint(); if (h) payload.test_id = h; }
     api('/chat', { method: 'POST', body: JSON.stringify(payload) }).then(function (res) {
@@ -157,7 +196,10 @@
       if (res.status === 200 && res.body && res.body.ok) {
         conversationId = res.body.data.conversation_id; storeSet(conversationId);
         testBar.classList.toggle('on', !!res.body.data.test_mode);
-        addMsg('assistant', res.body.data.message.content);
+        var note = (res.body.data.fallback && requested && labelOf(requested))
+          ? labelOf(requested) + ' was busy, so this answer is from ' + (res.body.data.message.answered_by ? res.body.data.message.answered_by.label : 'another AI') + '.'
+          : null;
+        addMsg('assistant', res.body.data.message.content, res.body.data.message.answered_by, note);
         input.focus();
       } else if (res.status === 404 && conversationId) {
         conversationId = null; storeSet(null); showErr('That chat is no longer available. Tap Retry to start a new one.', true);

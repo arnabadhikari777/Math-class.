@@ -9,6 +9,7 @@ from functools import wraps
 
 from flask import Blueprint, redirect, render_template, request, session, url_for
 
+from ..ai import provider as ai_provider
 from ..db import escape_like, get_db
 from ..http import fail, ok, page_meta, paging, teacher_api
 
@@ -107,7 +108,9 @@ def messages(cid):
             "WHERE conversation_id=? ORDER BY id ASC LIMIT ? OFFSET ?", (cid, per_page, offset)).fetchall()
     return ok({"conversation": {"id": conv["id"], "title": conv["title"],
                                 "created_at": conv["created_at"], "updated_at": conv["updated_at"]},
-               "student": _student(conv), "test": test, "messages": [dict(r) for r in rows]},
+               "student": _student(conv), "test": test,
+               "messages": [dict(r, provider_label=ai_provider.real_label(r["provider"]) if r["provider"] else None)
+                            for r in rows]},
               page_meta(page_, per_page, total))
 
 

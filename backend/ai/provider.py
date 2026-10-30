@@ -18,6 +18,34 @@ GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:ge
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
+# What STUDENTS see instead of the real provider names (id, display name, real providers).
+# The real names are only ever shown on the Sir/Admin pages.
+CHOICES = (
+    ("anubhab", "Anubhab Dutta", ("gemini",)),
+    ("arnab", "Arnab Adhikari", ("gpt-oss", "qwen", "groq")),
+)
+REAL_LABELS = {"gemini": "Gemini", "gpt-oss": "Groq \u00b7 gpt-oss", "qwen": "Groq \u00b7 Qwen",
+               "groq": "Groq \u00b7 compound"}
+
+
+def alias_of(provider_name):
+    """(choice_id, student-facing name) for a real provider, or (None, None)."""
+    for cid, label, provs in CHOICES:
+        if provider_name in provs:
+            return cid, label
+    return None, None
+
+
+def student_choices():
+    """Choices a student may pick: only those with at least one working key. No real names."""
+    order = configured_order()
+    return [{"id": cid, "label": label} for cid, label, provs in CHOICES if any(p in order for p in provs)]
+
+
+def real_label(provider_name):
+    return REAL_LABELS.get(provider_name, provider_name or "")
+
+
 class AIError(Exception):
     """code is machine readable; message is safe to show to the student."""
 
@@ -105,10 +133,16 @@ def _ask_groq(name, system, turns, timeout):
     return text
 
 
-def ask(system, turns):
+def ask(system, turns, prefer=None):
     """turns: [{"role": "user"|"assistant", "text": str}] ending with a user turn.
+    system: str, or a function(provider_name) -> str (so the persona can match who answers).
+    prefer: a CHOICES id to try first; the others stay as automatic fallback.
     Returns (text, provider_name). Raises AIError."""
     order = configured_order()
+    if prefer:
+        first_group = next((provs for cid, _l, provs in CHOICES if cid == prefer), ())
+        first = [p for p in order if p in first_group]
+        order = first + [p for p in order if p not in first]
     if _env("AI_ENABLED", "1").lower() in ("0", "false", "no") or not order:
         raise AIError("ai_not_configured", "AI assistant is not available right now.", 503)
     timeout = _timeout()
@@ -119,7 +153,8 @@ def ask(system, turns):
             break
         t = min(timeout, remaining)
         try:
-            text = _ask_gemini(system, turns, t) if name == "gemini" else _ask_groq(name, system, turns, t)
+            sys_text = system(name) if callable(system) else system
+            text = _ask_gemini(sys_text, turns, t) if name == "gemini" else _ask_groq(name, sys_text, turns, t)
             return text, name
         except (_ProviderFailed, requests.RequestException, ValueError) as exc:
             # class (+ status for our own _ProviderFailed) only; never URL, headers or key
