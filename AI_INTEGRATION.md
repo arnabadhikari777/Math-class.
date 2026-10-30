@@ -43,3 +43,25 @@ Gemini fail/timeout/429/5xx করলে নিজে Groq (`openai/gpt-oss-120b
 
 ## Sir-এর ব্যবহার
 Sir login → উপরের **AI Chats** → ছাত্র খুঁজুন/বাছুন → conversation → পুরো message (sender, সময়, পুরোনো→নতুন)। "Search all messages" দিয়ে সব chat-এ শব্দ খোঁজা যায়। শুধু নাম/শ্রেণি/রোল দেখা যায়; email, মোবাইল দেখানো হয় না। Chat-এর সঙ্গে test থাকলে test-এর নাম ও (জমা দিলে) নম্বর দেখা যায়। ছাত্ররা chat-এ Sir দেখতে পারেন — এই কথা widget-এ লেখা আছে।
+
+
+## নতুন AI যোগ করা ও ছাত্রদের দেখানো নাম বদলানো (শুধু `.env` দিয়ে)
+কোড বদলাতে হয় না। `.env`-এ key বসান, তারপর Web ট্যাবে **Reload**।
+
+**১. Key:** `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY`, `XAI_API_KEY`, `TOGETHER_API_KEY`, `CEREBRAS_API_KEY`, `PERPLEXITY_API_KEY`। এছাড়া যেকোনো OpenAI-compatible সার্ভিসের জন্য `CUSTOM_AI_BASE_URL` + `CUSTOM_AI_API_KEY` + `CUSTOM_AI_MODEL`।
+
+**২. ছাত্ররা যে নাম দেখবে — `AI_NAME_<আসল AI>=ছাত্রদের নাম`:**
+```
+AI_NAME_GEMINI=Anubhab Dutta
+AI_NAME_GPT_OSS=Arnab Adhikari
+AI_NAME_OPENAI=Rahul Sen
+AI_NAME_ANTHROPIC=Priya Das
+```
+বাঁ দিকে আসল AI (তাই কোনটা কোন AI সবসময় বোঝা যায়), ডান দিকে যে নাম খুশি, বাংলাতেও চলবে।
+- আসল AI-এর নাম: `GEMINI`, `GPT_OSS`, `QWEN`, `GROQ`, `OPENAI`, `ANTHROPIC`, `DEEPSEEK`, `MISTRAL`, `OPENROUTER`, `XAI`, `TOGETHER`, `CEREBRAS`, `PERPLEXITY`, `CUSTOM`।
+- দুটো AI-কে **একই নাম** দিলে ছাত্ররা একটাই বোতাম দেখে; প্রথমটা আগে চেষ্টা হয়, না চললে দ্বিতীয়টা। (Default-এ gpt-oss, qwen, groq তিনটাই "Arnab Adhikari"।)
+- নাম না দিলে ওই AI ব্যবহারই হয় না। Key না থাকলে বোতামও আসে না।
+- ছাত্ররা আসল নাম (Gemini/OpenAI...) কখনো দেখে না; শুধু Sir-এর AI Chats পেজে দেখা যায়।
+- বোতামের ক্রম বদলাতে: `AI_PROVIDER_ORDER=openai,gemini,gpt-oss`।
+
+**৩. Model বদলানো:** `OPENAI_MODEL=...`, `ANTHROPIC_MODEL=...` ইত্যাদি। Default model নামগুলো আমার আন্দাজ-করা মান; সার্ভিসের ডকুমেন্টে যাচাই করে দরকারে `.env`-এ বদলে নিন।
