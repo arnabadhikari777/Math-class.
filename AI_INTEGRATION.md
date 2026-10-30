@@ -23,7 +23,8 @@ GROQ_API_KEY=...          # fallback
 Gemini fail/timeout/429/5xx করলে নিজে Groq (`openai/gpt-oss-120b`) চেষ্টা করে। দুটোই fail করলে ছাত্র নিরাপদ error ও Retry দেখে, কিছু save হয় না। Key কখনো browser/GitHub-এ যায় না।
 
 ## Database migration
-- App চালু হলে `006_ai_chat` নিজে চলে (আগে স্বয়ংক্রিয় backup নেয়)। কোনো পুরোনো table/row বদলায় না।
+- App চালু হলে `006_ai_chat` নিজে চলে (স্বয়ংক্রিয় backup নেওয়া হয় **না**)। কোনো পুরোনো table/row বদলায় না।
+- হাতে backup নিতে: `python -m backend.migrations backup`
 - হাতে চালাতে: `python -m backend.migrations status` / `migrate`।
 - ফেরত নিতে: `python -m backend.migrations rollback 006_ai_chat` (শুধু AI table মোছে)।
 - মনে রাখবেন: কোনো ছাত্রকে delete করলে তার AI chat-ও মুছে যায় (results-এর মতোই)।

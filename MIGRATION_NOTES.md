@@ -12,7 +12,8 @@
 | 004_unique_attendance | UNIQUE(student_id,date) — একই শর্ত | index drop |
 
 ## স্বয়ংক্রিয় আচরণ
-অ্যাপ স্টার্টে (`init_db()`-এর পরে) pending migration থাকলে প্রথমে `backups/database-YYYYmmdd-HHMMSS.db` (SQLite online backup, সর্বশেষ ১০টি রাখা হয়), তারপর প্রতিটি migration আলাদা transaction-এ। ব্যর্থ হলে ওই migration rollback হয়, সাইট চালু থাকে। বন্ধ করতে `.env`-এ `BACKEND_AUTO_MIGRATE=0`।
+অ্যাপ স্টার্টে (`init_db()`-এর পরে) pending migration থাকলে সেগুলো চালায় — **স্বয়ংক্রিয় backup নেওয়া হয় না**। প্রতিটি migration আলাদা transaction-এ। ব্যর্থ হলে ওই migration rollback হয়, সাইট চালু থাকে। Migration বন্ধ করতে `.env`-এ `BACKEND_AUTO_MIGRATE=0`।
+ম্যানুয়াল backup: `python -m backend.migrations backup` (সর্বশেষ ১০টি রাখা হয়)।
 
 ## Deployment-এর আগে (PythonAnywhere)
 1. Bash console: `cd ~/<project> && cp database.db database.pre-backend-$(date +%F).db` (নিজস্ব ম্যানুয়াল backup)

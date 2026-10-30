@@ -4,8 +4,8 @@
 Rules this module follows (see MIGRATION_NOTES.md):
   * Only CREATE TABLE/INDEX IF NOT EXISTS. Never DROP/DELETE/UPDATE existing data.
   * Each migration has a ``down`` that removes ONLY what that migration created.
-  * A timestamped backup of the database is taken (SQLite online-backup API)
-    before the first pending migration is applied.
+  * Automatic app-start migrations do NOT take a backup.
+    Use CLI ``backup`` or pass backup=True to run_pending/rollback when you want one.
   * A unique index is created only when current data has no duplicates;
     otherwise it is skipped (and retried on next start) - data is never edited.
 

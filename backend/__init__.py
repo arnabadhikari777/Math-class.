@@ -21,10 +21,11 @@ def register_backend(app):
     if host is not None and hasattr(host, "PASS_PERCENTAGE"):
         app.config.setdefault("PASS_PERCENTAGE", host.PASS_PERCENTAGE)
 
-    # Additive migrations (with automatic backup first). Disable with BACKEND_AUTO_MIGRATE=0
+    # Additive migrations on start (no automatic backup). Disable with BACKEND_AUTO_MIGRATE=0
+    # Manual backup anytime: python -m backend.migrations backup
     if os.environ.get("BACKEND_AUTO_MIGRATE", "1").strip().lower() not in ("0", "false", "no"):
         try:
-            for row in migrations.run_pending(db_path(app)):
+            for row in migrations.run_pending(db_path(app), backup=False):
                 log.info("backend migration: %s", row)
         except Exception as exc:  # the site must still start if a migration cannot run
             log.error("backend migrations could not run: %s", exc)
