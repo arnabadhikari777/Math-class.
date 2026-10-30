@@ -218,11 +218,16 @@
   var loaded = false;
   function open() {
     panel.classList.add('open'); fab.setAttribute('aria-expanded', 'true');
+    document.body.style.overflow = 'hidden';
     if (!loaded) { loaded = true; loadHistory(); }
     refreshStatus();
     setTimeout(function () { input.focus(); }, 50);
   }
-  function close() { panel.classList.remove('open'); fab.setAttribute('aria-expanded', 'false'); fab.focus(); }
+  function close() {
+    panel.classList.remove('open'); fab.setAttribute('aria-expanded', 'false');
+    document.body.style.overflow = '';
+    fab.focus();
+  }
   fab.addEventListener('click', function () { panel.classList.contains('open') ? close() : open(); });
   closeBtn.addEventListener('click', close);
   newBtn.addEventListener('click', function () {
