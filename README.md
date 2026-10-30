@@ -62,3 +62,5 @@ Teacher login: set `TEACHER_USERNAME` and `TEACHER_PASSWORD` in `.env` (no defau
 - Docs: `BACKEND_AUDIT.md`, `BACKEND_ARCHITECTURE.md`, `BACKEND_FEATURES.md`, `API_DOCUMENTATION.md`, `MIGRATION_NOTES.md`, `TEST_REPORT.md`.
 - Tests: `python -m unittest discover -s tests -v` (runs on a temp copy; never touches `database.db`).
 - Migrations: `python -m backend.migrations status|backup|migrate|rollback <id>`.
+
+> AI Assistant ও Sir-এর chat monitoring: দেখুন `AI_INTEGRATION.md`।

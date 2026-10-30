@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 def register_backend(app):
     from . import guards, migrations
     from .db import db_path
-    from .routes import public_api, student_api, teacher_api
+    from .routes import ai_admin, ai_api, public_api, student_api, teacher_api
 
     # Business constants stay owned by app.py; read, never copy.
     host = sys.modules.get(app.import_name)
@@ -33,3 +33,5 @@ def register_backend(app):
     app.register_blueprint(public_api.bp)
     app.register_blueprint(student_api.bp)
     app.register_blueprint(teacher_api.bp)
+    app.register_blueprint(ai_api.bp)
+    app.register_blueprint(ai_admin.bp)

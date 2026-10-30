@@ -205,7 +205,8 @@ class BackendTests(unittest.TestCase):
         self.assertTrue(self.original_tables <= tables)
         self.assertTrue({"test_attempts", "schema_migrations"} <= tables)
         self.assertEqual(applied, {"001_test_attempts", "002_perf_indexes",
-                                   "003_unique_results", "004_unique_attendance"})
+                                   "003_unique_results", "004_unique_attendance",
+                                   "005_normalize_class_names", "006_ai_chat"})
 
     def test_12_backup_created_before_migrating(self):
         folder = os.path.join(self.proj, "backups")

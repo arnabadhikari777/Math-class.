@@ -721,6 +721,7 @@
       <a href="{{ url_for('manage_tests') }}">Tests</a>
       <a href="{{ url_for('manage_announcements') }}">Notices</a>
       <a href="{{ url_for('teacher_contacts') }}">Inbox</a>
+      <a href="{{ url_for('api_ai_admin.page') }}">AI Chats</a>
       <a href="{{ url_for('teacher_logout') }}" class="btn-logout">Logout</a>
     {% elif session.get('is_teacher') and session.get('student_id') %}
       <a href="{{ url_for('student_dashboard') }}">Student view</a>
@@ -754,6 +755,11 @@
 </footer>
 
 <canvas id="confetti"></canvas>
+
+{% if session.get('student_id') and not session.get('is_teacher') %}
+<link rel="stylesheet" href="{{ url_for('static', filename='ai-widget.css') }}">
+<script src="{{ url_for('static', filename='ai-widget.js') }}" defer></script>
+{% endif %}
 
 <script>
   // Theme

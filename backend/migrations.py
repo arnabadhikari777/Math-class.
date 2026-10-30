@@ -145,6 +145,38 @@ def _down_normalize_classes(conn):
             conn.execute(f"UPDATE {table} SET {col}=? WHERE {col}=?", (old, new))
 
 
+def _up_ai_chat(conn):
+    """AI assistant chats: one conversation belongs to exactly one student."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS ai_conversations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id INTEGER NOT NULL,
+            title TEXT NOT NULL DEFAULT '',
+            test_id INTEGER,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+            FOREIGN KEY (test_id) REFERENCES tests(id) ON DELETE SET NULL
+        )""")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS ai_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            conversation_id INTEGER NOT NULL,
+            role TEXT NOT NULL CHECK (role IN ('user','assistant')),
+            content TEXT NOT NULL,
+            provider TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (conversation_id) REFERENCES ai_conversations(id) ON DELETE CASCADE
+        )""")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_conv_student ON ai_conversations(student_id, updated_at)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_msg_conv ON ai_messages(conversation_id, id)")
+
+
+def _down_ai_chat(conn):
+    conn.execute("DROP TABLE IF EXISTS ai_messages")
+    conn.execute("DROP TABLE IF EXISTS ai_conversations")
+
+
 MIGRATIONS = [
     ("001_test_attempts", "Record when a student opens a test (for timer checks)",
      _up_test_attempts, _down_test_attempts),
@@ -156,6 +188,8 @@ MIGRATIONS = [
      _up_uq_attendance, _down_uq_attendance),
     ("005_normalize_class_names", "Map legacy class labels to canonical values (SIX…OTHER)",
      _up_normalize_classes, _down_normalize_classes),
+    ("006_ai_chat", "AI assistant: ai_conversations + ai_messages (new tables only)",
+     _up_ai_chat, _down_ai_chat),
 ]
 
 
