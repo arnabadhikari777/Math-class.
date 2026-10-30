@@ -35,17 +35,17 @@ QWEN_DIRECT_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/c
 PROVIDERS = {
     "gemini": dict(kind="gemini", label="Gemini", key_env="GEMINI_API_KEY",
                    model_env="GEMINI_MODEL", model="gemini-3.5-flash-lite"),
-    # --- Groq: ONE key (GROQ_API_KEY) runs gpt-oss and compound (and Qwen if QWEN_API_KEY is empty) ---
+    # --- Groq: ONE key (GROQ_API_KEY) runs gpt-oss-120b, gpt-oss-20b (and Qwen if QWEN_API_KEY is empty) ---
     "gpt-oss": dict(kind="openai", label="Groq \u00b7 gpt-oss", url=GROQ_URL, key_env="GROQ_API_KEY",
                     model_env="GPT_OSS_MODEL", model="openai/gpt-oss-120b"),
     # Qwen: with QWEN_API_KEY it talks to Alibaba directly; otherwise it is run on Groq (GROQ_API_KEY).
     "qwen": dict(kind="openai", label="Qwen", url=QWEN_DIRECT_URL, key_env="QWEN_API_KEY",
                  url_env="QWEN_BASE_URL", model_env="QWEN_MODEL", model="qwen-plus",
                  groq_fallback=dict(label="Groq \u00b7 Qwen", model="qwen/qwen3.8-27b")),
-    "groq": dict(kind="openai", label="Groq \u00b7 compound", url=GROQ_URL, key_env="GROQ_API_KEY",
-                 model_env="GROQ_COMPOUND_MODEL", model="groq/compound"),
+    "groq": dict(kind="openai", label="Groq \u00b7 gpt-oss-20b", url=GROQ_URL, key_env="GROQ_API_KEY",
+                 model_env="GROQ_COMPOUND_MODEL", model="openai/gpt-oss-20b"),
     "openai": dict(kind="openai", label="OpenAI", url="https://api.openai.com/v1/chat/completions",
-                   key_env="OPENAI_API_KEY", model_env="OPENAI_MODEL", model="gpt-4o-mini",
+                   key_env="OPENAI_API_KEY", model_env="OPENAI_MODEL", model="gpt-6-luna",
                    tokens_param="max_completion_tokens"),
     "anthropic": dict(kind="anthropic", label="Claude (Anthropic)", key_env="ANTHROPIC_API_KEY",
                       model_env="ANTHROPIC_MODEL", model="claude-haiku-5-5"),
@@ -308,6 +308,10 @@ def _ask_openai_compat(name, system, turns, timeout):
     # uniform OpenAI-compatible payload: no model-specific extras that could cause a 400
     payload = {"model": model, "messages": messages,
                PROVIDERS[name].get("tokens_param", "max_tokens"): 1024}
+    # gpt-6-luna (and other GPT-6 reasoning models) default to medium reasoning;
+    # force none so answers stay fast and content is always in message.content
+    if name == "openai":
+        payload["reasoning_effort"] = "none"
     if name == "custom" and not url.endswith("/chat/completions"):
         url += "/chat/completions"
     r = requests.post(url, headers={"Authorization": "Bearer " + key}, json=payload, timeout=timeout)
