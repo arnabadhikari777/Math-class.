@@ -43,3 +43,14 @@ Gemini fail/timeout/429/5xx করলে নিজে Groq (`openai/gpt-oss-120b
 
 ## Sir-এর ব্যবহার
 Sir login → উপরের **AI Chats** → ছাত্র খুঁজুন/বাছুন → conversation → পুরো message (sender, সময়, পুরোনো→নতুন)। "Search all messages" দিয়ে সব chat-এ শব্দ খোঁজা যায়। শুধু নাম/শ্রেণি/রোল দেখা যায়; email, মোবাইল দেখানো হয় না। Chat-এর সঙ্গে test থাকলে test-এর নাম ও (জমা দিলে) নম্বর দেখা যায়। ছাত্ররা chat-এ Sir দেখতে পারেন — এই কথা widget-এ লেখা আছে।
+
+
+## Multi-AI: সব কিছু `.env` থেকে (key বসালে চালু, না বসালে বন্ধ)
+- **চালু/বন্ধ:** `.env`-এ যে AI-এর key বসাবে শুধু সেটাই ছাত্রদের বোতামে আসবে ও উত্তর দেবে। key খালি থাকলে ওই AI বন্ধ, কোনো error হয় না।
+- **নাম:** `AI_NAME_<আসল AI>=ছাত্রদের নাম`, যেমন `AI_NAME_GEMINI=Anubhab Dutta`, `AI_NAME_OPENAI=Rahul Sen`। আসল নাম ছাত্ররা দেখে না।
+- **একই নাম দুই AI-কে** দিলে একটাই বোতাম; প্রথমটা না চললে দ্বিতীয়টা উত্তর দেয়।
+- **নাম খালি:** gemini/gpt-oss/qwen/groq পুরোনো নাম পায়, বাকিরা "AI 6" ধরনের নিরপেক্ষ নাম।
+- **Qwen:** `QWEN_API_KEY` থাকলে সরাসরি Alibaba থেকে (`qwen-plus`); না থাকলে `GROQ_API_KEY` দিয়ে Groq-এ চলে।
+- **Fallback ও ক্রম:** একটা AI fail করলে পরেরটা নিজে চলে। `AI_PROVIDER_ORDER=openai,gemini` দিলে শুধু এই দুটো, এই ক্রমে।
+- **Model বদলানো:** `OPENAI_MODEL=...` ইত্যাদি। Default model নামগুলো আন্দাজ-করা নিরাপদ মান; সার্ভিসের ডকুমেন্টে যাচাই করে নিও।
+- পুরো তালিকা ও ব্যাখ্যা `.env.example`-এ আছে। বদলানোর পর PythonAnywhere-এ Reload দাও।
