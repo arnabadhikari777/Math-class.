@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Review: {{ test.title }}{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>{{ test.title }}
+    {% if test.status == 'published' %}<span class="badge badge-green">Published</span>{% else %}<span class="badge badge-gray">Draft</span>{% endif %}
+  </h2>
+  <p class="helper-text">
+    Subject: {{ test.subject or '-' }} &middot; Class: {{ test.class_name }} &middot; Duration: {{ test.duration_minutes }} min &middot;
+    Questions: {{ questions|length }} &middot; Total marks: {{ total_marks }} &middot;
+    Negative marking: {% if test.negative_marks %}-{{ '%g'|format(test.negative_marks) }} per wrong answer{% else %}off{% endif %} &middot;
+    Results: {{ 'released by teacher' if test.result_release == 'manual' else 'shown immediately' }}
+  </p>
+
+  {% if issues and test.status != 'published' %}
+  <div class="card" style="border-left:4px solid #dc2626">
+    <strong>Fix these before publishing:</strong>
+    <ul>{% for i in issues %}<li>{{ i }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+    {% if editable %}
+      <a class="btn btn-outline" href="{{ url_for('add_questions', test_id=test.id) }}">Add / edit questions</a>
+      <a class="btn btn-outline" href="{{ url_for('test_settings', test_id=test.id) }}">Change rules</a>
+      <form method="POST" action="{{ url_for('publish_test', test_id=test.id) }}"
+            onsubmit="return confirm('Publish this test? Students of class {{ test.class_name }} will be notified.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-primary" type="submit" {% if issues %}disabled{% endif %}>Publish Test</button>
+      </form>
+    {% else %}
+      <form method="POST" action="{{ url_for('unpublish_test', test_id=test.id) }}"
+            onsubmit="return confirm('Unpublish? Students will no longer see this test. Nobody is notified.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-outline" type="submit">Unpublish to edit</button>
+      </form>
+    {% endif %}
+    <a class="btn btn-secondary" href="{{ url_for('manage_tests') }}">Back to tests</a>
+  </div>
+</div>
+
+{% for q in questions %}
+<div class="card">
+  <div style="font-weight:700">Q{{ loop.index }}. {{ q.question_text }}
+    <span class="badge badge-info">{{ q.marks }} mark{{ 's' if q.marks != 1 else '' }}</span></div>
+  {% if q.image_url %}<img src="{{ q.image_url }}" alt="Question image" loading="lazy" style="max-width:100%;height:auto;margin:.5rem 0;background:#fff">{% endif %}
+  {% for letter, opt in [('A', q.option_a), ('B', q.option_b), ('C', q.option_c), ('D', q.option_d)] %}
+  <div style="padding:2px 0;{% if letter == q.correct_option %}font-weight:700;color:#15803d{% endif %}">
+    {{ letter }}. {{ opt }}{% if letter == q.correct_option %} &#10003; correct{% endif %}</div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">No questions yet. Add some in the Question Studio.</div>
+{% endfor %}
+{% endblock %}

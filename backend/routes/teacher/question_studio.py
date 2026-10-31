@@ -305,8 +305,12 @@ def test_questions_save(test_id):
     if len(items) > MAX_QUESTIONS_PER_SAVE:
         return jsonify({"ok": False, "errors": [{"index": 0, "message": "একবারে সর্বোচ্চ %d টি প্রশ্ন।" % MAX_QUESTIONS_PER_SAVE}]}), 400
     with get_db() as conn:
-        if conn.execute("SELECT 1 FROM tests WHERE id=?", (test_id,)).fetchone() is None:
+        trow = conn.execute("SELECT status FROM tests WHERE id=?", (test_id,)).fetchone()
+        if trow is None:
             return jsonify({"ok": False, "errors": [{"index": 0, "message": "Test পাওয়া যায়নি।"}]}), 404
+        if (trow["status"] or "draft") != "draft":
+            return jsonify({"ok": False, "errors": [{"index": 0, "message":
+                            "This test is published. Unpublish it to add or change questions."}]}), 409
         clean, errors = [], []
         for i, item in enumerate(items):
             c, err = _validate_item(conn, item, i + 1)

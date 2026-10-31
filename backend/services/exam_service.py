@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Exam engine: versions, per-attempt question snapshots, server-side timer,
-multiple attempts, atomic submission and the counted result.
+one attempt per student, atomic submission and the counted result.
 
 Rules (all enforced HERE, on the server - the browser clock is display only):
   * the first attempt that starts freezes the exam version it uses;
@@ -86,11 +86,17 @@ def attempts_used(conn, test_id, student_id):
 
 
 def attempts_left(conn, test, student_id):
-    """None = unlimited, otherwise how many attempts remain."""
-    mx = int(test["max_attempts"] or 0)
-    if mx == 0:
-        return None
-    return max(0, mx - attempts_used(conn, test["id"], student_id))
+    """One attempt per student per test (the old max_attempts setting is ignored; old rows are kept).
+    Returns 1 while the student has never started the test, otherwise 0."""
+    return max(0, 1 - attempts_used(conn, test["id"], student_id))
+
+
+def has_attempted(conn, test_id, student_id):
+    """True when the student already started this test in any way (running, submitted, auto-submitted, rejected)
+    or has a stored result for it."""
+    if attempts_used(conn, test_id, student_id):
+        return True
+    return conn.execute("SELECT 1 FROM results WHERE test_id=? AND student_id=?", (test_id, student_id)).fetchone() is not None
 
 
 def get_running(conn, test_id, student_id):
@@ -119,8 +125,7 @@ def start_or_resume(conn, test, student_id):
                 return None, "expired"
             conn.execute("COMMIT")
             return run, "resumed"
-        left = attempts_left(conn, test, student_id)
-        if left is not None and left <= 0:
+        if has_attempted(conn, test["id"], student_id):   # one attempt only - decided here, on the server
             conn.execute("COMMIT")
             return None, "limit"
         if conn.execute("SELECT COUNT(*) FROM questions WHERE test_id=?", (test["id"],)).fetchone()[0] == 0:
@@ -148,6 +153,29 @@ def start_or_resume(conn, test, student_id):
             (aid, now.isoformat(), vid))
         conn.execute("COMMIT")
         return conn.execute("SELECT * FROM exam_attempts WHERE id=?", (aid,)).fetchone(), "started"
+    except Exception:
+        try:
+            conn.execute("ROLLBACK")
+        except sqlite3.Error:
+            pass
+        raise
+
+
+def resume_only(conn, test, student_id):
+    """Open the question paper of an attempt that is ALREADY running. Never creates an attempt.
+    -> (attempt | None, state)  state in 'resumed', 'none', 'expired'."""
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        run = get_running(conn, test["id"], student_id)
+        if run is None:
+            conn.execute("COMMIT")
+            return None, "none"
+        if _expired(run) and timer_enforced():
+            _finalize_expired(conn, test, run)
+            conn.execute("COMMIT")
+            return None, "expired"
+        conn.execute("COMMIT")
+        return run, "resumed"
     except Exception:
         try:
             conn.execute("ROLLBACK")

@@ -34,7 +34,7 @@ class QBankTests(unittest.TestCase):
         cls.sid = c.execute("INSERT INTO students (name,class_name,roll,email,mobile,password_hash,is_verified,registered_at,session_version) VALUES ('S','TEN','1','s@t.l','9','%s',1,'%s',0)" % (generate_password_hash("Passw0rd1"), now)).lastrowid
         cls.tid = c.execute("INSERT INTO tests (title,subject,class_name,duration_minutes,is_active,created_at) VALUES ('T','M','TEN',30,1,?)", (now,)).lastrowid
         c.execute("INSERT INTO questions (test_id,question_text,option_a,option_b,option_c,option_d,correct_option,marks) VALUES (?,?,?,?,?,?,?,?)", (cls.tid, "old", "a", "b", "c", "d", "A", 2))
-        c.commit(); c.close()
+        c.execute("UPDATE tests SET status='published' WHERE is_active=1"); c.commit(); c.close()
 
     @classmethod
     def tearDownClass(cls):
@@ -121,7 +121,7 @@ class QBankTests(unittest.TestCase):
         self.assertEqual(rows[1]["marks"], 3)
         # student sees text + image; submit scoring still works
         sc = self.student()
-        html = sc.get("/test/%d" % self.tid).get_data(as_text=True)
+        html = __import__("legacy").open_exam(sc, self.tid).get_data(as_text=True)
         self.assertIn("Fig?", html); self.assertIn("a.png", html)
         form = {"csrf_token": CSRF}
         for r_ in rows:

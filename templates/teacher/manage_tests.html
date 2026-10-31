@@ -13,10 +13,12 @@
   {% for item in tests_data %}
     <div class="card">
       <h3>{{ item.test.title }}
-        {% if item.test.is_active %}
-          <span class="badge badge-green">Active</span>
+        {% if item.test.status != 'published' %}
+          <span class="badge badge-gray">Draft</span>
+        {% elif item.test.is_active %}
+          <span class="badge badge-green">Published</span>
         {% else %}
-          <span class="badge badge-gray">Inactive</span>
+          <span class="badge badge-gray">Published &middot; paused</span>
         {% endif %}
       </h3>
       <p class="helper-text">
@@ -25,12 +27,19 @@
       </p>
       <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
         <a class="btn btn-sm btn-primary" href="{{ url_for('add_questions', test_id=item.test.id) }}">Manage Questions</a>
+        <a class="btn btn-sm btn-outline" href="{{ url_for('test_review', test_id=item.test.id) }}">Review{% if item.test.status != 'published' %} &amp; Publish{% endif %}</a>
         <a class="btn btn-sm btn-secondary" href="{{ url_for('test_results_view', test_id=item.test.id) }}">View Results</a>
+        {% if item.test.status == 'published' %}
         <form method="POST" action="{{ url_for('toggle_test', test_id=item.test.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-sm {% if item.test.is_active %}btn-outline{% endif %}" type="submit">
-            {% if item.test.is_active %}Deactivate{% else %}Activate{% endif %}
-          </button>
+          <button class="btn btn-sm {% if item.test.is_active %}btn-outline{% endif %}" type="submit">{% if item.test.is_active %}Pause{% else %}Resume{% endif %}</button>
         </form>
+        {% if item.test.is_active %}
+        <form method="POST" action="{{ url_for('renotify_test', test_id=item.test.id) }}"
+              onsubmit="return confirm('Send the new-test notification to students again?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline" type="submit">Notify again</button>
+        </form>
+        {% endif %}
+        {% endif %}
         <a class="btn btn-sm btn-outline" href="{{ url_for('test_settings', test_id=item.test.id) }}">Rules</a>
         <form method="POST" action="{{ url_for('archive_test', test_id=item.test.id) }}"
               onsubmit="return confirm('Archive this test? Students will no longer see it; all results are kept.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

@@ -20,7 +20,8 @@ from flask import abort, flash, jsonify, redirect, request, session, url_for
 
 from backend.db import get_db
 
-TEST_ENDPOINTS = {"take_test", "submit_test", "test_leaderboard", "save_test_progress"}
+TEST_ENDPOINTS = {"take_test", "test_continue", "test_confirm", "test_start", "test_exam",
+                  "submit_test", "test_leaderboard", "save_test_progress"}
 
 
 def _visible(item_class, student_class):

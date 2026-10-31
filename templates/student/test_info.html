@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ test.title }} · Instructions{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px;margin-inline:auto">
+  <h2>{{ test.title }}</h2>
+  <div class="stats" style="margin-top:.8rem">
+    <div class="stat"><div class="num">{{ test.duration_minutes }}</div><div class="label">Minutes</div></div>
+    <div class="stat"><div class="num">{{ facts.questions }}</div><div class="label">Questions</div></div>
+    <div class="stat"><div class="num">{{ facts.total_marks }}</div><div class="label">Total marks</div></div>
+  </div>
+  <p class="text-muted">Subject: <strong>{{ test.subject or 'General' }}</strong></p>
+
+  <h3 style="margin-top:1rem">Marking</h3>
+  <ul style="margin-left:1.2rem;line-height:1.7">
+    <li>Correct answer: full marks of that question.</li>
+    {% if facts.negative %}
+    <li><strong>Wrong answer: &minus;{{ '%g'|format(facts.negative) }} mark{{ '' if facts.negative == 1 else 's' }}</strong> (negative marking is ON).</li>
+    {% else %}
+    <li>Wrong answer: no marks are deducted (no negative marking).</li>
+    {% endif %}
+    <li>Unanswered question: 0 marks, never negative.</li>
+  </ul>
+
+  <h3 style="margin-top:1rem">Important instructions</h3>
+  <ul style="margin-left:1.2rem;line-height:1.7">
+    <li>You can take this test <strong>only once</strong>.</li>
+    <li>The timer runs on the server. Refreshing the page or closing the browser does not pause it.</li>
+    <li>You may skip questions and come back to change any answer before you submit.</li>
+    <li>Your answers are saved automatically. When time is over, the test is submitted automatically.</li>
+    <li>Use a stable internet connection and do not close the exam until you see your submission message.</li>
+  </ul>
+
+  <form method="POST" action="{{ url_for('test_continue', test_id=test.id) }}" class="flex gap-1 flex-wrap mt-2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-primary">Continue to Confirmation</button>
+    <a href="{{ url_for('student_dashboard') }}" class="btn btn-outline">Back to Dashboard</a>
+  </form>
+</div>
+{% endblock %}

@@ -9,23 +9,23 @@ from backend.core import app
 from backend.db.connection import get_db
 from backend.middleware.auth import teacher_login_required
 from backend.services.activity_service import log_activity
+from backend.services import publish_service
 from backend.services.notification_service import create_notification
 
 
 def _read_rules(form):
-    """Validated exam rules from a form (timer + attempts). Bad values fall back to safe defaults."""
+    """Validated exam rules from a form (timer, late rule, marking, result release). Bad values fall back to safe defaults."""
     def num(name, default, lo, hi, cast=int):
         try:
             v = cast(str(form.get(name, default)).strip() or default)
         except (TypeError, ValueError):
             v = default
         return max(lo, min(hi, v))
-    rp = form.get("result_policy", "best")
     lp = form.get("late_policy", "auto_submit")
+    rr = form.get("result_release", "immediate")
     return {
-        "max_attempts": num("max_attempts", 1, 0, 50),          # 0 = unlimited
-        "result_policy": rp if rp in ("best", "latest") else "best",
         "late_policy": lp if lp in ("auto_submit", "reject") else "auto_submit",
+        "result_release": rr if rr in ("immediate", "manual") else "immediate",
         "grace_seconds": num("grace_seconds", 30, 0, 600),
         "negative_marks": num("negative_marks", 0, 0, 100, float),
     }
@@ -34,34 +34,33 @@ def _read_rules(form):
 @app.route("/teacher/tests/<int:test_id>/settings", methods=["GET", "POST"])
 @teacher_login_required
 def test_settings(test_id):
-    """Duration, attempts, best/latest policy, late rule, grace and negative marking.
-    Running attempts keep the duration/grace they started with (stored on the attempt)."""
+    """Duration, late rule, grace, negative marking and result release - editable only while a draft.
+    (A published test must be unpublished first; running attempts keep the rules they started with.)"""
     with get_db() as conn:
         test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
         if test is None:
             abort(404)
         if request.method == "POST":
+            if not publish_service.is_editable(test):
+                flash("This test is published. Unpublish it first, make your changes, then publish again.", "error")
+                return redirect(url_for("test_review", test_id=test_id))
             rules = _read_rules(request.form)
             try:
-                duration = max(1, min(600, int(request.form.get("duration_minutes", test["duration_minutes"]))))
-            except ValueError:
-                duration = test["duration_minutes"]
+                duration = int(request.form.get("duration_minutes", test["duration_minutes"]))
+            except (TypeError, ValueError):
+                duration = 0
+            if not 1 <= duration <= 600:
+                flash("Duration must be between 1 and 600 minutes.", "error")
+                return redirect(url_for("test_settings", test_id=test_id))
             conn.execute(
-                """UPDATE tests SET duration_minutes=?, max_attempts=?, result_policy=?, late_policy=?,
-                   grace_seconds=?, negative_marks=? WHERE id=?""",
-                (duration, rules["max_attempts"], rules["result_policy"], rules["late_policy"],
-                 rules["grace_seconds"], rules["negative_marks"], test_id))
+                """UPDATE tests SET duration_minutes=?, late_policy=?, grace_seconds=?, negative_marks=?,
+                   result_release=? WHERE id=?""",
+                (duration, rules["late_policy"], rules["grace_seconds"], rules["negative_marks"],
+                 rules["result_release"], test_id))
             conn.commit()
             log_activity("teacher", "test_settings", f"id={test_id} {rules} duration={duration}")
-            # best/latest policy may have changed: recompute counted results (no attempt is touched)
-            from backend.services import exam_service
-            fresh = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
-            for (sid,) in conn.execute("SELECT DISTINCT student_id FROM exam_attempts WHERE test_id=?",
-                                       (test_id,)).fetchall():
-                exam_service.refresh_counted_result(conn, fresh, sid)
-            conn.commit()
-            flash("Test rules saved. Attempts already running keep the rules they started with.", "success")
-            return redirect(url_for("manage_tests"))
+            flash("Test rules saved.", "success")
+            return redirect(url_for("test_review", test_id=test_id))
     return render_template("teacher/test_settings.html", test=test)
 
 
@@ -109,24 +108,21 @@ def create_test():
             return redirect(url_for("create_test"))
         rules = _read_rules(request.form)
         with get_db() as conn:
+            # A new test is ALWAYS a draft: hidden from students (is_active=0) and no notification.
             cur = conn.execute(
                 """INSERT INTO tests (title, subject, class_name, duration_minutes, is_active, created_at,
-                                      max_attempts, result_policy, late_policy, grace_seconds, negative_marks)
-                   VALUES (?,?,?,?,1,?,?,?,?,?,?)""",
+                                      max_attempts, result_policy, late_policy, grace_seconds, negative_marks,
+                                      status, result_release)
+                   VALUES (?,?,?,?,0,?,?,?,?,?,?,'draft',?)""",
                 (title, subject, class_name, duration, datetime.now().isoformat(),
-                 rules["max_attempts"], rules["result_policy"], rules["late_policy"],
-                 rules["grace_seconds"], rules["negative_marks"])
+                 1, "best", rules["late_policy"], rules["grace_seconds"], rules["negative_marks"],
+                 rules["result_release"])
             )
             test_id = cur.lastrowid
             conn.commit()
-        create_notification(
-            title=f"New test: {title}",
-            message=f"A new test is available" + (f" for class {class_name}" if class_name else "") + f". Duration: {duration} minutes.",
-            notif_type="test",
-            class_name=class_name or "",
-            link=url_for("student_dashboard"),
-        )
-        flash("Test created! Now add questions.", "success")
+        log_activity("teacher", "create_test", f"id={test_id} status=draft")
+        flash("Draft test created. Add your questions, then review and publish it. Students are not notified yet.",
+              "success")
         return redirect(url_for("add_questions", test_id=test_id))
     return render_template("teacher/create_test.html")
 
@@ -134,94 +130,22 @@ def create_test():
 @app.route("/teacher/tests/<int:test_id>/questions", methods=["GET", "POST"])
 @teacher_login_required
 def add_questions(test_id):
-    # নতুন Question Studio পেজ (ছবিসহ প্রশ্ন)। নিচের পুরনো কোড অক্ষত রাখা হয়েছে, কিন্তু আর চলে না।
+    """Kept as the stable endpoint name (templates/guards use it); the page is the Question Studio."""
     return redirect(url_for("studio.test_questions", test_id=test_id))
-    with get_db() as conn:
-        test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
-        if test is None:
-            abort(404)
-
-        if request.method == "POST":
-            q_texts = request.form.getlist("question_text[]")
-            opt_a = request.form.getlist("option_a[]")
-            opt_b = request.form.getlist("option_b[]")
-            opt_c = request.form.getlist("option_c[]")
-            opt_d = request.form.getlist("option_d[]")
-            corrects = request.form.getlist("correct_option[]")
-            marks_list = request.form.getlist("marks[]")
-            image_ids = request.form.getlist("image_id[]")
-            added, errors = 0, []
-
-            for i, raw_text in enumerate(q_texts):
-                qt = (raw_text or "").strip()
-                a = (opt_a[i] if i < len(opt_a) else "").strip()
-                b = (opt_b[i] if i < len(opt_b) else "").strip()
-                c = (opt_c[i] if i < len(opt_c) else "").strip()
-                d = (opt_d[i] if i < len(opt_d) else "").strip()
-                co = (corrects[i] if i < len(corrects) else "").strip().upper()
-                mk = (marks_list[i] if i < len(marks_list) else "1").strip()
-                raw_image_id = image_ids[i] if i < len(image_ids) else ""
-                try:
-                    image_id = int(raw_image_id) if raw_image_id else None
-                except (TypeError, ValueError):
-                    image_id = None
-
-                if not all([qt, a, b, c, d]) or co not in ("A", "B", "C", "D"):
-                    continue
-
-                image_url = None
-                if image_id is not None:
-                    image_row = conn.execute(
-                        "SELECT url FROM bank_images WHERE id=?", (image_id,)
-                    ).fetchone()
-                    if image_row is None:
-                        errors.append("একটি নির্বাচিত ছবি Library-তে পাওয়া যায়নি; সেই প্রশ্নটি যোগ হয়নি।")
-                        continue
-                    image_url = image_row["url"]
-
-                try:
-                    marks = max(1, min(100, int(mk)))
-                except (TypeError, ValueError):
-                    marks = 1
-
-                conn.execute(
-                    """INSERT INTO questions
-                       (test_id, question_text, option_a, option_b, option_c, option_d,
-                        correct_option, marks, image_url, bank_image_id)
-                       VALUES (?,?,?,?,?,?,?,?,?,?)""",
-                    (test_id, qt, a, b, c, d, co, marks, image_url, image_id)
-                )
-                added += 1
-
-            conn.commit()
-            if added:
-                flash(f"{added} question(s) added successfully!", "success")
-            for message in errors:
-                flash(message, "error")
-            if not added and not errors:
-                flash("কোনো বৈধ প্রশ্ন যোগ হয়নি। প্রশ্ন ও চারটি Option পূরণ করুন।", "error")
-            return redirect(url_for("add_questions", test_id=test_id))
-
-        questions = conn.execute(
-            "SELECT * FROM questions WHERE test_id=? ORDER BY id", (test_id,)
-        ).fetchall()
-        image_library = conn.execute(
-            """SELECT i.id, i.url, i.original_name, c.name AS category_name
-               FROM bank_images i JOIN bank_categories c ON c.id=i.category_id
-               ORDER BY c.name COLLATE NOCASE, i.id DESC LIMIT 2000"""
-        ).fetchall()
-
-    return render_template(
-        "teacher/add_questions.html", test=test, questions=questions,
-        image_library=[dict(row) for row in image_library]
-    )
 
 
 @app.route("/teacher/questions/delete/<int:question_id>/<int:test_id>", methods=["POST"])
 @teacher_login_required
 def delete_question(question_id, test_id):
     with get_db() as conn:
-        conn.execute("DELETE FROM questions WHERE id=?", (question_id,))
+        test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
+        if test is None:
+            abort(404)
+        if not publish_service.is_editable(test):
+            flash("This test is published. Unpublish it before deleting questions.", "error")
+            return redirect(url_for("add_questions", test_id=test_id))
+        # scoped to the test: a question id from another test can never be removed through this URL
+        conn.execute("DELETE FROM questions WHERE id=? AND test_id=?", (question_id, test_id))
         conn.commit()
     flash("Question deleted.", "success")
     return redirect(url_for("add_questions", test_id=test_id))
@@ -230,21 +154,102 @@ def delete_question(question_id, test_id):
 @app.route("/teacher/tests/<int:test_id>/toggle", methods=["POST"])
 @teacher_login_required
 def toggle_test(test_id):
+    """Pause / resume a PUBLISHED test. Never notifies; a draft cannot be switched on this way."""
     with get_db() as conn:
         test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
-        if test:
-            new_status = 0 if test["is_active"] == 1 else 1
-            conn.execute("UPDATE tests SET is_active=? WHERE id=?", (new_status, test_id))
+        if test is None:
+            abort(404)
+        if test["status"] != "published":
+            flash("Publish the test first - a draft cannot be activated.", "error")
+        else:
+            conn.execute("UPDATE tests SET is_active=? WHERE id=?", (0 if test["is_active"] == 1 else 1, test_id))
             conn.commit()
-            if new_status == 1:
-                create_notification(
-                    title=f"Test active: {test['title']}",
-                    message="A test is now available. Open your dashboard to attempt it.",
-                    notif_type="test",
-                    class_name=test["class_name"] or "",
-                    link=url_for("student_dashboard"),
-                )
     return redirect(url_for("manage_tests"))
+
+
+@app.route("/teacher/tests/<int:test_id>/review")
+@teacher_login_required
+def test_review(test_id):
+    """Step 3: everything the teacher should check before publishing."""
+    with get_db() as conn:
+        test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
+        if test is None:
+            abort(404)
+        questions = conn.execute("SELECT * FROM questions WHERE test_id=? ORDER BY id", (test_id,)).fetchall()
+        issues = publish_service.problems(conn, test)
+        total = publish_service.total_marks(conn, test_id)
+    return render_template("teacher/test_review.html", test=test, questions=questions, issues=issues,
+                           total_marks=total, editable=publish_service.is_editable(test))
+
+
+@app.route("/teacher/tests/<int:test_id>/publish", methods=["POST"])
+@teacher_login_required
+def publish_test(test_id):
+    """Step 4: the ONLY place the first student notification is sent (once per test, atomically)."""
+    with get_db() as conn:
+        state, detail = publish_service.publish(conn, test_id)
+        notify = False
+        if state == "published":
+            notify = publish_service.claim_notification(conn, test_id)
+        conn.commit()
+        test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
+    if state == "missing":
+        abort(404)
+    if state == "invalid":
+        for msg in detail:
+            flash(msg, "error")
+        return redirect(url_for("test_review", test_id=test_id))
+    if state == "already":
+        flash("This test is already published.", "success")
+        return redirect(url_for("manage_tests"))
+    if notify:
+        _notify_students(test)
+    log_activity("teacher", "publish_test", f"id={test_id} notified={notify}")
+    flash("Test published. Students have been notified." if notify else
+          "Test published again. Students were not notified a second time.", "success")
+    return redirect(url_for("manage_tests"))
+
+
+@app.route("/teacher/tests/<int:test_id>/unpublish", methods=["POST"])
+@teacher_login_required
+def unpublish_test(test_id):
+    with get_db() as conn:
+        if conn.execute("SELECT 1 FROM tests WHERE id=?", (test_id,)).fetchone() is None:
+            abort(404)
+        changed = publish_service.unpublish(conn, test_id)
+        conn.commit()
+    log_activity("teacher", "unpublish_test", f"id={test_id}")
+    flash("Test moved back to draft. Students can no longer see it; no one was notified." if changed else
+          "This test is already a draft.", "success")
+    return redirect(url_for("test_review", test_id=test_id))
+
+
+@app.route("/teacher/tests/<int:test_id>/notify", methods=["POST"])
+@teacher_login_required
+def renotify_test(test_id):
+    """Explicit teacher action: send the 'new test' notification again for a published test."""
+    with get_db() as conn:
+        test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
+        if test is None:
+            abort(404)
+        if test["status"] != "published" or not test["is_active"]:
+            flash("Only a published, active test can be announced.", "error")
+            return redirect(url_for("manage_tests"))
+        publish_service.force_notification_stamp(conn, test_id)
+        conn.commit()
+    _notify_students(test)
+    log_activity("teacher", "renotify_test", f"id={test_id}")
+    flash("Students have been notified again.", "success")
+    return redirect(url_for("manage_tests"))
+
+
+def _notify_students(test):
+    cls = test["class_name"] or ""
+    create_notification(
+        title=f"New test: {test['title']}",
+        message="A new test is available" + (f" for class {cls}" if cls else "")
+                + f". Duration: {test['duration_minutes']} minutes.",
+        notif_type="test", class_name=cls, link=url_for("student_dashboard"))
 
 
 def test_impact(conn, test_id):

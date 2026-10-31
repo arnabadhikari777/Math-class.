@@ -16,14 +16,8 @@
   <p class="text-muted">Pass mark {{ pass_pct }}% · Submitted {{ result.submitted_at[:16].replace('T',' ') }}</p>
   <div class="flex gap-1 flex-wrap mt-2" style="justify-content:center">
     <a href="{{ url_for('test_leaderboard', test_id=test.id) }}" class="btn btn-primary">🏆 Leaderboard</a>
-    {% if attempts_left is none or attempts_left > 0 %}<a href="{{ url_for('take_test', test_id=test.id) }}" class="btn btn-outline">Try again{% if attempts_left is not none %} ({{ attempts_left }} left){% endif %}</a>{% endif %}
     <a href="{{ url_for('student_dashboard') }}" class="btn btn-outline">Back to Dashboard</a>
   </div>
-  {% if attempts|length > 1 %}
-  <p class="text-muted" style="margin-top:.8rem;font-size:.85rem">Attempts:
-    {% for at in attempts if at.status in ('submitted','auto_submitted') %}#{{ at.attempt_no }}: {{ at.score }}/{{ at.total_marks }}{% if at.is_counted %} (counted){% endif %}{% if not loop.last %} · {% endif %}{% endfor %}
-    · counted result: {{ test.result_policy }}</p>
-  {% endif %}
 </div>
 
 {% if answers %}

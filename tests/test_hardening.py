@@ -68,7 +68,7 @@ class H(unittest.TestCase):
         cls.t_snap = test("Snap"); cls.t_multi = test("Multi", max=3, pol="best"); cls.t_latest = test("Latest", max=3, pol="latest")
         cls.t_late = test("Late"); cls.t_rej = test("Reject", late="reject"); cls.t_neg = test("Neg", neg=2)
         cls.t_race = test("Race"); cls.t_ver = test("Ver"); cls.t_del = test("Del"); cls.t_unl = test("Unlimited", max=0); cls.t_ai = test("AiCtx")
-        c.commit(); c.close()
+        c.execute("UPDATE tests SET status='published' WHERE is_active=1"); c.commit(); c.close()
 
     # ------------------------------------------------------------ helpers
     def conn(self):
@@ -100,7 +100,7 @@ class H(unittest.TestCase):
         return [r for r in rows if status is None or r["status"] == status]
 
     def start(self, cl, sid, tid):
-        self.assertEqual(cl.get(f"/test/{tid}").status_code, 200)
+        self.assertEqual(__import__("legacy").open_exam(cl, tid).status_code, 200)
         return self.attempt(sid, tid, "in_progress")[0]
 
     def submit(self, cl, sid, tid, pick="A"):
@@ -124,7 +124,7 @@ class H(unittest.TestCase):
             c.execute("UPDATE questions SET question_text='CHANGED', correct_option='B', marks=99 WHERE test_id=?", (self.t_ver,))
             c.execute("DELETE FROM questions WHERE id=(SELECT MIN(id) FROM questions WHERE test_id=?)", (self.t_ver,))
             c.commit()
-        page = cl.get(f"/test/{self.t_ver}").get_data(as_text=True)
+        page = __import__("legacy").open_exam(cl, self.t_ver).get_data(as_text=True)
         self.assertIn("Ver-Q0", page); self.assertNotIn("CHANGED", page)           # still the frozen snapshot
         self.submit(cl, self.sb, self.t_ver, "A")
         r = self.q("SELECT * FROM results WHERE test_id=? AND student_id=?", self.t_ver, self.sb)[0]
@@ -155,7 +155,7 @@ class H(unittest.TestCase):
     def test_e05_server_timer_reload_resumes_same_attempt_and_deadline(self):
         cl = self.student_client(self.sd); a = self.start(cl, self.sd, self.t_late)
         for _ in range(3):
-            cl.get(f"/test/{self.t_late}")                                         # reload
+            __import__("legacy").open_exam(cl, self.t_late)                          # reload
         runs = self.attempt(self.sd, self.t_late)
         self.assertEqual(len(runs), 1); self.assertEqual(runs[0]["deadline_at"], a["deadline_at"])
         dl = datetime.fromisoformat(a["deadline_at"]); st = datetime.fromisoformat(a["started_at"])
@@ -199,21 +199,20 @@ class H(unittest.TestCase):
         self.assertEqual(len(self.attempt(self.sa, self.t_race, "submitted")), 1)
         self.assertEqual(self.q("SELECT COUNT(*) FROM answers WHERE attempt_id=?", self.attempt(self.sa, self.t_race)[0]["id"])[0][0], 2)
 
-    def test_e10_multiple_attempts_limit_and_best_vs_latest(self):
+    def test_e10_only_one_attempt_per_student_per_test(self):
+        """Replaces the old multiple-attempt / best-vs-latest test. Even a test that used to allow 3 attempts
+        now allows exactly one; refresh, a second tab and direct URLs cannot create another."""
         cl = self.student_client(self.sc)
-        for pick in ("A", "B", "B"):                                                # 10, 0, 0
-            self.start(cl, self.sc, self.t_multi); self.submit(cl, self.sc, self.t_multi, pick)
-        self.assertEqual(len(self.attempt(self.sc, self.t_multi, "submitted")), 3)
-        cl.get(f"/test/{self.t_multi}")                                             # 4th attempt refused
-        self.assertEqual(len(self.attempt(self.sc, self.t_multi)), 3)
-        self.assertEqual(self.q("SELECT score FROM results WHERE test_id=? AND student_id=?", self.t_multi, self.sc)[0][0], 10)  # best
-        cl2 = self.student_client(self.sc)
-        for pick in ("A", "B"):                                                     # latest policy: 10 then 0
-            self.start(cl2, self.sc, self.t_latest); self.submit(cl2, self.sc, self.t_latest, pick)
-        self.assertEqual(self.q("SELECT score FROM results WHERE test_id=? AND student_id=?", self.t_latest, self.sc)[0][0], 0)
-        res = self.q("SELECT attempt_id FROM results WHERE test_id=? AND student_id=?", self.t_multi, self.sc)[0][0]
-        self.assertEqual(self.q("SELECT attempt_no FROM exam_attempts WHERE id=?", res)[0][0], 1)
-        self.assertEqual(self.q("SELECT COUNT(*) FROM exam_attempts WHERE test_id=? AND student_id=? AND is_counted=1", self.t_multi, self.sc)[0][0], 1)
+        self.start(cl, self.sc, self.t_multi)
+        self.submit(cl, self.sc, self.t_multi, "A")                                  # 10 / 10
+        legacy = __import__("legacy")
+        for _ in range(3):                                                           # refresh / other tab / retry
+            r = legacy.open_exam(self.student_client(self.sc), self.t_multi)
+            self.assertNotEqual(r.status_code, 200)
+        self.assertEqual(cl.get(f"/test/{self.t_multi}/exam").status_code, 302)      # direct URL: no paper
+        self.assertEqual(self.post(cl, f"/test/{self.t_multi}/start").status_code, 302)
+        self.assertEqual(len(self.attempt(self.sc, self.t_multi)), 1)
+        self.assertEqual(self.q("SELECT score FROM results WHERE test_id=? AND student_id=?", self.t_multi, self.sc)[0][0], 10)
 
     def test_e11_negative_marking(self):
         cl = self.student_client(self.sd); self.start(cl, self.sd, self.t_neg); self.submit(cl, self.sd, self.t_neg, "B")
@@ -338,12 +337,16 @@ class H(unittest.TestCase):
         self.assertEqual(self.q("SELECT COUNT(*) FROM results WHERE test_id=?", tid)[0][0], 0)
 
     def test_t02_teacher_can_change_rules(self):
+        """Rules: duration, late rule, grace, negative marks, result release. (Attempt count / best-latest are gone.)"""
         t = self.teacher_client()
-        self.post(t, f"/teacher/tests/{self.t_unl}/settings", {"duration_minutes": "45", "max_attempts": "2", "result_policy": "latest",
-                                                              "late_policy": "reject", "grace_seconds": "15", "negative_marks": "0.5"})
+        self.post(t, f"/teacher/tests/{self.t_unl}/unpublish")                       # published tests are locked
+        self.post(t, f"/teacher/tests/{self.t_unl}/settings", {"duration_minutes": "45", "max_attempts": "9", "result_policy": "latest",
+                                                              "late_policy": "reject", "grace_seconds": "15", "negative_marks": "0.5",
+                                                              "result_release": "manual"})
         r = self.q("SELECT * FROM tests WHERE id=?", self.t_unl)[0]
-        self.assertEqual((r["duration_minutes"], r["max_attempts"], r["result_policy"], r["late_policy"], r["grace_seconds"], r["negative_marks"]),
-                         (45, 2, "latest", "reject", 15, 0.5))
+        self.assertEqual((r["duration_minutes"], r["late_policy"], r["grace_seconds"], r["negative_marks"], r["result_release"]),
+                         (45, "reject", 15, 0.5, "manual"))
+        self.assertEqual((r["max_attempts"], r["result_policy"]), (0, "best"))   # old form fields are ignored
 
     # ================================================== IMPERSONATION
     def test_i01_impersonation_is_readonly_audited_and_teacher_pages_closed(self):

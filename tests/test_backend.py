@@ -124,6 +124,7 @@ class BackendTests(unittest.TestCase):
                                  ("Note9", "Geo", "9", "y.pdf", now)).lastrowid
         conn.execute("INSERT INTO notes (title,subject,class_name,filename,uploaded_at) VALUES (?,?,?,?,?)",
                      ("100% free_note", "Misc", "", "z.pdf", now))
+        conn.execute("UPDATE tests SET status='published'")
         conn.commit()
         conn.close()
 
@@ -216,7 +217,8 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(applied, {"001_test_attempts", "002_perf_indexes",
                                    "003_unique_results", "004_unique_attendance",
                                    "005_normalize_class_names", "006_ai_chat", "007_question_bank",
-                                   "008_exam_system", "009_drop_legacy_attempts", "010_support_tables"})
+                                   "008_exam_system", "009_drop_legacy_attempts", "010_support_tables",
+                                   "011_publish_marking"})
 
     def test_12_backup_created_before_migrating(self):
         folder = os.path.join(self.proj, "backups")
@@ -390,6 +392,7 @@ class BackendTests(unittest.TestCase):
 
     def test_44_results_summary_progress(self):
         c = self.student_client(self.s10, "10")
+        __import__("legacy").open_exam(c, self.t10)                        # confirm + start (creates the one attempt)
         self.assertEqual(self.submit(c, self.t10, "A").status_code, 302)   # both correct -> 10/10
         res = c.get("/api/v1/results").get_json()["data"]
         mine = [r for r in res if r["test_id"] == self.t10][0]
@@ -430,7 +433,7 @@ class BackendTests(unittest.TestCase):
         conn = self.db_conn()
         conn.execute("UPDATE tests SET is_active=1 WHERE id=?", (self.t_inactive_started,))
         conn.commit()
-        c.get(f"/test/{self.t_inactive_started}")                         # starts the attempt
+        __import__("legacy").open_exam(c, self.t_inactive_started)                         # starts the attempt
         conn.execute("UPDATE tests SET is_active=0 WHERE id=?", (self.t_inactive_started,))
         conn.commit()
         conn.close()
@@ -439,14 +442,14 @@ class BackendTests(unittest.TestCase):
 
     def test_54_opening_a_test_records_attempt(self):
         c = self.student_client(self.s9, "9")
-        c.get(f"/test/{self.t9}")
+        __import__("legacy").open_exam(c, self.t9)
         with self.db_conn() as conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM exam_attempts WHERE test_id=? AND student_id=?",
                                           (self.t9, self.s9)).fetchone()[0], 1)
 
     def test_55_second_submission_is_ignored(self):
         c = self.student_client(self.s9, "9")
-        c.get(f"/test/{self.t9}")
+        __import__("legacy").open_exam(c, self.t9)
         self.submit(c, self.t9, "A")
         self.submit(c, self.t9, "B")
         self.assertEqual(self.result_count(self.t9, self.s9), 1)
@@ -456,7 +459,7 @@ class BackendTests(unittest.TestCase):
 
     def test_56_simultaneous_submissions_make_one_result(self):
         c1 = self.student_client(self.s10, "10")
-        c1.get(f"/test/{self.t_race}")
+        __import__("legacy").open_exam(c1, self.t_race)
         codes = []
 
         def go():
@@ -470,7 +473,7 @@ class BackendTests(unittest.TestCase):
     def test_57_timer_is_enforced_by_default_and_kill_switch_works(self):
         sid = self.s10b
         c = self.student_client(sid, "10")
-        c.get(f"/test/{self.t_timer}")
+        __import__("legacy").open_exam(c, self.t_timer)
         conn = self.db_conn()
         past = (datetime.now() - timedelta(minutes=60)).isoformat()
         conn.execute("UPDATE exam_attempts SET deadline_at=? WHERE test_id=? AND student_id=? AND status='in_progress'",

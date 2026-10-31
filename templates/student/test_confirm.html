@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Confirm · {{ test.title }}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:520px;margin-inline:auto;text-align:center">
+  <h2>Are you ready to start this examination?</h2>
+  <p style="margin:.6rem 0"><strong>{{ test.title }}</strong></p>
+  <p class="text-muted">{{ facts.questions }} questions &middot; {{ facts.total_marks }} marks &middot; {{ test.duration_minutes }} minutes
+    {% if facts.negative %}&middot; &minus;{{ '%g'|format(facts.negative) }} per wrong answer{% endif %}</p>
+  <p style="margin:1rem 0">Once started, your examination timer will begin.</p>
+  <div class="flex gap-1 flex-wrap" style="justify-content:center">
+    <a href="{{ url_for('take_test', test_id=test.id) }}" class="btn btn-outline">Go Back</a>
+    <form method="POST" action="{{ url_for('test_start', test_id=test.id) }}" onsubmit="this.querySelector('button').disabled=true">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-primary">Confirm &amp; Start Test</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

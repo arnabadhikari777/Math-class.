@@ -128,6 +128,7 @@ class AITests(unittest.TestCase):
         def finished(tid, sid, qids, picks, score):
             """A submitted attempt with a frozen snapshot, exactly what the exam engine writes."""
             from backend.services import exam_service
+            conn.execute("UPDATE tests SET status='published' WHERE is_active=1")
             conn.commit()
             vid = conn.execute("INSERT INTO exam_versions (test_id,version_no,content_hash,is_frozen,created_at) "
                                "VALUES (?,1,'h',1,?)", (tid, now)).lastrowid
@@ -326,7 +327,7 @@ class AITests(unittest.TestCase):
         c = self.student_client(self.sc)
         _, r0 = self.chat(c, {"message": "before test"})
         self.assertNotIn("TEST MODE", r0.system_text())
-        c.get(f"/test/{self.t_live}")                                  # opens the test -> test_attempts row
+        __import__("legacy").open_exam(c, self.t_live)                                  # opens the test -> test_attempts row
         _, r1 = self.chat(c, {"message": "during test"})
         self.assertIn("TEST MODE", r1.system_text())
         self.assertNotIn("LiveTest-question", r1.system_text())        # the open test's questions never enter the prompt
@@ -430,6 +431,7 @@ class AITests(unittest.TestCase):
         with self.dbc() as conn:
             t9 = conn.execute("INSERT INTO tests (title,subject,class_name,duration_minutes,is_active,created_at) "
                               "VALUES ('Other','M','9',10,1,?)", (datetime.now().isoformat(),)).lastrowid
+            conn.execute("UPDATE tests SET status='published' WHERE is_active=1")
             conn.commit()
         cid = self.chat(s, {"message": "wrong class hint", "test_id": t9})[0].get_json()["data"]["conversation_id"]
         with self.dbc() as conn:
@@ -438,7 +440,7 @@ class AITests(unittest.TestCase):
     # ------------------------------------------------------ UI integration
     def test_70_widget_only_for_students_and_test_page_intact(self):
         s = self.student_client(self.sa)
-        page = s.get(f"/test/{self.t_bob}").get_data(as_text=True)
+        page = __import__("legacy").open_exam(s, self.t_bob).get_data(as_text=True)
         self.assertIn("ai-widget.js", page)
         self.assertIn(f"/test/{self.t_bob}/submit", page)             # the test form is still there
         self.assertIn("ai-widget.js", s.get("/dashboard").get_data(as_text=True))

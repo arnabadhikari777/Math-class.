@@ -32,9 +32,10 @@ def student_dashboard():
                WHERE results.student_id=? ORDER BY results.submitted_at DESC""",
             (student["id"],)
         ).fetchall()
-        attempted_test_ids = {t["id"] for t in tests
-                              if any(r["test_id"] == t["id"] for r in my_results)
-                              and exam_service.attempts_left(conn, t, student["id"]) == 0}
+        done_ids = {r[0] for r in conn.execute(
+            "SELECT test_id FROM exam_attempts WHERE student_id=? AND status!='in_progress'", (student["id"],))}
+        done_ids |= {r["test_id"] for r in my_results}
+        attempted_test_ids = {t["id"] for t in tests if t["id"] in done_ids}
         announcements = conn.execute(
             """SELECT * FROM announcements WHERE is_active=1
                AND (class_name=? OR class_name='' OR class_name IS NULL)
@@ -106,32 +107,149 @@ def student_profile():
     return render_template("student/student_profile.html", student=student, history=history, results=results)
 
 
+READY_TTL_SECONDS = 15 * 60   # how long "Continue to Confirmation" stays valid
+
+
+def _ready_key(test_id):
+    return f"exam_ready_{test_id}"
+
+
+def _is_ready(test_id):
+    ts = session.get(_ready_key(test_id))
+    try:
+        return ts is not None and (datetime.now() - datetime.fromisoformat(ts)).total_seconds() <= READY_TTL_SECONDS
+    except (TypeError, ValueError):
+        return False
+
+
+def _impersonation_block():
+    if session.get("impersonating"):
+        # Starting a test is a database write - never allowed while a teacher views as a student.
+        flash("A teacher viewing as a student cannot start a test.", "error")
+        return redirect(url_for("student_dashboard"))
+    return None
+
+
+def _open_test(conn, test_id):
+    """The published, active, non-archived test (class access is enforced by middleware/guards.py)."""
+    test = conn.execute(
+        "SELECT * FROM tests WHERE id=? AND is_active=1 AND is_archived=0 AND status='published'", (test_id,)).fetchone()
+    if test is None:
+        abort(404)
+    return test
+
+
+def _exam_facts(conn, test):
+    qs = conn.execute("SELECT COUNT(*) AS n, COALESCE(SUM(marks),0) AS m FROM questions WHERE test_id=?",
+                      (test["id"],)).fetchone()
+    return {"questions": qs["n"], "total_marks": qs["m"], "negative": float(test["negative_marks"] or 0)}
+
+
 @app.route("/test/<int:test_id>")
 @student_login_required
 def take_test(test_id):
-    if session.get("impersonating"):
-        # Opening a test STARTS a timed attempt (a database write) - never allowed while viewing as a student.
-        flash("A teacher viewing as a student cannot start a test.", "error")
-        return redirect(url_for("student_dashboard"))
+    """STEP 1 - examination information. Read-only: opening this page never starts an attempt or a timer."""
+    blocked = _impersonation_block()
+    if blocked:
+        return blocked
     sid = session["student_id"]
     with get_db() as conn:
-        test = conn.execute("SELECT * FROM tests WHERE id=? AND is_active=1 AND is_archived=0", (test_id,)).fetchone()
+        test = _open_test(conn, test_id)
+        if exam_service.get_running(conn, test_id, sid) is not None:
+            return redirect(url_for("test_exam", test_id=test_id))     # resume the running attempt
+        if exam_service.has_attempted(conn, test_id, sid):
+            flash("You have already taken this test. Each test can be taken only once.", "error")
+            return redirect(url_for("test_result", test_id=test_id)
+                            if conn.execute("SELECT 1 FROM results WHERE test_id=? AND student_id=?",
+                                            (test_id, sid)).fetchone() else url_for("student_dashboard"))
+        facts = _exam_facts(conn, test)
+    if facts["questions"] == 0:
+        flash("No questions in this test yet.", "error")
+        return redirect(url_for("student_dashboard"))
+    return render_template("student/test_info.html", test=test, facts=facts)
+
+
+@app.route("/test/<int:test_id>/continue", methods=["POST"])
+@student_login_required
+def test_continue(test_id):
+    """'Continue to Confirmation' - unlocks the final confirmation screen (server-side, 15 min)."""
+    blocked = _impersonation_block()
+    if blocked:
+        return blocked
+    with get_db() as conn:
+        _open_test(conn, test_id)
+    session[_ready_key(test_id)] = datetime.now().isoformat()
+    return redirect(url_for("test_confirm", test_id=test_id))
+
+
+@app.route("/test/<int:test_id>/confirm")
+@student_login_required
+def test_confirm(test_id):
+    """STEP 2 - final 'Are you ready?' screen. Still read-only."""
+    blocked = _impersonation_block()
+    if blocked:
+        return blocked
+    sid = session["student_id"]
+    with get_db() as conn:
+        test = _open_test(conn, test_id)
+        if exam_service.get_running(conn, test_id, sid) is not None:
+            return redirect(url_for("test_exam", test_id=test_id))
+        if exam_service.has_attempted(conn, test_id, sid):
+            return redirect(url_for("take_test", test_id=test_id))
+        facts = _exam_facts(conn, test)
+    if not _is_ready(test_id):
+        return redirect(url_for("take_test", test_id=test_id))      # cannot skip the first screen
+    return render_template("student/test_confirm.html", test=test, facts=facts)
+
+
+@app.route("/test/<int:test_id>/start", methods=["POST"])
+@student_login_required
+def test_start(test_id):
+    """The ONE place an attempt is created (inside one write transaction, exactly once)."""
+    blocked = _impersonation_block()
+    if blocked:
+        return blocked
+    sid = session["student_id"]
+    with get_db() as conn:
+        test = _open_test(conn, test_id)                      # 404 for draft / paused / archived / unknown tests
+    if not _is_ready(test_id):
+        flash("Please review the test information and confirm before starting.", "error")
+        return redirect(url_for("take_test", test_id=test_id))
+    session.pop(_ready_key(test_id), None)
+    with get_db() as conn:
+        attempt, state = exam_service.start_or_resume(conn, test, sid)
+    if attempt is None:
+        msgs = {"limit": "You have already taken this test. Each test can be taken only once.",
+                "empty": "No questions in this test yet.",
+                "expired": "Your previous attempt ran out of time and was closed."}
+        flash(msgs.get(state, "This test cannot be started."), "error")
+        return redirect(url_for("student_dashboard"))
+    return redirect(url_for("test_exam", test_id=test_id))
+
+
+@app.route("/test/<int:test_id>/exam")
+@student_login_required
+def test_exam(test_id):
+    """The question paper. Only opens an attempt that is already running (server deadline); never creates one."""
+    blocked = _impersonation_block()
+    if blocked:
+        return blocked
+    sid = session["student_id"]
+    with get_db() as conn:
+        test = conn.execute("SELECT * FROM tests WHERE id=? AND is_archived=0", (test_id,)).fetchone()
         if test is None:
             abort(404)
-        attempt, state = exam_service.start_or_resume(conn, test, sid)
+        attempt, state = exam_service.resume_only(conn, test, sid)
         if attempt is None:
-            msgs = {"limit": "You have used all attempts for this test.",
-                    "empty": "No questions in this test yet.",
-                    "expired": "Your previous attempt ran out of time and was closed."}
-            flash(msgs.get(state, "This test cannot be started."), "error")
-            return redirect(url_for("student_dashboard"))
+            if state == "expired":
+                flash("Your time ran out and the exam was submitted automatically.", "error")
+                return redirect(url_for("test_result", test_id=test_id))
+            return redirect(url_for("take_test", test_id=test_id))
         questions = exam_service.attempt_questions(conn, attempt["id"])
         draft = exam_service.draft_answers(attempt)
         remaining = exam_service.remaining_seconds(attempt)
-        left = exam_service.attempts_left(conn, test, sid)
     return render_template("student/take_test.html", test=test, questions=questions, attempt=attempt,
-                           remaining=remaining, total_seconds=attempt["duration_seconds"], draft=draft,
-                           attempts_left=left)
+                           remaining=remaining, total_seconds=attempt["duration_seconds"], draft=draft)
 
 
 @app.route("/test/<int:test_id>/save", methods=["POST"])
@@ -192,15 +310,13 @@ def test_result(test_id):
         if result is None or test is None:
             abort(404)
         answers = exam_service.result_answers(conn, result["id"])
-        attempts = exam_service.student_attempts(conn, test_id, session["student_id"])
         insights = build_result_insights(conn, test, result, answers, {"id": session["student_id"]})
-        left = exam_service.attempts_left(conn, test, session["student_id"])
     pct = percentage(result["score"], result["total_marks"])
     passed = pct >= PASS_PERCENTAGE
     return render_template(
         "student/test_result.html", test=test, result=result, answers=answers,
         pct=pct, passed=passed, pass_pct=PASS_PERCENTAGE, insights=insights,
-        attempts=attempts, attempts_left=left
+
     )
 
 

@@ -3,18 +3,10 @@
 {% block content %}
 <div class="card" style="max-width:480px;">
   <h2>Rules: {{ test.title }}</h2>
+  {% if test.status == 'published' %}<p class="helper-text" style="color:#b45309">This test is published. Unpublish it from the Review page before changing its rules.</p>{% endif %}
   <form method="POST" action="{{ url_for('test_settings', test_id=test.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Duration (minutes)</label>
     <input type="number" name="duration_minutes" value="{{ test.duration_minutes }}" min="1" max="600" required>
-    <label>Attempts allowed <span class="helper-text">(0 = unlimited)</span></label>
-    <input type="number" name="max_attempts" value="{{ (test.max_attempts if test else 1) }}" min="0" max="50">
-
-    <label>Which result counts when there are several attempts</label>
-    <select name="result_policy">
-      <option value="best" {% if test and test.result_policy == 'best' %}selected{% endif %}>Best attempt</option>
-      <option value="latest" {% if test and test.result_policy == 'latest' %}selected{% endif %}>Latest attempt</option>
-    </select>
-
     <label>If time is over before submitting</label>
     <select name="late_policy">
       <option value="auto_submit" {% if not test or test.late_policy == 'auto_submit' %}selected{% endif %}>Auto-submit the last saved answers</option>
@@ -27,7 +19,13 @@
     <label>Negative marks per wrong answer <span class="helper-text">(0 = none)</span></label>
     <input type="number" name="negative_marks" value="{{ (test.negative_marks if test else 0) }}" min="0" step="0.25">
 
-    <p class="helper-text">The timer runs on the server. Attempts that are already running keep the duration and grace they started with.</p>
+    <label>When students see their result</label>
+    <select name="result_release">
+      <option value="immediate" {% if test.result_release != 'manual' %}selected{% endif %}>Immediately after submission</option>
+      <option value="manual" {% if test.result_release == 'manual' %}selected{% endif %}>After I release the results</option>
+    </select>
+
+    <p class="helper-text">Each student can take this test only once. The timer runs on the server. Attempts that are already running keep the duration and grace they started with.</p>
     <button class="btn btn-full" type="submit">Save rules</button>
   </form>
 </div>

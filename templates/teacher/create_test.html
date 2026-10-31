@@ -21,29 +21,26 @@
     <label>Duration (minutes)</label>
     <input type="number" name="duration_minutes" value="30" min="1" required>
 
-{% set test = none %}
-    <label>Attempts allowed <span class="helper-text">(0 = unlimited)</span></label>
-    <input type="number" name="max_attempts" value="{{ (test.max_attempts if test else 1) }}" min="0" max="50">
-
-    <label>Which result counts when there are several attempts</label>
-    <select name="result_policy">
-      <option value="best" {% if test and test.result_policy == 'best' %}selected{% endif %}>Best attempt</option>
-      <option value="latest" {% if test and test.result_policy == 'latest' %}selected{% endif %}>Latest attempt</option>
-    </select>
-
     <label>If time is over before submitting</label>
     <select name="late_policy">
-      <option value="auto_submit" {% if not test or test.late_policy == 'auto_submit' %}selected{% endif %}>Auto-submit the last saved answers</option>
-      <option value="reject" {% if test and test.late_policy == 'reject' %}selected{% endif %}>Reject the late submission</option>
+      <option value="auto_submit" selected>Auto-submit the last saved answers</option>
+      <option value="reject" >Reject the late submission</option>
     </select>
 
     <label>Grace seconds after the deadline <span class="helper-text">(network delay allowance)</span></label>
-    <input type="number" name="grace_seconds" value="{{ (test.grace_seconds if test else 30) }}" min="0" max="600">
+    <input type="number" name="grace_seconds" value="30" min="0" max="600">
 
     <label>Negative marks per wrong answer <span class="helper-text">(0 = none)</span></label>
-    <input type="number" name="negative_marks" value="{{ (test.negative_marks if test else 0) }}" min="0" step="0.25">
+    <input type="number" name="negative_marks" value="0" min="0" step="0.25">
 
-    <button class="btn btn-full" type="submit">Create Test & Add Questions</button>
+    <label>When students see their result</label>
+    <select name="result_release">
+      <option value="immediate" selected>Immediately after submission</option>
+      <option value="manual">After I release the results</option>
+    </select>
+
+    <p class="helper-text">The test is saved as a <strong>draft</strong>. Students are not notified until you publish it.</p>
+    <button class="btn btn-full" type="submit">Create Draft & Add Questions</button>
   </form>
 </div>
 {% endblock %}

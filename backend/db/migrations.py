@@ -239,7 +239,7 @@ def _down_question_bank(conn):
     conn.execute("DROP TABLE IF EXISTS bank_categories")
 
 
-from backend.db import m008_exam_system, m010_support_tables  # noqa: E402
+from backend.db import m008_exam_system, m010_support_tables, m011_publish_marking  # noqa: E402
 
 
 def _up_drop_legacy_attempts(conn):
@@ -263,7 +263,7 @@ def _down_drop_legacy_attempts(conn):
 # setting inside a transaction); the runner checks PRAGMA foreign_key_check before COMMIT.
 FK_OFF = {"008_exam_system"}
 # Down-migrations that destroy data and therefore refuse to run without --force-destructive.
-DESTRUCTIVE_DOWN = {"001_test_attempts", "006_ai_chat", "007_question_bank", "008_exam_system",
+DESTRUCTIVE_DOWN = {"011_publish_marking", "001_test_attempts", "006_ai_chat", "007_question_bank", "008_exam_system",
                     "009_drop_legacy_attempts", "010_support_tables"}
 
 MIGRATIONS = [
@@ -287,6 +287,8 @@ MIGRATIONS = [
      _up_drop_legacy_attempts, _down_drop_legacy_attempts),
     ("010_support_tables", "Impersonation audit log, deletion retry queue, note/image/push columns",
      m010_support_tables.up, m010_support_tables.down),
+    ("011_publish_marking", "Draft/publish status, notified_at, result_release; marking breakdown columns",
+     m011_publish_marking.up, m011_publish_marking.down),
 ]
 
 
