@@ -1,0 +1,26 @@
+Question Studio আপডেট - ইনস্টল করার নিয়ম (PythonAnywhere)
+
+১) আপনার প্রজেক্টের ডাটাবেস (database.db) ও .env ফাইল ছোঁবেন না। 
+২) এই ফোল্ডারের ফাইলগুলো প্রজেক্টে একই পথে কপি/replace করুন:
+     backend/image_store.py              (নতুন)
+     backend/routes/question_studio.py   (নতুন)
+     templates/_image_picker.html        (নতুন)
+     templates/studio_library.html       (নতুন)
+     templates/studio_questions.html     (নতুন)
+     backend/__init__.py                 (২ লাইন বদলেছে)
+     templates/teacher_dashboard.html    (বাটন বদলেছে)
+     app.py                              (শুধু add_questions ফাংশনে ১টি redirect লাইন যোগ)
+     tests/test_studio.py                (ঐচ্ছিক)
+   যদি আপনার সার্ভারের app.py এই zip-এর চেয়ে নতুন হয়, তাহলে app.py replace না করে শুধু
+   add_questions(test_id) ফাংশনের প্রথম লাইনে এটি বসান:
+       return redirect(url_for("studio.test_questions", test_id=test_id))
+৩) PythonAnywhere -> Web ট্যাব -> Reload।
+৪) Dashboard -> "Image Library" দিয়ে ছবি দেখুন। Manage Tests -> Manage Questions -> প্রশ্ন যোগ করুন।
+
+নতুন যা আছে
+- প্রশ্নে ছবি: "ছবি বাছুন / আপলোড করুন" বাটন -> thumbnail সহ popup, Category filter, খোঁজা, সরাসরি নতুন ছবি আপলোড।
+- শুধু ছবি দিয়েও প্রশ্ন (লেখা ঐচ্ছিক)।
+- আগের প্রশ্নে "ছবি যোগ করুন / বদলান / সরান"।
+- সব প্রশ্ন একসাথে যাচাই; একটি ভুল থাকলে কিছুই সেভ হয় না ও লেখা মুছে যায় না।
+- .env ভুল হলে (যেমন Cloud name-এ স্পেস) আপলোডের আগেই বাংলায় বার্তা। CLOUDINARY_URL দিলেও চলে।
+- Question Bank বাটন সরানো হয়েছে; আগের সব ছবি/প্রশ্ন/ফলাফল যেমন ছিল আছে (কোনো টেবিল মোছা হয়নি)।

@@ -2375,6 +2375,8 @@ def create_test():
 @app.route("/teacher/tests/<int:test_id>/questions", methods=["GET", "POST"])
 @teacher_login_required
 def add_questions(test_id):
+    # নতুন Question Studio পেজ (ছবিসহ প্রশ্ন)। নিচের পুরনো কোড অক্ষত রাখা হয়েছে, কিন্তু আর চলে না।
+    return redirect(url_for("studio.test_questions", test_id=test_id))
     with get_db() as conn:
         test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
         if test is None:

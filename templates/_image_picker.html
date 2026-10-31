@@ -1,0 +1,136 @@
+{# ছবি বাছাইয়ের Popup (Library থেকে বাছা + সরাসরি নতুন ছবি আপলোড)।
+   ব্যবহার: JS-এ  ImagePicker.open(function (img) { ... })  ; img = {id,url,thumb,name,category} #}
+<style>
+  .ip-back{position:fixed;inset:0;background:rgba(5,8,25,.62);z-index:2000;display:none;align-items:center;justify-content:center;padding:12px}
+  .ip-back.open{display:flex}
+  .ip-box{background:var(--surface);color:var(--text);width:min(940px,100%);max-height:92vh;border-radius:16px;border:1px solid var(--border);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden}
+  .ip-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border)}
+  .ip-head h3{margin:0;font-size:1.05rem}
+  .ip-tabs{display:flex;gap:6px;padding:10px 16px 0}
+  .ip-tab{border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:999px;padding:6px 14px;cursor:pointer;font-size:.88rem}
+  .ip-tab.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .ip-body{padding:12px 16px 16px;overflow:auto;flex:1}
+  .ip-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+  .ip-chip{border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:999px;padding:4px 12px;cursor:pointer;font-size:.82rem}
+  .ip-chip.active{background:var(--primary-soft);border-color:var(--primary);color:var(--primary);font-weight:600}
+  .ip-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+  .ip-card{border:2px solid var(--border);border-radius:12px;background:var(--surface2);padding:6px;cursor:pointer;text-align:center}
+  .ip-card:hover{border-color:var(--primary)}
+  .ip-card img{width:100%;height:105px;object-fit:contain;background:#fff;border-radius:8px;display:block}
+  .ip-card small{display:block;margin-top:4px;color:var(--text-muted);font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ip-drop{border:2px dashed var(--border-strong);border-radius:14px;padding:26px 14px;text-align:center;background:var(--surface2);cursor:pointer}
+  .ip-drop.over{border-color:var(--primary);background:var(--primary-soft)}
+  .ip-row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .ip-row>*{flex:1;min-width:150px}
+  .ip-msg{margin-top:10px;font-size:.88rem}
+  .ip-msg.err{color:var(--danger)} .ip-msg.ok{color:var(--success)}
+</style>
+<div class="ip-back" id="ipBack" role="dialog" aria-modal="true" aria-label="ছবি বাছুন">
+  <div class="ip-box">
+    <div class="ip-head"><h3>🖼️ ছবি বাছুন</h3><button type="button" class="btn btn-sm btn-outline" id="ipClose">✕ বন্ধ</button></div>
+    <div class="ip-tabs">
+      <button type="button" class="ip-tab active" data-tab="lib">Library থেকে বাছুন</button>
+      <button type="button" class="ip-tab" data-tab="up">⬆️ নতুন ছবি আপলোড</button>
+    </div>
+    <div class="ip-body">
+      <div id="ipLib">
+        <div class="ip-chips" id="ipChips"></div>
+        <input type="text" id="ipSearch" placeholder="ফাইলের নাম দিয়ে খুঁজুন…" style="margin-bottom:10px">
+        <div class="ip-grid" id="ipGrid"></div>
+        <div class="ip-msg" id="ipEmpty" style="display:none;color:var(--text-muted)">এখানে কোনো ছবি নেই। "নতুন ছবি আপলোড" ট্যাব থেকে যোগ করুন।</div>
+      </div>
+      <div id="ipUp" style="display:none">
+        {% if problem %}<p class="ip-msg err"><strong>{{ problem }}</strong></p>{% endif %}
+        <div class="ip-row">
+          <select id="ipCatSel"></select>
+          <input type="text" id="ipNewCat" maxlength="60" placeholder="অথবা নতুন Category (যেমন: Calculus)">
+        </div>
+        <div class="ip-drop" id="ipDrop">
+          <div style="font-size:1.6rem">📁</div>
+          <div>ছবি এখানে টেনে আনুন, অথবা ক্লিক করে বাছুন</div>
+          <small style="color:var(--text-muted)">JPG, PNG, WEBP, GIF · প্রতিটি সর্বোচ্চ {{ max_mb }} MB · একবারে {{ max_files }} টি পর্যন্ত</small>
+          <input type="file" id="ipFile" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
+        </div>
+        <div class="ip-msg" id="ipUpMsg"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+window.ImagePicker = (function () {
+  var API = "{{ url_for('studio.api_images') }}", UP = "{{ url_for('studio.api_upload') }}";
+  var CSRF = "{{ csrf_token() }}";
+  var $ = function (id) { return document.getElementById(id); };
+  var back = $('ipBack'), grid = $('ipGrid'), chips = $('ipChips'), search = $('ipSearch');
+  var state = { cat: 0, cats: [], images: [], cb: null, timer: null };
+
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+  function tab(name) {
+    document.querySelectorAll('.ip-tab').forEach(function (t) { t.classList.toggle('active', t.dataset.tab === name); });
+    $('ipLib').style.display = name === 'lib' ? '' : 'none';
+    $('ipUp').style.display = name === 'up' ? '' : 'none';
+  }
+  function renderChips() {
+    var html = '<button type="button" class="ip-chip ' + (!state.cat ? 'active' : '') + '" data-c="0">সব</button>';
+    state.cats.forEach(function (c) {
+      html += '<button type="button" class="ip-chip ' + (state.cat === c.id ? 'active' : '') + '" data-c="' + c.id + '">' + esc(c.name) + ' (' + c.count + ')</button>';
+    });
+    chips.innerHTML = html;
+    var sel = $('ipCatSel'), keep = sel.value;
+    sel.innerHTML = state.cats.map(function (c) { return '<option value="' + c.id + '">' + esc(c.name) + '</option>'; }).join('') || '<option value="">(কোনো Category নেই)</option>';
+    if (keep) sel.value = keep; else if (state.cat) sel.value = String(state.cat);
+  }
+  function renderGrid() {
+    grid.innerHTML = state.images.map(function (im, i) {
+      return '<div class="ip-card" data-i="' + i + '"><img loading="lazy" src="' + esc(im.thumb) + '" alt=""><small>' + esc(im.category) + ' · ' + esc(im.name) + '</small></div>';
+    }).join('');
+    $('ipEmpty').style.display = state.images.length ? 'none' : '';
+  }
+  function load() {
+    var url = API + '?category=' + (state.cat || '') + '&q=' + encodeURIComponent(search.value.trim());
+    return fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { state.images = d.images || []; state.cats = d.categories || []; renderChips(); renderGrid(); })
+      .catch(function () { $('ipEmpty').style.display = ''; $('ipEmpty').textContent = 'ছবির তালিকা আনা যায়নি। পেজ রিলোড করে দেখুন।'; });
+  }
+  function close() { back.classList.remove('open'); state.cb = null; }
+  function pick(im) { var cb = state.cb; close(); if (cb) cb(im); }
+
+  chips.addEventListener('click', function (e) { var b = e.target.closest('.ip-chip'); if (b) { state.cat = parseInt(b.dataset.c, 10) || 0; load(); } });
+  grid.addEventListener('click', function (e) { var c = e.target.closest('.ip-card'); if (c) pick(state.images[parseInt(c.dataset.i, 10)]); });
+  search.addEventListener('input', function () { clearTimeout(state.timer); state.timer = setTimeout(load, 250); });
+  document.querySelectorAll('.ip-tab').forEach(function (t) { t.addEventListener('click', function () { tab(t.dataset.tab); }); });
+  $('ipClose').addEventListener('click', close);
+  back.addEventListener('click', function (e) { if (e.target === back) close(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && back.classList.contains('open')) close(); });
+
+  var drop = $('ipDrop'), file = $('ipFile'), msg = $('ipUpMsg');
+  drop.addEventListener('click', function () { file.click(); });
+  ['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+  ['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+  drop.addEventListener('drop', function (e) { upload(e.dataTransfer.files); });
+  file.addEventListener('change', function () { upload(file.files); file.value = ''; });
+
+  function upload(files) {
+    if (!files || !files.length) return;
+    var fd = new FormData();
+    var cat = $('ipCatSel').value, nc = $('ipNewCat').value.trim();
+    if (nc) fd.append('new_category', nc); else if (cat) fd.append('category_id', cat);
+    for (var i = 0; i < files.length; i++) fd.append('images', files[i]);
+    msg.className = 'ip-msg'; msg.textContent = 'আপলোড হচ্ছে… একটু অপেক্ষা করুন';
+    fetch(UP, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRFToken': CSRF, 'Accept': 'application/json' } })
+      .then(function (r) { return r.json().catch(function () { return { ok: false, errors: ['সার্ভার থেকে ভুল উত্তর এসেছে।'] }; }); })
+      .then(function (d) {
+        var errs = (d.errors || []).concat(d.error ? [d.error] : []);
+        if (d.ok && d.images && d.images.length) {
+          $('ipNewCat').value = '';
+          msg.className = 'ip-msg ok'; msg.textContent = d.images.length + ' টি ছবি আপলোড হয়েছে।' + (errs.length ? ' (কিছু ব্যর্থ: ' + errs.join(' | ') + ')' : '');
+          if (d.images.length === 1 && !errs.length) { load(); pick(d.images[0]); return; }
+          state.cat = d.category ? d.category.id : state.cat; load().then(function () { tab('lib'); });
+        } else { msg.className = 'ip-msg err'; msg.textContent = errs.join(' | ') || 'আপলোড হয়নি।'; }
+      })
+      .catch(function () { msg.className = 'ip-msg err'; msg.textContent = 'নেটওয়ার্ক সমস্যা। আবার চেষ্টা করুন।'; });
+  }
+  return { open: function (cb) { state.cb = cb; tab('lib'); msg.textContent = ''; back.classList.add('open'); load(); } };
+})();
+</script>

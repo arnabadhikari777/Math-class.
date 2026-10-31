@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 def register_backend(app):
     from . import guards, migrations
     from .db import db_path
-    from .routes import ai_admin, ai_api, public_api, question_bank, student_api, teacher_api
+    from .routes import ai_admin, ai_api, public_api, question_bank, question_studio, student_api, teacher_api
 
     # Business constants stay owned by app.py; read, never copy.
     host = sys.modules.get(app.import_name)
@@ -36,4 +36,5 @@ def register_backend(app):
     app.register_blueprint(ai_api.bp)
     app.register_blueprint(ai_admin.bp)
     app.register_blueprint(question_bank.bp)
+    app.register_blueprint(question_studio.bp)
     app.jinja_env.globals["qimg"] = question_bank.question_image_url

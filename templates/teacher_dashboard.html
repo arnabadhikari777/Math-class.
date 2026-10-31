@@ -34,8 +34,7 @@
     <a href="{{ url_for('upload_note') }}" class="btn btn-outline">Upload Note</a>
     <a href="{{ url_for('create_test') }}" class="btn btn-outline">Create Test</a>
     <a href="{{ url_for('manage_tests') }}" class="btn btn-outline">Manage Tests</a>
-    <a href="{{ url_for('qbank.questions') }}" class="btn btn-outline">Question Bank</a>
-    <a href="{{ url_for('qbank.images') }}" class="btn btn-outline">Image Library</a>
+    <a href="{{ url_for('studio.library') }}" class="btn btn-outline">Image Library</a>
     <a href="{{ url_for('manage_announcements') }}" class="btn btn-outline">Notices</a>
     <a href="{{ url_for('teacher_contacts') }}" class="btn btn-outline">Inbox {% if new_contacts %}({{ new_contacts }}){% endif %}</a>
     <a href="{{ url_for('teacher_activity') }}" class="btn btn-outline">Activity Log</a>
