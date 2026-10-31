@@ -424,12 +424,12 @@ class AITests(unittest.TestCase):
         self.assertNotIn("ai-widget.js", t.get("/teacher/dashboard").get_data(as_text=True))
         self.assertIn("AI Chats", t.get("/teacher/dashboard").get_data(as_text=True))
         self.assertNotIn("ai-widget.js", self.app.test_client().get("/login").get_data(as_text=True))
-        self.assertEqual(s.get("/static/ai-widget.js").status_code, 200)
-        self.assertEqual(s.get("/static/ai-widget.css").status_code, 200)
+        self.assertEqual(s.get("/static/js/ai-widget.js").status_code, 200)
+        self.assertEqual(s.get("/static/css/ai-widget.css").status_code, 200)
 
     def test_71_secret_keys_never_in_pages_or_static(self):
         s = self.student_client(self.sa)
-        for path in ["/dashboard", "/static/ai-widget.js", "/api/v1/ai/status", "/teacher/ai-chats"]:
+        for path in ["/dashboard", "/static/js/ai-widget.js", "/api/v1/ai/status", "/teacher/ai-chats"]:
             body = s.get(path).get_data(as_text=True)
             self.assertNotIn(GKEY, body)
             self.assertNotIn(QKEY, body)
@@ -441,7 +441,7 @@ class AITests(unittest.TestCase):
         with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "", "GROQ_API_KEY": ""}):
             st = c.get("/api/v1/ai/status").get_json()["data"]
         self.assertFalse(st["enabled"])
-        with open(os.path.join(self.proj, "static", "ai-widget.js"), encoding="utf-8") as fh:
+        with open(os.path.join(self.proj, "static", "js", "ai-widget.js"), encoding="utf-8") as fh:
             js = fh.read()
         self.assertNotIn("fab.style.display", js)   # regression: button used to vanish when AI was off
         self.assertIn("ai-widget.js?v=", c.get("/dashboard").get_data(as_text=True))
@@ -482,7 +482,7 @@ class AITests(unittest.TestCase):
         data = json.loads(raw)["data"]
         self.assertEqual([x["label"] for x in data["choices"]], ["Anubhab Dutta", "Arnab Adhikari"])
         self.assert_no_real_names(raw)
-        self.assert_no_real_names(c.get("/static/ai-widget.js").get_data(as_text=True))
+        self.assert_no_real_names(c.get("/static/js/ai-widget.js").get_data(as_text=True))
 
     def test_91_choice_routes_to_right_provider_and_labels_alias(self):
         c = self.student_client(self.sa)
@@ -540,7 +540,7 @@ class AITests(unittest.TestCase):
 
     # ------------------------------------------------------------ database
     def test_80_migration_006_is_additive_idempotent_reversible(self):
-        from backend import migrations
+        from backend.db import migrations
         with self.dbc() as conn:
             tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         self.assertTrue({"ai_conversations", "ai_messages"} <= tables)

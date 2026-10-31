@@ -218,7 +218,7 @@ class BackendTests(unittest.TestCase):
         backup.close()
 
     def test_13_migrations_idempotent_and_reversible(self):
-        from backend import migrations as m
+        from backend.db import migrations as m
         self.assertEqual(m.run_pending(self.db, backup=False), [])
         m.rollback(self.db, "002_perf_indexes", backup=False)
         self.assertNotIn("002_perf_indexes", m.applied_ids(self.db))
@@ -227,7 +227,7 @@ class BackendTests(unittest.TestCase):
         self.assertTrue(_same_old_data(self.original_snapshot["students"], _snapshot(self.db)["students"]))
 
     def test_14_unique_index_skipped_when_duplicates_exist(self):
-        from backend import migrations as m
+        from backend.db import migrations as m
         path = os.path.join(self.tmp, "dupes.db")
         shutil.copy(os.path.join(ROOT, "database.db"), path)
         c = sqlite3.connect(path)
@@ -254,7 +254,7 @@ class BackendTests(unittest.TestCase):
         conn.close()
 
     def test_16_integrity_error_becomes_friendly_redirect(self):
-        from backend import guards
+        from backend.middleware import guards
         with self.app.test_request_context(f"/test/{self.t10}/submit", method="POST"):
             resp = guards.integrity_error(sqlite3.IntegrityError("UNIQUE"))
             self.assertEqual(resp.status_code, 302)
@@ -476,7 +476,7 @@ class BackendTests(unittest.TestCase):
         r = self.app.test_client().get("/sw.js")
         self.assertEqual(r.headers["Cache-Control"], "no-cache")
         js = r.get_data(as_text=True)
-        self.assertIn("math-class-v7", js)
+        self.assertIn("math-class-v8", js)
         self.assertIn("startsWith('/static/')", js)
         self.assertNotIn("caches.match(event.request))\n  );\n});", js.split("addEventListener('fetch'")[1][-60:])
         fetch_part = js.split("addEventListener('fetch'")[1]

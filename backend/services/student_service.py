@@ -3,11 +3,11 @@
 notes, announcements, progress). Pure functions: take a connection, return dicts.
 
 Scoring rules are NOT re-implemented here - they are read back exactly as
-app.py stored them (results.score / results.total_marks, PASS_PERCENTAGE).
+the web pages stored them (results.score / results.total_marks, PASS_PERCENTAGE).
 """
 from flask import current_app
 
-from ..db import escape_like
+from backend.db import escape_like
 
 VISIBLE = "(class_name=? OR class_name='' OR class_name IS NULL)"
 PROFILE_FIELDS = ("id", "name", "class_name", "roll", "email", "mobile", "registered_at")

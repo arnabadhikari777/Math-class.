@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Read-side business logic for teacher/admin dashboards (counts, student search,
-per-test results). Write operations for students/tests/notes remain in app.py."""
-from ..db import escape_like
+per-test results). Write operations for students/tests/notes remain in backend/routes/teacher/."""
+from backend.db import escape_like
 
 STUDENT_FIELDS = ("id", "name", "class_name", "roll", "email", "mobile", "is_verified",
                   "is_blocked", "admitted_by_teacher", "registered_at")

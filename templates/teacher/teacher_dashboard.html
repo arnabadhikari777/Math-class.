@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Teacher Dashboard{% endblock %}
+{% block content %}
+{% set T = insights %}
+<div class="card">
+  <div class="welcome">
+    <div>
+      <h2>Teacher Dashboard</h2>
+      <p class="text-muted">Full control: students, tests, notes, notices and inbox, plus live class analytics.</p>
+    </div>
+    <div class="ring-wrap" title="Average score of all students">
+      <div class="ring {{ 'good' if T.avg_pct >= 70 else 'warn' if T.avg_pct >= 40 else 'bad' if total_results else '' }}" style="--p: {{ T.avg_pct }}"><span>{{ T.avg_pct|round|int }}%</span></div>
+      <div class="kv"><small>Class average</small><b>{{ total_results }} submissions</b></div>
+    </div>
+  </div>
+</div>
+
+{% include "partials/_jee_cards.html" %}
+
+<div class="stats">
+  <div class="stat"><div class="num">{{ total_students }}</div><div class="label">Verified Students</div></div>
+  <div class="stat"><div class="num">{{ T.active_7d }}</div><div class="label">Active (7 days)</div></div>
+  <div class="stat"><div class="num">{{ T.subs_7d }}</div><div class="label">Submissions (7 days)</div></div>
+  <div class="stat"><div class="num">{{ pending }}</div><div class="label">Pending OTP</div></div>
+  <div class="stat"><div class="num">{{ total_tests }}</div><div class="label">Tests</div></div>
+  <div class="stat"><div class="num">{{ new_contacts }}</div><div class="label">New Messages</div></div>
+</div>
+
+<div class="card">
+  <h3>⚡ Quick Actions</h3>
+  <div class="flex gap-1 flex-wrap mt-1">
+    <a href="{{ url_for('students_list') }}" class="btn btn-primary">Students</a>
+    <a href="{{ url_for('admit_student') }}" class="btn btn-primary">Admit Student</a>
+    <a href="{{ url_for('upload_note') }}" class="btn btn-outline">Upload Note</a>
+    <a href="{{ url_for('create_test') }}" class="btn btn-outline">Create Test</a>
+    <a href="{{ url_for('manage_tests') }}" class="btn btn-outline">Manage Tests</a>
+    <a href="{{ url_for('studio.library') }}" class="btn btn-outline">Image Library</a>
+    <a href="{{ url_for('manage_announcements') }}" class="btn btn-outline">Notices</a>
+    <a href="{{ url_for('teacher_contacts') }}" class="btn btn-outline">Inbox {% if new_contacts %}({{ new_contacts }}){% endif %}</a>
+    <a href="{{ url_for('teacher_activity') }}" class="btn btn-outline">Activity Log</a>
+    <a href="{{ url_for('data_cleanup') }}" class="btn btn-outline">Data Cleanup</a>
+    <a href="{{ url_for('export_students') }}" class="btn btn-outline">Export CSV</a>
+  </div>
+</div>
+
+<div class="grid-auto">
+  <div class="card">
+    <h3>📊 Submissions, last 7 days</h3>
+    <div class="spark" style="height:90px">
+      {% for d in T.daily %}<i style="height: {{ d.h }}%" data-v="{{ d.n }}" title="{{ d.label }}: {{ d.n }}"></i>{% endfor %}
+    </div>
+    <div class="flex justify-between helper-text">
+      {% for d in T.daily %}<span style="flex:1;text-align:center">{{ d.label }}</span>{% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>🧪 Average by recent test</h3>
+    {% if T.test_avgs %}
+      {% for x in T.test_avgs %}
+      <div class="bar-row">
+        <a class="nm" href="{{ url_for('test_results_view', test_id=x.id) }}" title="{{ x.title }} ({{ x.n }} attempts)">{{ x.title }}</a>
+        <div class="bar {{ 'good' if x.avg >= 70 else 'warn' if x.avg >= 40 else 'bad' }}"><i style="width: {{ x.avg }}%"></i></div>
+        <span class="pc">{{ x.avg|round|int }}%</span>
+      </div>
+      {% endfor %}
+    {% else %}<p class="text-muted">No submissions yet.</p>{% endif %}
+  </div>
+</div>
+
+<div class="grid-auto">
+  <div class="card">
+    <h3>🚨 Students needing attention</h3>
+    {% if T.at_risk %}
+      {% for s in T.at_risk %}
+      <div class="tip warn">
+        <span class="ic">⚠️</span>
+        <div><b>{{ s.name }} <span class="text-muted" style="font-weight:500">· {{ class_display(s.class_name) }}</span></b>
+        <p>Average {{ s.avg|round|int }}% · {{ s.reason }}</p></div>
+      </div>
+      {% endfor %}
+    {% else %}<p class="text-muted">Nobody is flagged right now. 👏</p>{% endif %}
+  </div>
+
+  <div class="card">
+    <h3>🌟 Top performers</h3>
+    {% if T.top %}
+      {% for s in T.top %}
+      <div class="bar-row" style="grid-template-columns: 24px 1fr 44px">
+        <span>{{ ['🥇','🥈','🥉','4','5'][loop.index0] }}</span>
+        <span class="nm">{{ s.name }} <span class="text-muted" style="font-weight:500">· {{ s.n }} test{{ '' if s.n == 1 else 's' }}</span></span>
+        <span class="pc">{{ s.avg|round|int }}%</span>
+      </div>
+      {% endfor %}
+    {% else %}<p class="text-muted">No data yet.</p>{% endif %}
+  </div>
+</div>
+
+{% if T.hard_questions %}
+<div class="card">
+  <h3>🧩 Hardest questions (lowest accuracy)</h3>
+  {% for q in T.hard_questions %}
+  <div class="tip">
+    <span class="ic">❓</span>
+    <div><b>{{ q.text }}{% if q.text|length >= 90 %}…{% endif %}</b>
+    <p>{{ q.test }} · only {{ q.acc }}% correct ({{ q.n }} answers). Worth re-teaching.</p></div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="grid-auto">
+  <div class="card">
+    <h3>🔐 Recent Student Logins</h3>
+    {% if recent_logins %}
+    <table>
+      <thead><tr><th>Name</th><th>Class</th><th>Time</th><th></th></tr></thead>
+      <tbody>
+        {% for l in recent_logins %}
+        <tr>
+          <td>{{ l.name }}</td>
+          <td>{{ l.class_name }}</td>
+          <td class="text-muted">{{ l.login_time[:16].replace('T',' ') }}</td>
+          <td>{% if l.via_teacher %}<span class="badge badge-info">via Sir</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted">No logins yet.</p>
+    {% endif %}
+  </div>
+
+  {% if announcements %}
+  <div class="card">
+    <h3>📣 Latest Notices</h3>
+    {% for a in announcements %}
+    <div class="announce">
+      <strong>{{ a.title }}</strong>
+      <span class="badge {{ 'badge-success' if a.is_active else 'badge-danger' }}">{{ 'Active' if a.is_active else 'Hidden' }}</span>
+      <div class="text-muted" style="font-size:.9rem">{{ a.content[:150] }}{% if a.content|length > 150 %}…{% endif %}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

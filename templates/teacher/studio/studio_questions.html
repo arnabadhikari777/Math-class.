@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}Questions - {{ test.title }}{% endblock %}
+{% block extra_head %}
+<style>
+  .sq-block{margin-bottom:18px;padding:16px;border:2px solid var(--border);border-radius:14px;background:var(--surface2)}
+  .sq-block.bad{border-color:var(--danger)}
+  .sq-err{color:var(--danger);font-size:.88rem;margin-top:8px;display:none}
+  .sq-img{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:6px 0 12px}
+  .sq-img img{max-width:200px;max-height:140px;object-fit:contain;background:#fff;border-radius:8px;border:1px solid var(--border)}
+  .sq-bn{font-family:'Noto Sans Bengali',Inter,sans-serif}
+</style>
+{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>{{ test.title }}</h2>
+  <p class="helper-text">Class: {{ test.class_name }} | Duration: {{ test.duration_minutes }} minutes | মোট প্রশ্ন: {{ questions|length }}</p>
+  <div class="flex gap-1 flex-wrap mt-1">
+    <a class="btn btn-outline" href="{{ url_for('studio.library') }}">🖼️ Image Library</a>
+    <a class="btn btn-outline" href="{{ url_for('manage_tests') }}">← All Tests</a>
+  </div>
+</div>
+
+{% if problem %}
+<div class="card"><p style="color:var(--danger)"><strong>{{ problem }}</strong> (ছবি আপলোড না হওয়া পর্যন্ত শুধু আগে আপলোড করা ছবি বাছা যাবে।)</p></div>
+{% endif %}
+
+<div class="card">
+  <h3>নতুন প্রশ্ন যোগ করুন</h3>
+  <p class="helper-text" style="margin-bottom:14px">প্রশ্নে <strong>লেখা</strong>, <strong>ছবি</strong>, অথবা দুটোই দিতে পারেন (শুধু ছবি দিলেও চলবে)। ছবি Library থেকে বাছুন বা সরাসরি নতুন আপলোড করুন।</p>
+  <div id="blocks"></div>
+  <div id="saveErr" class="flash error" style="display:none"></div>
+  <div class="flex gap-1 flex-wrap" style="margin-top:14px">
+    <button type="button" class="btn btn-secondary" id="addBtn">+ আরেকটি প্রশ্ন</button>
+    <button type="button" class="btn btn-primary" id="saveBtn">সব প্রশ্ন সেভ করুন</button>
+  </div>
+</div>
+
+<div class="card">
+  <h3>এই Test-এর সব প্রশ্ন ({{ questions|length }})</h3>
+  {% if questions %}
+    {% for q in questions %}
+    <div class="item-box" style="margin-bottom:12px">
+      <div class="item-title sq-bn">{{ loop.index }}. {{ q.question_text }}</div>
+      {% if q.image_url %}<img src="{{ q.image_url }}" alt="Question image" loading="lazy" style="max-width:240px;max-height:160px;object-fit:contain;background:#fff;border-radius:8px;margin:8px 0;display:block">{% endif %}
+      <div class="item-meta sq-bn">
+        A) {{ q.option_a }} &nbsp; B) {{ q.option_b }} &nbsp; C) {{ q.option_c }} &nbsp; D) {{ q.option_d }}<br>
+        Correct: <span class="badge badge-green">{{ q.correct_option }}</span> | Marks: {{ q.marks }}
+      </div>
+      <div class="flex gap-1 flex-wrap" style="margin-top:8px">
+        <button type="button" class="btn btn-sm btn-outline set-img" data-q="{{ q.id }}">🖼️ {{ 'ছবি বদলান' if q.image_url else 'ছবি যোগ করুন' }}</button>
+        {% if q.image_url %}
+        <form method="POST" action="{{ url_for('studio.question_set_image', qid=q.id) }}" onsubmit="return confirm('প্রশ্ন থেকে ছবি সরাবেন? (Library-তে ছবি থাকবে)');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="image_id" value="">
+          <button class="btn btn-sm btn-outline" type="submit">ছবি সরান</button>
+        </form>
+        {% endif %}
+        <form method="POST" action="{{ url_for('delete_question', question_id=q.id, test_id=test.id) }}" onsubmit="return confirm('এই প্রশ্ন মুছবেন?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-danger" type="submit">Delete</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}<div class="empty-state">এখনো কোনো প্রশ্ন নেই। উপরে যোগ করুন।</div>{% endif %}
+</div>
+
+<form id="setImgForm" method="POST" style="display:none">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="image_id" id="setImgId">
+</form>
+
+{% include "partials/_image_picker.html" %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var SAVE_URL = "{{ url_for('studio.test_questions_save', test_id=test.id) }}";
+  var SET_URL = "{{ url_for('studio.question_set_image', qid=0) }}";
+  var CSRF = "{{ csrf_token() }}";
+  var blocks = document.getElementById('blocks');
+  var saveErr = document.getElementById('saveErr');
+  var saving = false;
+
+  function el(html) { var d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstChild; }
+
+  function makeBlock() {
+    var b = el(
+      '<div class="sq-block">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><strong class="sq-title">প্রশ্ন</strong>' +
+      '<button type="button" class="btn btn-sm btn-danger rm">Remove</button></div>' +
+      '<label>প্রশ্নের লেখা (ছবি থাকলে ঐচ্ছিক)</label>' +
+      '<textarea class="f-text sq-bn" rows="2" placeholder="প্রশ্ন লিখুন…"></textarea>' +
+      '<label>প্রশ্নের ছবি (ঐচ্ছিক)</label>' +
+      '<div class="sq-img"><button type="button" class="btn btn-sm btn-outline pick">🖼️ ছবি বাছুন / আপলোড করুন</button>' +
+      '<span class="prev"></span></div>' +
+      '<label>Option A</label><input type="text" class="f-a sq-bn">' +
+      '<label>Option B</label><input type="text" class="f-b sq-bn">' +
+      '<label>Option C</label><input type="text" class="f-c sq-bn">' +
+      '<label>Option D</label><input type="text" class="f-d sq-bn">' +
+      '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px">' +
+      '<div style="flex:1;min-width:140px"><label>Correct Option</label><select class="f-correct"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>' +
+      '<div style="flex:1;min-width:100px"><label>Marks</label><input type="number" class="f-marks" value="1" min="1"></div></div>' +
+      '<div class="sq-err"></div></div>');
+    b._imageId = null;
+    var prev = b.querySelector('.prev'), pickBtn = b.querySelector('.pick');
+    function showImage(im) {
+      b._imageId = im ? im.id : null;
+      prev.innerHTML = '';
+      if (im) {
+        var img = document.createElement('img'); img.src = im.thumb || im.url; img.alt = '';
+        var x = document.createElement('button'); x.type = 'button'; x.className = 'btn btn-sm btn-outline'; x.textContent = '✕ ছবি সরান';
+        x.addEventListener('click', function () { showImage(null); });
+        prev.appendChild(img); prev.appendChild(document.createTextNode(' ')); prev.appendChild(x);
+        pickBtn.textContent = '🖼️ ছবি বদলান';
+      } else { pickBtn.textContent = '🖼️ ছবি বাছুন / আপলোড করুন'; }
+    }
+    pickBtn.addEventListener('click', function () { ImagePicker.open(showImage); });
+    b.querySelector('.rm').addEventListener('click', function () { b.remove(); renumber(); });
+    return b;
+  }
+
+  function renumber() {
+    var all = blocks.querySelectorAll('.sq-block');
+    all.forEach(function (b, i) {
+      b.querySelector('.sq-title').textContent = 'প্রশ্ন ' + (i + 1);
+      b.querySelector('.rm').style.display = all.length > 1 ? '' : 'none';
+    });
+  }
+  function addBlock() { blocks.appendChild(makeBlock()); renumber(); }
+
+  function collect() {
+    return Array.prototype.map.call(blocks.querySelectorAll('.sq-block'), function (b) {
+      return { text: b.querySelector('.f-text').value, image_id: b._imageId,
+               a: b.querySelector('.f-a').value, b: b.querySelector('.f-b').value,
+               c: b.querySelector('.f-c').value, d: b.querySelector('.f-d').value,
+               correct: b.querySelector('.f-correct').value, marks: b.querySelector('.f-marks').value };
+    });
+  }
+  function clearErrors() {
+    saveErr.style.display = 'none';
+    blocks.querySelectorAll('.sq-block').forEach(function (b) { b.classList.remove('bad'); var e = b.querySelector('.sq-err'); e.style.display = 'none'; e.textContent = ''; });
+  }
+  function showErrors(list) {
+    var all = blocks.querySelectorAll('.sq-block'), first = null;
+    list.forEach(function (er) {
+      var b = all[er.index];
+      if (b) { b.classList.add('bad'); var e = b.querySelector('.sq-err'); e.textContent = er.message; e.style.display = 'block'; first = first || b; }
+      else { saveErr.textContent = er.message; saveErr.style.display = 'block'; }
+    });
+    if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  document.getElementById('addBtn').addEventListener('click', addBlock);
+  document.getElementById('saveBtn').addEventListener('click', function () {
+    if (saving) return;
+    clearErrors();
+    var btn = this; saving = true; btn.disabled = true; btn.textContent = 'সেভ হচ্ছে…';
+    fetch(SAVE_URL, { method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF, 'Accept': 'application/json' },
+      body: JSON.stringify({ questions: collect() }) })
+      .then(function (r) { return r.json().catch(function () { return { ok: false, errors: [{ index: -1, message: 'সার্ভার থেকে ভুল উত্তর এসেছে। পেজ রিলোড না করে আবার চেষ্টা করুন।' }] }; }); })
+      .then(function (d) {
+        if (d.ok) { window.location.reload(); return; }
+        showErrors(d.errors || [{ index: -1, message: 'সেভ হয়নি।' }]);
+        saving = false; btn.disabled = false; btn.textContent = 'সব প্রশ্ন সেভ করুন';
+      })
+      .catch(function () {
+        showErrors([{ index: -1, message: 'নেটওয়ার্ক সমস্যা। আপনার লেখা মুছে যায়নি, আবার চেষ্টা করুন।' }]);
+        saving = false; btn.disabled = false; btn.textContent = 'সব প্রশ্ন সেভ করুন';
+      });
+  });
+
+  // আগের প্রশ্নে ছবি বসানো
+  document.querySelectorAll('.set-img').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var qid = btn.dataset.q;
+      ImagePicker.open(function (im) {
+        var f = document.getElementById('setImgForm');
+        f.action = SET_URL.replace(/\/0\/image$/, '/' + qid + '/image');
+        document.getElementById('setImgId').value = im.id;
+        f.submit();
+      });
+    });
+  });
+
+  addBlock();
+})();
+</script>
+{% endblock %}

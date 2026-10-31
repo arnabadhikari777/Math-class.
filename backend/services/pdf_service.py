@@ -1,0 +1,154 @@
+# -*- coding: utf-8 -*-
+"""Student result PDF generation (reportlab)."""
+
+import io
+import os
+
+from backend.utils.helpers import percentage
+
+
+# PDF generation (Bengali-capable via FreeSerif)
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.pdfgen import canvas as pdf_canvas
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    REPORTLAB_OK = True
+except ImportError:
+    REPORTLAB_OK = False
+
+
+def _register_pdf_fonts():
+    """Register Unicode fonts for PDF (Bengali support via FreeSerif)."""
+    if not REPORTLAB_OK:
+        return None, None
+    font_paths = [
+        "/usr/share/fonts/truetype/freefont/FreeSerif.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf",
+    ]
+    regular = None
+    bold = None
+    for p in font_paths:
+        if os.path.isfile(p) and "Bold" not in os.path.basename(p) and regular is None:
+            try:
+                pdfmetrics.registerFont(TTFont("AppFont", p))
+                regular = "AppFont"
+            except Exception:
+                pass
+        if os.path.isfile(p) and "Bold" in os.path.basename(p) and bold is None:
+            try:
+                pdfmetrics.registerFont(TTFont("AppFontBold", p))
+                bold = "AppFontBold"
+            except Exception:
+                pass
+    if regular and not bold:
+        bold = regular
+    return regular, bold
+
+
+def build_student_result_pdf(test, student, result, answers):
+    """Generate PDF bytes of student's answer sheet (Bengali-safe)."""
+    if not REPORTLAB_OK:
+        return None
+    font, font_bold = _register_pdf_fonts()
+    if not font:
+        font = font_bold = "Helvetica"
+
+    buf = io.BytesIO()
+    c = pdf_canvas.Canvas(buf, pagesize=A4)
+    width, height = A4
+    left = 18 * mm
+    right = width - 18 * mm
+    y = height - 18 * mm
+    line_h = 6.5 * mm
+    max_w = right - left
+
+    def new_page_if_needed(need=20 * mm):
+        nonlocal y
+        if y < need:
+            c.showPage()
+            y = height - 18 * mm
+            return True
+        return False
+
+    def draw_wrapped(text, x, fontsize=10, bold=False, color=(0, 0, 0)):
+        nonlocal y
+        f = font_bold if bold else font
+        c.setFont(f, fontsize)
+        c.setFillColorRGB(*color)
+        words = (text or "").split()
+        if not words:
+            return
+        lines = []
+        cur = words[0]
+        for w in words[1:]:
+            trial = cur + " " + w
+            if c.stringWidth(trial, f, fontsize) <= max_w:
+                cur = trial
+            else:
+                lines.append(cur)
+                cur = w
+        lines.append(cur)
+        for ln in lines:
+            new_page_if_needed(12 * mm)
+            c.drawString(x, y, ln)
+            y -= line_h * 0.85
+
+    c.setFont(font_bold, 14)
+    c.setFillColorRGB(0.12, 0.23, 0.54)
+    c.drawString(left, y, "Arnab Math Class — Student Answer Sheet")
+    y -= line_h * 1.2
+    c.setStrokeColorRGB(0.12, 0.23, 0.54)
+    c.setLineWidth(1.5)
+    c.line(left, y, right, y)
+    y -= line_h * 1.1
+
+    pct = percentage(result["score"], result["total_marks"])
+    meta = [
+        f"Test: {test['title']}",
+        f"Student: {student['name']}  |  Class: {student['class_name']}  |  Roll: {student['roll'] or '-'}",
+        f"Score: {result['score']} / {result['total_marks']}  ({pct}%)",
+        f"Submitted: {str(result['submitted_at'])[:16].replace('T', ' ')}",
+    ]
+    for m in meta:
+        draw_wrapped(m, left, fontsize=10, bold=True)
+        y -= 1 * mm
+
+    y -= 3 * mm
+    c.setStrokeColorRGB(0.85, 0.85, 0.85)
+    c.line(left, y, right, y)
+    y -= line_h
+
+    for i, a in enumerate(answers, 1):
+        new_page_if_needed(40 * mm)
+        status = "Correct" if a["is_correct"] else "Incorrect"
+        color = (0.02, 0.59, 0.41) if a["is_correct"] else (0.86, 0.15, 0.15)
+        draw_wrapped(
+            f"Q{i}. {a['question_text']}  [{a['marks']} mark(s)]  {status}",
+            left, fontsize=10, bold=True, color=color
+        )
+        y -= 1 * mm
+        for letter, key in [("A", "option_a"), ("B", "option_b"), ("C", "option_c"), ("D", "option_d")]:
+            prefix = ""
+            col = (0.1, 0.1, 0.1)
+            if letter == a["correct_option"]:
+                prefix = " [Correct]"
+                col = (0.02, 0.5, 0.35)
+            if letter == a["selected_option"]:
+                prefix += " <- Student chose"
+                if not a["is_correct"]:
+                    col = (0.75, 0.1, 0.1)
+            draw_wrapped(f"  {letter}) {a[key]}{prefix}", left, fontsize=9, color=col)
+        if not a["selected_option"]:
+            draw_wrapped("  (No answer selected)", left, fontsize=9, color=(0.7, 0.1, 0.1))
+        y -= 3 * mm
+
+    y -= 4 * mm
+    new_page_if_needed(15 * mm)
+    c.setFont(font, 8)
+    c.setFillColorRGB(0.4, 0.4, 0.4)
+    c.drawString(left, y, "Generated by Arnab Math Class")
+    c.save()
+    buf.seek(0)
+    return buf.read()

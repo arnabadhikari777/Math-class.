@@ -17,7 +17,7 @@ class StoreConfigTests(unittest.TestCase):
         for k in ("CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET", "CLOUDINARY_URL"):
             os.environ.pop(k, None)
         sys.path.insert(0, ROOT)
-        self.store = importlib.import_module("backend.image_store")
+        self.store = importlib.import_module("backend.services.image_store")
 
     def tearDown(self):
         self.env.stop(); sys.path.remove(ROOT)
@@ -89,7 +89,7 @@ class StudioTests(unittest.TestCase):
                 "width": 5, "height": 5, "bytes": 72, "format": "png"}
 
     def upload(self, cl, name="a.png", **form):
-        with mock.patch("backend.image_store.upload", side_effect=lambda f, d, category=None: self.fake_upload(f)):
+        with mock.patch("backend.services.image_store.upload", side_effect=lambda f, d, category=None: self.fake_upload(f)):
             return cl.post("/teacher/studio/api/upload", data=dict(form, images=(io.BytesIO(PNG), name)),
                            headers={"X-CSRFToken": CSRF}, content_type="multipart/form-data")
 
@@ -179,7 +179,7 @@ class StudioTests(unittest.TestCase):
         used = self.upload(cl, "u.png", new_category="Used").get_json()["images"][0]["id"]
         free = self.upload(cl, "f.png", new_category="Used").get_json()["images"][0]["id"]
         self.save(cl, [{"text": "uses", "image_id": used, "a": "1", "b": "2", "c": "3", "d": "4", "correct": "A"}])
-        with mock.patch("backend.image_store.destroy", return_value=True) as d:
+        with mock.patch("backend.services.image_store.destroy", return_value=True) as d:
             cl.post("/teacher/studio/library/images/%d/delete" % used, data={"csrf_token": CSRF})
             self.assertEqual(d.call_count, 0)
             self.assertEqual(len(self.q("SELECT 1 FROM bank_images WHERE id=?", (used,))), 1)

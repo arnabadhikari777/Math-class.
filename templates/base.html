@@ -8,8 +8,8 @@
 <meta name="color-scheme" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.png') }}">
-<link rel="icon" href="{{ url_for('static', filename='icon-192.png') }}">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+<link rel="icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
 <meta name="csrf-token" content="{{ csrf_token() }}">
 <title>{% block title %}Math Class{% endblock %} · Arnab Math Class</title>
 <script>
@@ -596,10 +596,10 @@
 <canvas id="confetti"></canvas>
 
 {% if session.get('student_id') and not session.get('is_teacher') %}
-<link rel="stylesheet" href="{{ url_for('static', filename='ai-widget.css') }}?v=9">
-<script src="{{ url_for('static', filename='ai-widget.js') }}?v=9" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ai-widget.css') }}?v=10">
+<script src="{{ url_for('static', filename='js/ai-widget.js') }}?v=10" defer></script>
 {% endif %}
-<script src="{{ url_for('static', filename='countdown.js') }}?v=2" defer></script>
+<script src="{{ url_for('static', filename='js/countdown.js') }}?v=3" defer></script>
 <script>
   // Optional JEE countdown: remembered per device, off by default.
   (function () {

@@ -1,9 +1,21 @@
-# Environment & secrets
+# ============ Secrets (NEVER commit) ============
 .env
-*.env
+.env.*
 !.env.example
+*.pem
+*.key
+.secret_key
 
-# Python
+# ============ Live data (stays on the server) ============
+database.db
+*.db
+*.sqlite
+*.sqlite3
+backups/
+uploads/notes/*
+!uploads/notes/.gitkeep
+
+# ============ Python ============
 __pycache__/
 *.py[cod]
 *$py.class
@@ -13,26 +25,27 @@ venv/
 env/
 .venv/
 ENV/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# Database (optional — uncomment if you don't want to commit DB)
-database.db
-
-# Uploads (keep structure, ignore files)
-uploads/notes/*
-!uploads/notes/.gitkeep
-
-# IDE / OS
+# ============ Editors / OS ============
 .idea/
 .vscode/
 *.swp
+*.swo
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Logs
+# ============ Logs / temp / leftovers ============
 *.log
-
-# App secret generated automatically
-.secret_key
-
-# Database backups created by backend/migrations.py
-backups/
+*.tmp
+*.bak
+*.orig
+*.zip

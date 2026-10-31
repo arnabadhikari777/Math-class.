@@ -1,4 +1,4 @@
-const CACHE_NAME = 'math-class-v7';
+const CACHE_NAME = 'math-class-v8';
 
 // Only truly static, non-login-dependent assets are safe to precache.
 // '/' and '/download' were removed on purpose: those pages render
@@ -7,8 +7,8 @@ const CACHE_NAME = 'math-class-v7';
 // even after a successful login.
 const PRECACHE = [
   '/static/manifest.json',
-  '/static/icon-192.png',
-  '/static/icon-512.png'
+  '/static/icons/icon-192.png',
+  '/static/icons/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -38,8 +38,8 @@ self.addEventListener('push', (event) => {
   }
   const options = {
     body: data.body,
-    icon: '/static/icon-192.png',
-    badge: '/static/icon-192.png',
+    icon: '/static/icons/icon-192.png',
+    badge: '/static/icons/icon-192.png',
     data: { url: data.url || '/' },
     vibrate: [100, 50, 100]
   };

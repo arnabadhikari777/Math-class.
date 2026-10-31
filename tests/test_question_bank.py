@@ -85,7 +85,7 @@ class QBankTests(unittest.TestCase):
         self.post(t, "/teacher/bank/categories/create", {"name": "calculus"})  # duplicate (case-insens.)
         cat = self.q("SELECT id FROM bank_categories")[0]["id"]
         self.assertEqual(len(self.q("SELECT * FROM bank_categories")), 1)
-        with mock.patch("backend.cloudinary_client.requests.post") as rp:
+        with mock.patch("backend.services.cloudinary_client.requests.post") as rp:
             rp.return_value = mock.Mock(status_code=200, json=lambda: {"secure_url": "https://res.cloudinary.com/demo/image/upload/v1/a.png", "public_id": "arnab/a", "width": 5, "height": 5, "bytes": 72, "format": "png"})
             self.post(t, "/teacher/bank/images/upload", {"category_id": cat, "images": (io.BytesIO(PNG), "a.png")}, content_type="multipart/form-data")
             self.post(t, "/teacher/bank/images/upload", {"category_id": cat, "images": (io.BytesIO(b"<html>"), "evil.png")}, content_type="multipart/form-data")  # fake image
@@ -133,7 +133,7 @@ class QBankTests(unittest.TestCase):
         self.post(t, "/teacher/bank/questions/%d/edit" % bid, {"question_text": "CHANGED", "image_id": iid, "option_a": "1", "option_b": "2", "option_c": "3", "option_d": "4", "correct_option": "B"})
         self.assertEqual(self.q("SELECT question_text FROM questions WHERE id=?", rows[1]["id"])[0][0], "Fig?")
         # image in use -> delete blocked, Cloudinary not called
-        with mock.patch("backend.cloudinary_client.requests.post") as rp:
+        with mock.patch("backend.services.cloudinary_client.requests.post") as rp:
             self.post(t, "/teacher/bank/images/%d/delete" % iid)
             self.assertEqual(rp.call_count, 0)
         self.assertEqual(len(self.q("SELECT * FROM bank_images")), 1)
@@ -152,16 +152,16 @@ class QBankTests(unittest.TestCase):
         # unused image deletes fine (and Cloudinary failure keeps the record)
         c = sqlite3.connect(self.db); c.execute("DELETE FROM questions WHERE bank_image_id=?", (iid,)); c.commit(); c.close()
         import requests
-        with mock.patch("backend.cloudinary_client.requests.post", side_effect=requests.ConnectionError()):
+        with mock.patch("backend.services.cloudinary_client.requests.post", side_effect=requests.ConnectionError()):
             self.post(t, "/teacher/bank/images/%d/delete" % iid)
         self.assertEqual(len(self.q("SELECT * FROM bank_images")), 1)
-        with mock.patch("backend.cloudinary_client.requests.post") as rp:
+        with mock.patch("backend.services.cloudinary_client.requests.post") as rp:
             rp.return_value = mock.Mock(status_code=200, json=lambda: {"result": "ok"})
             self.post(t, "/teacher/bank/images/%d/delete" % iid)
         self.assertEqual(len(self.q("SELECT * FROM bank_images")), 0)
 
     def test_04_cloudinary_signature_and_missing_config(self):
-        from backend import cloudinary_client as cdn
+        from backend.services import cloudinary_client as cdn
         import hashlib
         self.assertEqual(cdn._sign({"timestamp": "1", "folder": "f"}, "S"), hashlib.sha1(b"folder=f&timestamp=1S").hexdigest())
         with mock.patch.dict(os.environ, {"CLOUDINARY_API_SECRET": ""}):
