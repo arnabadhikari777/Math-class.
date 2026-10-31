@@ -218,7 +218,7 @@ class BackendTests(unittest.TestCase):
                                    "003_unique_results", "004_unique_attendance",
                                    "005_normalize_class_names", "006_ai_chat", "007_question_bank",
                                    "008_exam_system", "009_drop_legacy_attempts", "010_support_tables",
-                                   "011_publish_marking"})
+                                   "011_publish_marking", "012_autosave"})
 
     def test_12_backup_created_before_migrating(self):
         folder = os.path.join(self.proj, "backups")

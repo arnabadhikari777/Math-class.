@@ -21,9 +21,30 @@ from backend.db.m008_exam_system import question_hash
 
 log = logging.getLogger(__name__)
 
-POLICIES_RESULT = ("best", "latest")
+POLICIES_RESULT = ("best", "latest")   # legacy only: kept so old multi-attempt history still resolves
 POLICIES_LATE = ("auto_submit", "reject")
 OPTIONS = ("A", "B", "C", "D")
+
+# Final score = correct x marks - wrong x negative marks (unanswered = 0). By default a total below 0 is
+# shown as it is, so the result page always adds up. Set MARKS_FLOOR_AT_ZERO=1 in .env to stop at 0 instead.
+FLOOR_AT_ZERO = os.environ.get("MARKS_FLOOR_AT_ZERO", "0").strip().lower() in ("1", "true", "yes")
+
+# SQL: a result is visible to its student when the test shows results immediately, or the teacher released them.
+# Use it in any student-facing query that joins `tests t`.
+RELEASED_SQL = "(COALESCE(t.result_release,'immediate')<>'manual' OR t.results_released_at IS NOT NULL)"
+
+
+def results_visible(test):
+    """True when students may see the marks of this test (teacher's result-publication setting)."""
+    try:
+        return (test["result_release"] or "immediate") != "manual" or bool(test["results_released_at"])
+    except (KeyError, IndexError):
+        return True
+
+
+def money(x):
+    """Marks rounded to 4 decimals (kills 0.30000000000000004) and never '-0.0'."""
+    return round(float(x or 0), 4) + 0.0
 
 
 def _now():
@@ -206,48 +227,149 @@ def draft_answers(attempt):
         return {}
 
 
-def save_draft(conn, attempt_id, student_id, answers):
-    """Autosave (called while the student works). Ignored once the attempt is closed or past the deadline."""
-    clean = {}
-    ids = {r[0] for r in conn.execute("SELECT id FROM attempt_questions WHERE attempt_id=?", (attempt_id,))}
-    for k, v in (answers or {}).items():
+def draft_meta(attempt):
+    try:
+        data = json.loads(attempt["draft_meta"] or "{}")
+        return data if isinstance(data, dict) else {}
+    except (TypeError, ValueError, KeyError, IndexError):
+        return {}
+
+
+def _merge_delta(attempt, valid_ids, delta):
+    """Merge a client delta into the server draft.  Each item is {"v": "A".."D" | null, "t": client_ms}
+    (a bare "A" is accepted too and counts as 'chosen just now').  An item older than what the server
+    already holds for that question is ignored, so a stale tab / late retry / old local copy can never
+    overwrite a newer answer.  null clears the answer (kept as a timestamped tombstone).
+    -> (draft, meta, changed)"""
+    draft, meta = dict(draft_answers(attempt)), draft_meta(attempt)
+    now_ms = int(_now().timestamp() * 1000)
+    changed = False
+    for k, item in (delta or {}).items():
         try:
             qid = int(str(k).replace("q_", ""))
         except ValueError:
             continue
-        if qid in ids and v in OPTIONS:
-            clean[str(qid)] = v
-    cur = conn.execute(
-        """UPDATE exam_attempts SET draft_json=?, draft_saved_at=?
-           WHERE id=? AND student_id=? AND status='in_progress' AND deadline_at >= ?""",
-        (json.dumps(clean), _now().isoformat(), attempt_id, student_id,
-         (_now() - timedelta(seconds=0)).isoformat()))
-    return cur.rowcount == 1
+        if qid not in valid_ids:
+            continue
+        v, t = (item.get("v"), item.get("t")) if isinstance(item, dict) else (item, None)
+        try:
+            t = int(t)
+        except (TypeError, ValueError):
+            t = now_ms
+        t = min(t, now_ms + 60000)               # a wrong browser clock cannot lock a question forever
+        key = str(qid)
+        if t < int(meta.get(key, 0) or 0):
+            continue
+        if v in OPTIONS:
+            draft[key] = v
+        elif v in (None, ""):
+            draft.pop(key, None)
+        else:
+            continue
+        meta[key] = t
+        changed = True
+    return draft, meta, changed
+
+
+def autosave(conn, test_id, student_id, delta):
+    """Autosave / heartbeat.  One write transaction -> (state, answers, remaining_seconds)
+    state: 'saved' | 'closed' (past the deadline) | 'none' (no running attempt: submitted elsewhere / never started).
+    The returned answers are the AUTHORITATIVE server draft - the page re-renders from them."""
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        att = get_running(conn, test_id, student_id)
+        if att is None:
+            conn.execute("COMMIT")
+            return "none", {}, 0
+        dl = _parse(att["deadline_at"])
+        if dl is None or _now() > dl:
+            conn.execute("COMMIT")                   # past the deadline: no new answers via autosave
+            return "closed", draft_answers(att), 0   # (the final submit still has the grace window)
+        ids = {r[0] for r in conn.execute("SELECT id FROM attempt_questions WHERE attempt_id=?", (att["id"],))}
+        draft, meta, changed = _merge_delta(att, ids, delta)
+        if changed:
+            conn.execute(
+                """UPDATE exam_attempts SET draft_json=?, draft_meta=?, draft_saved_at=?, draft_rev=COALESCE(draft_rev,0)+1
+                   WHERE id=? AND student_id=? AND status='in_progress'""",
+                (json.dumps(draft), json.dumps(meta), _now().isoformat(), att["id"], student_id))
+        conn.execute("COMMIT")
+        return "saved", draft, remaining_seconds(att)
+    except Exception:
+        try:
+            conn.execute("ROLLBACK")
+        except sqlite3.Error:
+            pass
+        raise
+
+
+def save_draft(conn, attempt_id, student_id, answers):
+    """Backwards-compatible wrapper (old payload {'q_12': 'A'}). True when the attempt was still open."""
+    att = conn.execute("SELECT test_id FROM exam_attempts WHERE id=? AND student_id=?", (attempt_id, student_id)).fetchone()
+    if att is None:
+        return False
+    state, _a, _r = autosave(conn, att["test_id"], student_id, answers)
+    return state == "saved"
 
 
 # ---------------------------------------------------------------- grading
 def _grade(conn, attempt_id, chosen):
-    """chosen = {attempt_question_id(int): 'A'..'D'}  ->  (score, total, rows)"""
-    rows, score, total = [], 0.0, 0.0
+    """chosen = {attempt_question_id(int): 'A'..'D'}  ->  (score, total, rows, summary)
+    The ONLY place marks are calculated.  It reads the correct option and the marks from the attempt's own
+    frozen snapshot - never from the browser, never from the live questions table."""
+    rows, total = [], 0.0
+    n_ok = n_bad = n_none = 0
+    pos = neg_total = 0.0
     for q in attempt_questions(conn, attempt_id):
         sel = chosen.get(q["id"])
         if sel not in OPTIONS:
             sel = None
         marks, neg = float(q["marks"]), float(q["negative_marks"] or 0)
-        correct = 1 if sel is not None and sel == q["correct_option"] else 0
-        awarded = marks if correct else (-neg if sel is not None else 0.0)
-        score += awarded
+        if sel is None:                       # unanswered: always exactly 0, never negative
+            correct, awarded = 0, 0.0
+            n_none += 1
+        elif sel == q["correct_option"]:
+            correct, awarded = 1, marks
+            n_ok += 1
+            pos += marks
+        else:                                 # wrong answer: deducted ONCE, here
+            correct, awarded = 0, -neg
+            n_bad += 1
+            neg_total += neg
         total += marks
-        rows.append((q, sel, correct, awarded))
-    return max(0.0, score), total, rows
+        rows.append((q, sel, correct, money(awarded)))
+    score = money(pos - neg_total)
+    if FLOOR_AT_ZERO:
+        score = max(0.0, score)
+    summary = {"correct_count": n_ok, "wrong_count": n_bad, "unanswered_count": n_none,
+               "positive_marks": money(pos), "negative_marks_total": money(neg_total)}
+    return score, money(total), rows, summary
 
 
-def _chosen_from(form_answers, draft, qids):
+def breakdown_from_answers(answers):
+    """Correct / wrong / unanswered and marks earned / deducted, straight from the stored answer rows
+    (works for old results too: the rows are the frozen record of what happened)."""
+    out = {"correct": 0, "wrong": 0, "unanswered": 0, "positive": 0.0, "negative": 0.0}
+    for a in answers:
+        if a["selected_option"] in (None, ""):
+            out["unanswered"] += 1
+        elif a["is_correct"]:
+            out["correct"] += 1
+        else:
+            out["wrong"] += 1
+        got = float(a["marks_awarded"] or 0)
+        if got > 0:
+            out["positive"] += got
+        elif got < 0:
+            out["negative"] += -got
+    out["positive"], out["negative"] = money(out["positive"]), money(out["negative"])
+    return out
+
+
+def _chosen_from(draft, qids):
+    """Final answers = the server draft (already merged with the page's last answers) for the attempt's questions."""
     chosen = {}
     for qid in qids:
-        v = (form_answers or {}).get(qid)
-        if v not in OPTIONS:
-            v = draft.get(str(qid))
+        v = draft.get(str(qid))
         if v in OPTIONS:
             chosen[qid] = v
     return chosen
@@ -255,11 +377,14 @@ def _chosen_from(form_answers, draft, qids):
 
 def _close(conn, attempt, test, chosen, status, source):
     """Atomically close an attempt. Returns result_id of the counted result, or None if lost the race."""
-    score, total, rows = _grade(conn, attempt["id"], chosen)
+    score, total, rows, sm = _grade(conn, attempt["id"], chosen)
     now = _now().isoformat()
     cur = conn.execute(
-        """UPDATE exam_attempts SET status=?, submitted_at=?, submit_source=?, score=?, total_marks=?
-           WHERE id=? AND status='in_progress'""", (status, now, source, score, total, attempt["id"]))
+        """UPDATE exam_attempts SET status=?, submitted_at=?, submit_source=?, score=?, total_marks=?,
+               correct_count=?, wrong_count=?, unanswered_count=?, positive_marks=?, negative_marks_total=?
+           WHERE id=? AND status='in_progress'""",
+        (status, now, source, score, total, sm["correct_count"], sm["wrong_count"], sm["unanswered_count"],
+         sm["positive_marks"], sm["negative_marks_total"], attempt["id"]))
     if cur.rowcount != 1:
         return None  # somebody else (double click / other tab / expiry sweep) already closed it
     for q, sel, correct, awarded in rows:
@@ -281,12 +406,16 @@ def _finalize_expired(conn, test, attempt):
                         WHERE id=? AND status='in_progress'""", (_now().isoformat(), attempt["id"]))
         return None
     qids = [r["id"] for r in attempt_questions(conn, attempt["id"])]
-    return _close(conn, attempt, test, _chosen_from({}, draft_answers(attempt), qids),
+    return _close(conn, attempt, test, _chosen_from(draft_answers(attempt), qids),
                   "auto_submitted", "server_expiry")
 
 
 def submit(conn, test, student_id, form_answers):
-    """-> (state, result_id)   state in 'ok','late_auto','rejected','already','none'."""
+    """-> (state, result_id)   state in 'ok','late_auto','rejected','already','none'.
+    form_answers: the page's last answers, {qid: {"v","t"}} (or the legacy {qid: "A"}).  They are MERGED into the
+    server draft inside this same transaction (newer wins per question), then the attempt is graded from the draft
+    alone - so a last-second answer is never lost, a stale tab can never overwrite a newer answer, and the
+    autosave can't race the submission (both are serialised by the write lock)."""
     conn.execute("BEGIN IMMEDIATE")
     try:
         att = get_running(conn, test["id"], student_id)
@@ -294,7 +423,6 @@ def submit(conn, test, student_id, form_answers):
             conn.execute("COMMIT")
             return "already", None
         qids = [r["id"] for r in attempt_questions(conn, att["id"])]
-        draft = draft_answers(att)
         if timer_enforced() and _expired(att):
             if test["late_policy"] == "reject":
                 conn.execute("""UPDATE exam_attempts SET status='rejected', submitted_at=?,
@@ -302,12 +430,12 @@ def submit(conn, test, student_id, form_answers):
                              (_now().isoformat(), att["id"]))
                 conn.execute("COMMIT")
                 return "rejected", None
-            rid = _close(conn, att, test, _chosen_from({}, draft, qids), "auto_submitted", "late_server_draft")
+            rid = _close(conn, att, test, _chosen_from(draft_answers(att), qids), "auto_submitted", "late_server_draft")
             conn.execute("COMMIT")
             return "late_auto", rid
+        draft, _meta, _changed = _merge_delta(att, set(qids), form_answers)
         timed_out = _now() > (_parse(att["deadline_at"]) or _now())
-        rid = _close(conn, att, test, _chosen_from(form_answers, draft, qids),
-                     "submitted", "timer" if timed_out else "student")
+        rid = _close(conn, att, test, _chosen_from(draft, qids), "submitted", "timer" if timed_out else "student")
         conn.execute("COMMIT")
         return ("ok" if rid else "already"), rid
     except Exception:
@@ -362,13 +490,19 @@ def refresh_counted_result(conn, test, student_id):
                        (test["id"], student_id)).fetchone()
     if row is None:
         rid = conn.execute(
-            """INSERT INTO results (test_id, student_id, score, total_marks, submitted_at, attempt_id)
-               VALUES (?,?,?,?,?,?)""",
-            (test["id"], student_id, pick["score"], pick["total_marks"], pick["submitted_at"], pick["id"])).lastrowid
+            """INSERT INTO results (test_id, student_id, score, total_marks, submitted_at, attempt_id,
+                   correct_count, wrong_count, unanswered_count, positive_marks, negative_marks_total)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (test["id"], student_id, pick["score"], pick["total_marks"], pick["submitted_at"], pick["id"],
+             pick["correct_count"], pick["wrong_count"], pick["unanswered_count"], pick["positive_marks"],
+             pick["negative_marks_total"])).lastrowid
     else:
         rid = row["id"]
-        conn.execute("UPDATE results SET score=?, total_marks=?, submitted_at=?, attempt_id=? WHERE id=?",
-                     (pick["score"], pick["total_marks"], pick["submitted_at"], pick["id"], rid))
+        conn.execute("""UPDATE results SET score=?, total_marks=?, submitted_at=?, attempt_id=?, correct_count=?,
+                        wrong_count=?, unanswered_count=?, positive_marks=?, negative_marks_total=? WHERE id=?""",
+                     (pick["score"], pick["total_marks"], pick["submitted_at"], pick["id"], pick["correct_count"],
+                      pick["wrong_count"], pick["unanswered_count"], pick["positive_marks"],
+                      pick["negative_marks_total"], rid))
     conn.execute("UPDATE exam_attempts SET is_counted=CASE WHEN id=? THEN 1 ELSE 0 END "
                  "WHERE test_id=? AND student_id=?", (pick["id"], test["id"], student_id))
     conn.execute("UPDATE answers SET result_id=NULL WHERE result_id=?", (rid,))

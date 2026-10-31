@@ -239,7 +239,7 @@ def _down_question_bank(conn):
     conn.execute("DROP TABLE IF EXISTS bank_categories")
 
 
-from backend.db import m008_exam_system, m010_support_tables, m011_publish_marking  # noqa: E402
+from backend.db import m008_exam_system, m010_support_tables, m011_publish_marking, m012_autosave  # noqa: E402
 
 
 def _up_drop_legacy_attempts(conn):
@@ -289,6 +289,8 @@ MIGRATIONS = [
      m010_support_tables.up, m010_support_tables.down),
     ("011_publish_marking", "Draft/publish status, notified_at, result_release; marking breakdown columns",
      m011_publish_marking.up, m011_publish_marking.down),
+    ("012_autosave", "Autosave ordering: exam_attempts.draft_meta / draft_rev (additive)",
+     m012_autosave.up, m012_autosave.down),
 ]
 
 

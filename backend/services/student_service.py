@@ -61,11 +61,14 @@ def list_tests(conn, student, status="all", page=1, per_page=20, offset=0):
 
 
 def list_results(conn, sid, per_page, offset):
-    total = conn.execute("SELECT COUNT(*) FROM results WHERE student_id=?", (sid,)).fetchone()[0]
+    from backend.services.exam_service import RELEASED_SQL
+    total = conn.execute(
+        "SELECT COUNT(*) FROM results r JOIN tests t ON t.id=r.test_id WHERE r.student_id=? AND " + RELEASED_SQL,
+        (sid,)).fetchone()[0]
     items = _rows(conn.execute(
         """SELECT r.id, r.test_id, t.title AS test_title, r.score, r.total_marks, r.submitted_at
            FROM results r JOIN tests t ON t.id=r.test_id
-           WHERE r.student_id=? ORDER BY r.submitted_at DESC LIMIT ? OFFSET ?""",
+           WHERE r.student_id=? AND """ + RELEASED_SQL + """ ORDER BY r.submitted_at DESC LIMIT ? OFFSET ?""",
         (sid, per_page, offset)))
     for it in items:
         it["percentage"] = percentage(it["score"], it["total_marks"])
@@ -79,13 +82,20 @@ def result_detail(conn, sid, test_id):
            WHERE r.test_id=? AND r.student_id=?""", (test_id, sid)).fetchone()
     if r is None:
         return None
+    from backend.services.exam_service import results_visible
+    t = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
+    if t is not None and not results_visible(t):      # submitted, marks not released yet: no score, no answers
+        return {"result_id": r["id"], "test_id": r["test_id"], "test_title": r["test_title"],
+                "submitted_at": r["submitted_at"], "released": False}
     answers = _rows(conn.execute(
         """SELECT a.question_id, a.selected_option, a.is_correct, a.question_text,
-                  a.option_a, a.option_b, a.option_c, a.option_d, a.correct_option, a.marks
+                  a.option_a, a.option_b, a.option_c, a.option_d, a.correct_option, a.marks, a.marks_awarded
            FROM answers a WHERE a.result_id=? ORDER BY a.position, a.id""", (r["id"],)))
     pct = percentage(r["score"], r["total_marks"])
-    return {"result_id": r["id"], "test_id": r["test_id"], "test_title": r["test_title"],
+    return {"result_id": r["id"], "test_id": r["test_id"], "test_title": r["test_title"], "released": True,
             "score": r["score"], "total_marks": r["total_marks"], "submitted_at": r["submitted_at"],
+            "correct": r["correct_count"], "wrong": r["wrong_count"], "unanswered": r["unanswered_count"],
+            "positive_marks": r["positive_marks"], "negative_marks": r["negative_marks_total"],
             "percentage": pct, "passed": pct >= pass_percentage(), "answers": answers}
 
 
@@ -123,7 +133,10 @@ def unread_notifications(conn, student):
 
 def summary(conn, student):
     sid = student["id"]
-    results = conn.execute("SELECT score, total_marks FROM results WHERE student_id=?", (sid,)).fetchall()
+    from backend.services.exam_service import RELEASED_SQL
+    results = conn.execute(
+        "SELECT r.score, r.total_marks FROM results r JOIN tests t ON t.id=r.test_id WHERE r.student_id=? AND " + RELEASED_SQL,
+        (sid,)).fetchall()
     attempted = len(results)
     avg = round(sum(percentage(r["score"], r["total_marks"]) for r in results) / attempted, 1) if attempted else 0
     pending = list_tests(conn, student, "available", 1, 1, 0)[1]
@@ -133,11 +146,12 @@ def summary(conn, student):
 
 
 def progress(conn, sid):
-    """Chronological list of the student's results for trend charts."""
+    """Chronological list of the student's (released) results for trend charts."""
+    from backend.services.exam_service import RELEASED_SQL as RELEASED_SQL_
     rows = _rows(conn.execute(
         """SELECT r.test_id, t.title AS test_title, t.subject, r.score, r.total_marks, r.submitted_at
            FROM results r JOIN tests t ON t.id=r.test_id
-           WHERE r.student_id=? ORDER BY r.submitted_at ASC LIMIT 200""", (sid,)))
+           WHERE r.student_id=? AND """ + RELEASED_SQL_ + """ ORDER BY r.submitted_at ASC LIMIT 200""", (sid,)))
     for r in rows:
         r["percentage"] = percentage(r["score"], r["total_marks"])
     return rows

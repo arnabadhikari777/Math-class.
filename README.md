@@ -5,7 +5,7 @@ Flask + SQLite, no ORM. Installable as a PWA.
 
 ## Features
 - Student registration with email OTP, login, forgot/reset password (OTP by email only)
-- Notes (PDF), timed MCQ tests with auto-submit, refresh-safe timer, answer review, leaderboards
+- Notes (PDF), timed MCQ tests: draft/publish, one attempt, two-step start, one-question-at-a-time exam page with safe autosave, negative marking, teacher-controlled result release, answer review, leaderboards (see STAGE_3_4_REPORT.md)
 - Smart dashboards: average ring, score trend, subject strength, rank, streak, coach tips
 - Teacher panel: admit/verify/block/delete students, login-as, CSV export, tests and questions, results (+PDF), announcements, contact inbox, activity log, data cleanup
 - Question Studio: Cloudinary image library + question builder

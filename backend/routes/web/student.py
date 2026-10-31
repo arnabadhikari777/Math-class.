@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Student pages: dashboard, notes, profile, taking tests, results, leaderboard."""
 
+import json
 from datetime import datetime
 from werkzeug.utils import secure_filename
 
@@ -28,13 +29,16 @@ def student_dashboard():
         ).fetchall()
         my_results = conn.execute(
             """SELECT results.*, tests.title AS test_title FROM results
-               JOIN tests ON tests.id = results.test_id
-               WHERE results.student_id=? ORDER BY results.submitted_at DESC""",
+               JOIN tests t ON t.id = results.test_id JOIN tests ON tests.id = results.test_id
+               WHERE results.student_id=? AND """ + exam_service.RELEASED_SQL + """
+               ORDER BY results.submitted_at DESC""",
             (student["id"],)
         ).fetchall()
+        # every submitted test (also those whose marks are not released yet) - they must show "Result", not "Start"
+        all_done = {r[0] for r in conn.execute("SELECT test_id FROM results WHERE student_id=?", (student["id"],))}
         done_ids = {r[0] for r in conn.execute(
             "SELECT test_id FROM exam_attempts WHERE student_id=? AND status!='in_progress'", (student["id"],))}
-        done_ids |= {r["test_id"] for r in my_results}
+        done_ids |= all_done
         attempted_test_ids = {t["id"] for t in tests if t["id"] in done_ids}
         announcements = conn.execute(
             """SELECT * FROM announcements WHERE is_active=1
@@ -100,8 +104,9 @@ def student_profile():
         ).fetchall()
         results = conn.execute(
             """SELECT results.*, tests.title AS test_title FROM results
-               JOIN tests ON tests.id = results.test_id
-               WHERE results.student_id=? ORDER BY results.submitted_at DESC""",
+               JOIN tests t ON t.id = results.test_id JOIN tests ON tests.id = results.test_id
+               WHERE results.student_id=? AND """ + exam_service.RELEASED_SQL + """
+               ORDER BY results.submitted_at DESC""",
             (session["student_id"],)
         ).fetchall()
     return render_template("student/student_profile.html", student=student, history=history, results=results)
@@ -255,18 +260,44 @@ def test_exam(test_id):
 @app.route("/test/<int:test_id>/save", methods=["POST"])
 @student_login_required
 def save_test_progress(test_id):
-    """Autosave of the chosen options. The server keeps them, so a reload or a dropped
-    connection never loses work, and the timer is NOT affected by this call."""
+    """Autosave + heartbeat.  Body: {"answers": {"q_12": {"v": "A"|null, "t": client_ms}}} (may be empty).
+    The reply carries the AUTHORITATIVE server answers and remaining time, so the page always re-syncs to the
+    server (never the other way round).  A reload or a dropped connection never loses saved work, and the
+    timer is not affected by this call."""
     if session.get("impersonating"):
         return jsonify({"ok": False, "error": "Not allowed while viewing as a student."}), 403
     payload = request.get_json(silent=True) or {}
+    delta = payload.get("answers") if isinstance(payload.get("answers"), dict) else {}
     with get_db() as conn:
-        run = exam_service.get_running(conn, test_id, session["student_id"])
-        if run is None:
-            return jsonify({"ok": False, "error": "No running attempt."}), 409
-        ok = exam_service.save_draft(conn, run["id"], session["student_id"], payload.get("answers") or {})
-        conn.commit()
-        return jsonify({"ok": bool(ok), "remaining": exam_service.remaining_seconds(run)})
+        state, answers, remaining = exam_service.autosave(conn, test_id, session["student_id"], delta)
+        finished = state == "none" and conn.execute(
+            "SELECT 1 FROM results WHERE test_id=? AND student_id=?", (test_id, session["student_id"])).fetchone()
+    if state == "none":
+        # nothing to save into: the attempt was already submitted (this or another tab) or never started
+        return jsonify({"ok": False, "closed": True, "state": "none", "remaining": 0,
+                        "redirect": url_for("test_result", test_id=test_id) if finished else url_for("student_dashboard")}), 409
+    return jsonify({"ok": state == "saved", "state": state, "closed": state == "closed", "remaining": remaining,
+                    "answers": answers, "server_time": datetime.now().isoformat(timespec="seconds")})
+
+
+def _submitted_answers(form):
+    """The page's last answers.  New page: answers_json = {"q_<id>": {"v": "A", "t": ms}}.  Old/no-JS form: q_<id> fields."""
+    raw = form.get("answers_json")
+    if raw:
+        try:
+            data = json.loads(raw)
+        except ValueError:
+            data = None
+        if isinstance(data, dict):
+            return data
+    out = {}
+    for key, val in form.items():
+        if key.startswith("q_"):
+            try:
+                out[int(key[2:])] = val
+            except ValueError:
+                pass
+    return out
 
 
 @app.route("/test/<int:test_id>/submit", methods=["POST"])
@@ -279,16 +310,14 @@ def submit_test(test_id):
         test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
         if test is None:
             abort(404)
-        form = {}
-        for key, val in request.form.items():
-            if key.startswith("q_"):
-                try:
-                    form[int(key[2:])] = val
-                except ValueError:
-                    pass
-        state, _rid = exam_service.submit(conn, test, session["student_id"], form)
+        state, _rid = exam_service.submit(conn, test, session["student_id"], _submitted_answers(request.form))
+        has_result = conn.execute("SELECT 1 FROM results WHERE test_id=? AND student_id=?",
+                                  (test_id, session["student_id"])).fetchone() is not None
     if state == "already":
-        flash("Already submitted.", "error")
+        # double click / second tab / refresh after submitting: never an error, never a second result
+        if has_result:
+            return redirect(url_for("test_result", test_id=test_id))
+        flash("This test is not running.", "error")
         return redirect(url_for("student_dashboard"))
     if state == "rejected":
         flash("Time was over, so this submission was not accepted.", "error")
@@ -301,6 +330,7 @@ def submit_test(test_id):
 @app.route("/test/<int:test_id>/result")
 @student_login_required
 def test_result(test_id):
+    """The student's OWN result (looked up by the logged-in student id, never by a URL parameter)."""
     with get_db() as conn:
         test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
         result = conn.execute(
@@ -309,14 +339,22 @@ def test_result(test_id):
         ).fetchone()
         if result is None or test is None:
             abort(404)
+        if not exam_service.results_visible(test):
+            # submitted, but the teacher has not released the marks yet: no score, no answers, no rank
+            return render_template("student/test_result.html", test=test, result=result, pending=True,
+                                   answers=[], pct=0, passed=False, pass_pct=PASS_PERCENTAGE,
+                                   insights=None, bd=None)
         answers = exam_service.result_answers(conn, result["id"])
         insights = build_result_insights(conn, test, result, answers, {"id": session["student_id"]})
+    bd = exam_service.breakdown_from_answers(answers) if answers else {
+        "correct": result["correct_count"] or 0, "wrong": result["wrong_count"] or 0,
+        "unanswered": result["unanswered_count"] or 0,
+        "positive": result["positive_marks"] or 0, "negative": result["negative_marks_total"] or 0}
     pct = percentage(result["score"], result["total_marks"])
     passed = pct >= PASS_PERCENTAGE
     return render_template(
-        "student/test_result.html", test=test, result=result, answers=answers,
-        pct=pct, passed=passed, pass_pct=PASS_PERCENTAGE, insights=insights,
-
+        "student/test_result.html", test=test, result=result, answers=answers, pending=False,
+        pct=pct, passed=passed, pass_pct=PASS_PERCENTAGE, insights=insights, bd=bd,
     )
 
 
@@ -327,6 +365,9 @@ def test_leaderboard(test_id):
         test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
         if test is None:
             abort(404)
+        if not exam_service.results_visible(test):
+            flash("The leaderboard will be available after your teacher publishes the results.", "error")
+            return redirect(url_for("test_result", test_id=test_id))
         rows = conn.execute(
             """SELECT results.score, results.total_marks, results.submitted_at,
                       students.name, students.roll, students.class_name

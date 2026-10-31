@@ -38,11 +38,12 @@ def _clip(text, n):
 
 
 def learning_summary(conn, sid):
+    from backend.services.exam_service import RELEASED_SQL
     """Compact, verified summary of SUBMITTED work (no unsubmitted test content)."""
     results = conn.execute(
         """SELECT r.id, r.score, r.total_marks, r.submitted_at, t.title, t.subject
            FROM results r JOIN tests t ON t.id = r.test_id
-           WHERE r.student_id=? ORDER BY r.submitted_at DESC, r.id DESC LIMIT ?""",
+           WHERE r.student_id=? AND """ + RELEASED_SQL + """ ORDER BY r.submitted_at DESC, r.id DESC LIMIT ?""",
         (sid, MAX_RESULTS)).fetchall()
     if not results:
         return "No submitted test results yet."
@@ -60,7 +61,8 @@ def learning_summary(conn, sid):
            FROM answers a
            JOIN exam_attempts ea ON ea.id = a.attempt_id
            JOIN tests t ON t.id = ea.test_id
-           WHERE ea.student_id=? AND a.is_correct=0 AND ea.status IN ('submitted','auto_submitted')
+           WHERE ea.student_id=? AND a.is_correct=0 AND a.selected_option IS NOT NULL
+             AND ea.status IN ('submitted','auto_submitted') AND """ + RELEASED_SQL + """
            ORDER BY ea.submitted_at DESC, a.id DESC LIMIT ?""",
         (sid, MAX_WRONG_ITEMS)).fetchall()
     if wrong:

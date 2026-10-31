@@ -1,136 +1,291 @@
 {% extends "base.html" %}
 {% block title %}{{ test.title }}{% endblock %}
 {% block content %}
+<style>
+  .ex-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 1rem; align-items: start; }
+  .ex-side { position: sticky; top: calc(var(--nav-h) + 86px); }
+  .pal { display: grid; grid-template-columns: repeat(5, 1fr); gap: .4rem; }
+  .pal button { height: 40px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-weight: 700; cursor: pointer; position: relative; }
+  .pal button.visited { background: var(--warning-soft); border-color: var(--warning); }          /* seen, not answered */
+  .pal button.done { background: var(--success); border-color: var(--success); color: #fff; }       /* answered */
+  .pal button.cur { outline: 3px solid var(--primary); outline-offset: 1px; }
+  .legend { display: flex; flex-wrap: wrap; gap: .35rem .9rem; font-size: .78rem; color: var(--text-muted); margin-top: .7rem; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 4px; border: 1px solid var(--border-strong); vertical-align: -1px; margin-right: .3rem; }
+  .ex-nav { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-top: .9rem; }
+  .ex-nav .grow { flex: 1; }
+  #saveState { font-size: .78rem; font-weight: 600; }
+  #saveState.saving { color: var(--text-muted); } #saveState.saved { color: var(--success); } #saveState.failed { color: var(--danger); }
+  #banner { display: none; margin: .6rem 0; padding: .55rem .8rem; border-radius: 10px; font-weight: 600; font-size: .9rem; }
+  #banner.warn { display: block; background: var(--warning-soft); color: var(--warning); }
+  #banner.crit { display: block; background: var(--danger-soft); color: var(--danger); }
+  .ex-q { display: none; } .ex-q.on { display: block; }
+  .modal-back { position: fixed; inset: 0; background: rgba(8, 12, 30, .55); display: none; align-items: center; justify-content: center; z-index: 400; padding: 1rem; }
+  .modal-back.on { display: flex; }
+  .modal-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 1.3rem; max-width: 420px; width: 100%; box-shadow: var(--shadow-md); }
+  .modal-box .sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; text-align: center; margin: .9rem 0; }
+  .modal-box .sum b { display: block; font-size: 1.5rem; }
+  .modal-box .sum .u b { color: var(--danger); }
+  @media (max-width: 820px) { .ex-wrap { grid-template-columns: 1fr; } .ex-side { position: static; order: -1; } .pal { grid-template-columns: repeat(8, 1fr); } }
+</style>
+
 <div id="timer-bar">
   <div style="min-width:0">
     <strong>{{ test.title }}</strong>
-    <div class="text-muted" style="font-size:.78rem"><span id="answeredCount">0</span> / {{ questions|length }} answered</div>
+    <div class="text-muted" style="font-size:.78rem"><span id="answeredCount">0</span> / {{ questions|length }} answered · <span id="saveState" class="saving">Saving…</span></div>
   </div>
   <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:100%"></div></div>
-  <div id="timer">--:--</div>
+  <div id="timer" aria-live="off">--:--</div>
 </div>
+<div id="banner" role="alert"></div>
 
-<div class="qnav" id="qnav" aria-label="Question navigator">
-  {% for q in questions %}<a href="#qc{{ q.id }}" data-q="{{ q.id }}">{{ loop.index }}</a>{% endfor %}
-</div>
-
-<form method="POST" action="{{ url_for('submit_test', test_id=test.id) }}" id="testForm"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  {% for q in questions %}
-  <div class="q-card" id="qc{{ q.id }}">
-    <div style="font-weight:700;margin-bottom:.6rem;font-family:'Noto Sans Bengali',Inter,sans-serif">
-      Q{{ loop.index }}. {{ q.question_text }}
-      <span class="badge badge-info">{{ q.marks }} mark{{ 's' if q.marks != 1 else '' }}</span>
+<form method="POST" action="{{ url_for('submit_test', test_id=test.id) }}" id="testForm">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="answers_json" id="answersJson" value="">
+  <div class="ex-wrap">
+    <div>
+      {% for q in questions %}
+      <div class="q-card ex-q" id="qc{{ q.id }}" data-id="{{ q.id }}" data-idx="{{ loop.index0 }}">
+        <div style="font-weight:700;margin-bottom:.6rem;font-family:'Noto Sans Bengali',Inter,sans-serif">
+          Q{{ loop.index }}. {{ q.question_text }}
+          <span class="badge badge-info">{{ q.marks|marks }} mark{{ 's' if q.marks != 1 else '' }}</span>
+          {% if q.negative_marks and q.negative_marks > 0 %}<span class="badge badge-danger">−{{ q.negative_marks|marks }} if wrong</span>{% endif %}
+        </div>
+        {% if q.image_url %}<img src="{{ q.image_url }}" alt="Question image" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;margin:0 0 .8rem;background:#fff">{% endif %}
+        {% for opt, letter in [('option_a','A'),('option_b','B'),('option_c','C'),('option_d','D')] %}
+        <label class="option-label" style="font-family:'Noto Sans Bengali',Inter,sans-serif">
+          <input type="radio" name="q_{{ q.id }}" value="{{ letter }}">
+          <span><strong>{{ letter }}.</strong> {{ q[opt] }}</span>
+        </label>
+        {% endfor %}
+        <div style="margin-top:.5rem"><button type="button" class="btn btn-sm btn-outline" data-clear="{{ q.id }}">Clear answer</button></div>
+      </div>
+      {% endfor %}
+      <div class="ex-nav">
+        <button type="button" class="btn btn-outline" id="prevBtn">← Previous</button>
+        <button type="button" class="btn btn-outline" id="skipBtn">Skip</button>
+        <button type="button" class="btn btn-primary" id="nextBtn">Next →</button>
+        <span class="grow"></span>
+        <button type="button" class="btn btn-primary" id="submitBtn">Submit Test</button>
+      </div>
+      <p class="text-muted" style="font-size:.8rem;margin-top:.7rem">You do not have to answer every question: unanswered questions score 0 (no negative marks). Your answers are saved on the server as you go; the timer runs on the server too.</p>
     </div>
-    {% if q.image_url %}<img src="{{ q.image_url }}" alt="Question image" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;margin:0 0 .8rem;background:#fff">{% endif %}
-    {% for opt, letter in [('option_a','A'),('option_b','B'),('option_c','C'),('option_d','D')] %}
-    <label class="option-label" style="font-family:'Noto Sans Bengali',Inter,sans-serif">
-      <input type="radio" name="q_{{ q.id }}" value="{{ letter }}" required>
-      <span><strong>{{ letter }}.</strong> {{ q[opt] }}</span>
-    </label>
-    {% endfor %}
-  </div>
-  {% endfor %}
-
-  <div class="flex gap-2 items-center flex-wrap mt-2">
-    <button type="submit" class="btn btn-primary" id="submitBtn">Submit Test</button>
-    <span class="text-muted" style="font-size:.85rem">Your answers are saved on the server as you go, so a refresh or a dropped connection does not lose them. The timer runs on the server and the test is submitted automatically when time is up.</span>
+    <aside class="card ex-side">
+      <h4 style="margin:0 0 .6rem">Questions</h4>
+      <div class="pal" id="pal">{% for q in questions %}<button type="button" data-go="{{ loop.index0 }}" aria-label="Question {{ loop.index }}">{{ loop.index }}</button>{% endfor %}</div>
+      <div class="legend">
+        <span><i style="background:var(--success)"></i>Answered</span>
+        <span><i style="background:var(--warning-soft);border-color:var(--warning)"></i>Not answered</span>
+        <span><i></i>Not visited</span>
+      </div>
+    </aside>
   </div>
 </form>
+
+<div class="modal-back" id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="cmTitle">
+  <div class="modal-box">
+    <h3 id="cmTitle" style="margin:0">Submit your test?</h3>
+    <div class="sum">
+      <div><b id="cmTotal">0</b><span class="text-muted">Total</span></div>
+      <div><b id="cmDone">0</b><span class="text-muted">Answered</span></div>
+      <div class="u"><b id="cmLeft">0</b><span class="text-muted">Unanswered</span></div>
+    </div>
+    <p class="text-muted" style="font-size:.88rem">Once submitted, the test is locked and cannot be attempted again. Unanswered questions score 0.</p>
+    <div class="flex gap-2" style="justify-content:flex-end;flex-wrap:wrap">
+      <button type="button" class="btn btn-outline" id="cmBack">Go Back</button>
+      <button type="button" class="btn btn-primary" id="cmGo">Yes, Submit</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-(function() {
-  // The SERVER owns the clock: `remaining` below was computed from the deadline stored in the database.
-  // This script only displays it. Changing it in the browser cannot extend the real deadline.
+(function () {
+  'use strict';
+  // The SERVER owns the clock and the answers. This page only shows them and sends changes.
   const totalSeconds = {{ total_seconds }};
-  let remainingAtLoad = {{ remaining }};
-  const loadedAt = performance.now();
-  const timerEl = document.getElementById('timer');
-  const fillEl = document.getElementById('progressFill');
-  const form = document.getElementById('testForm');
-  const countEl = document.getElementById('answeredCount');
+  let remainingAtSync = {{ remaining }};
+  let syncedAt = performance.now();                      // monotonic: changing the PC clock cannot move it
   const CSRF = {{ csrf_token()|tojson }};
   const SAVE_URL = {{ url_for('save_test_progress', test_id=test.id)|tojson }};
-  const ANS = 'tt_{{ session.get("student_id") }}_{{ attempt.id }}_ans';
+  const PEND = 'tt_{{ session.get("student_id") }}_{{ attempt.id }}_pending';   // unsent changes only, never a source of truth
+  const SEEN = 'tt_{{ session.get("student_id") }}_{{ attempt.id }}_seen';
+  const form = document.getElementById('testForm');
+  const cards = Array.prototype.slice.call(document.querySelectorAll('.ex-q'));
+  const palBtns = Array.prototype.slice.call(document.querySelectorAll('#pal button'));
+  const ids = cards.map(function (c) { return c.dataset.id; });
+  const el = function (i) { return document.getElementById(i); };
   const store = {
-    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
-    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
-    del(k) { try { localStorage.removeItem(k); } catch (e) {} }
+    get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+    del: function (k) { try { localStorage.removeItem(k); } catch (e) {} }
   };
 
-  // Restore answers: server draft first, then the local copy for anything newer.
-  const serverDraft = {{ draft|tojson }};
-  function applyAnswers(map) {
-    Object.keys(map).forEach(function(id) {
-      const r = form.querySelector('input[name="q_' + id + '"][value="' + map[id] + '"]');
-      if (r) r.checked = true;
+  // ---- state: answers = what the server holds (+ my unsent changes on top). t = when I chose it.
+  let answers = {};                // id -> 'A'..'D'
+  let stamps = {};                 // id -> ms of my last change
+  let pending = {};                // id -> {v, t}  not yet confirmed by the server
+  try { pending = JSON.parse(store.get(PEND) || '{}') || {}; } catch (e) { pending = {}; }
+  let seen = {};
+  try { seen = JSON.parse(store.get(SEEN) || '{}') || {}; } catch (e) { seen = {}; }
+  let cur = 0, finishing = false, finalizing = false;
+
+  function setRadio(id, v) {
+    const radios = form.querySelectorAll('input[name="q_' + id + '"]');
+    radios.forEach(function (r) { r.checked = (r.value === v); });
+  }
+  function applyServer(map) {      // server answers win, except for my own newer unsent change
+    ids.forEach(function (id) {
+      const p = pending[id];
+      if (p) { return; }
+      const v = map[id] || null;
+      if (v) { answers[id] = v; } else { delete answers[id]; }
+      setRadio(id, v);
     });
+    ids.forEach(function (id) { if (pending[id]) { if (pending[id].v) answers[id] = pending[id].v; else delete answers[id]; setRadio(id, pending[id].v); } });
+    paint();
   }
-  applyAnswers(serverDraft);
-  try { const saved = JSON.parse(store.get(ANS) || '{}'); Object.keys(saved).forEach(function(n) {
-    const r = form.querySelector('input[name="' + n + '"][value="' + saved[n] + '"]'); if (r) r.checked = true; }); } catch (e) {}
+  applyServer({{ draft|tojson }});
 
-  let dirty = false, saving = false;
-  function picked() {
-    const o = {};
-    form.querySelectorAll('input[type=radio]:checked').forEach(function(r) { o[r.name] = r.value; });
-    return o;
-  }
-  function refreshAnswers() {
-    const p = picked();
-    store.set(ANS, JSON.stringify(p));
-    countEl.textContent = Object.keys(p).length;
-    document.querySelectorAll('#qnav a').forEach(function(a) {
-      a.classList.toggle('done', ('q_' + a.dataset.q) in p);
+  // ---- indicators
+  function paint() {
+    let n = 0;
+    palBtns.forEach(function (b, i) {
+      const id = ids[i], done = !!answers[id];
+      if (done) n++;
+      b.classList.toggle('done', done);
+      b.classList.toggle('visited', !done && !!seen[id]);
+      b.classList.toggle('cur', i === cur);
     });
-    dirty = true;
+    el('answeredCount').textContent = n;
   }
-  form.addEventListener('change', refreshAnswers);
-  refreshAnswers(); dirty = false;
+  const saveEl = el('saveState');
+  function status(kind, text) { saveEl.className = kind; saveEl.textContent = text; }
 
-  function save() {
-    if (saving || !dirty) return;
-    saving = true; dirty = false;
-    fetch(SAVE_URL, { method: 'POST', credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-      body: JSON.stringify({ answers: picked() }) })
-      .then(function(r) { return r.json(); })
-      .then(function(d) { if (d && typeof d.remaining === 'number') {   // re-sync with the server clock
-          remainingAtLoad = d.remaining; window.__t0 = performance.now(); } })
-      .catch(function() { dirty = true; })        // offline: keep trying, the timer keeps running
-      .finally(function() { saving = false; });
+  // ---- navigation
+  function show(i) {
+    cur = Math.max(0, Math.min(cards.length - 1, i));
+    cards.forEach(function (c, k) { c.classList.toggle('on', k === cur); });
+    seen[ids[cur]] = 1; store.set(SEEN, JSON.stringify(seen));
+    el('prevBtn').disabled = cur === 0;
+    el('nextBtn').disabled = cur === cards.length - 1;
+    el('skipBtn').disabled = cur === cards.length - 1;
+    paint();
+    window.scrollTo({ top: 0 });
   }
-  setInterval(save, 4000);
-  window.__t0 = loadedAt;
+  el('prevBtn').onclick = function () { show(cur - 1); };
+  el('nextBtn').onclick = function () { show(cur + 1); };
+  el('skipBtn').onclick = function () { show(cur + 1); };      // leaves the question as it is (answered or not)
+  palBtns.forEach(function (b) { b.onclick = function () { show(parseInt(b.dataset.go, 10)); }; });
 
-  function fmt(s) {
-    const m = Math.floor(s / 60), sec = s % 60;
-    return String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+  // ---- choosing / clearing an answer
+  function change(id, v) {
+    const t = Date.now();
+    pending[id] = { v: v, t: t };
+    if (v) answers[id] = v; else delete answers[id];
+    store.set(PEND, JSON.stringify(pending));
+    paint(); status('saving', 'Saving…');
+    schedule(400);
   }
-  let finished = false;
-  function finish() {
-    if (finished) return;
-    finished = true;
-    form.submit();
-  }
-  function tick() {
-    const remaining = Math.max(0, Math.round(remainingAtLoad - (performance.now() - window.__t0) / 1000));
-    timerEl.textContent = fmt(remaining);
-    fillEl.style.width = (totalSeconds ? remaining / totalSeconds * 100 : 0) + '%';
-    if (remaining <= 300) timerEl.classList.add('urgent');
-    if (remaining <= 0) { clearInterval(iv); finish(); }
-  }
-  tick();
-  const iv = setInterval(tick, 1000);
-
-  form.addEventListener('submit', function() {
-    if (finished && form.dataset.sent) return;
-    finished = true; form.dataset.sent = '1';
-    store.del(ANS);
-    const b = document.getElementById('submitBtn');
-    b.disabled = true; b.textContent = 'Submitting\u2026';
+  form.addEventListener('change', function (e) {
+    if (e.target && e.target.type === 'radio') change(e.target.name.slice(2), e.target.value);
   });
+  document.querySelectorAll('[data-clear]').forEach(function (b) {
+    b.onclick = function () { setRadio(b.dataset.clear, null); change(b.dataset.clear, null); };
+  });
+
+  // ---- autosave: one request at a time, retries with back-off, heartbeat every 15 s
+  let inflight = false, timer = null, failures = 0;
+  function schedule(ms) { clearTimeout(timer); timer = setTimeout(sync, ms); }
+  function sync() {
+    if (inflight || finishing) return Promise.resolve(false);
+    inflight = true;
+    const sent = {}; Object.keys(pending).forEach(function (id) { sent[id] = pending[id]; });
+    const body = {}; Object.keys(sent).forEach(function (id) { body['q_' + id] = sent[id]; });
+    return fetch(SAVE_URL, { method: 'POST', credentials: 'same-origin', cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF }, body: JSON.stringify({ answers: body }) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { r: r, d: d }; }); })
+      .then(function (x) {
+        const d = x.d || {};
+        if (d.closed && d.redirect) { finishing = true; window.location.href = d.redirect; return false; }
+        if (typeof d.remaining === 'number') { remainingAtSync = d.remaining; syncedAt = performance.now(); }
+        if (!x.r.ok && !d.state) throw new Error('http ' + x.r.status);
+        Object.keys(sent).forEach(function (id) {                      // confirmed: drop what was sent (if unchanged since)
+          if (pending[id] && pending[id].t === sent[id].t) delete pending[id];
+        });
+        store.set(PEND, JSON.stringify(pending));
+        if (d.answers) applyServer(d.answers);                          // the server's version is the truth
+        failures = 0;
+        status('saved', d.state === 'closed' ? 'Time is up' : 'Saved');
+        return d.state !== 'closed';
+      })
+      .catch(function () { failures++; status('failed', navigator.onLine ? 'Save failed – retrying…' : 'Offline – will save when connected'); return false; })
+      .then(function (ok) {
+        inflight = false;
+        if (!finishing && !finalizing) schedule(ok === false && failures ? Math.min(15000, 1500 * Math.pow(2, failures)) : (Object.keys(pending).length ? 400 : 15000));
+        return ok;
+      });
+  }
+  window.addEventListener('online', function () { schedule(100); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) schedule(100); });
+  schedule(100);                                                          // replays unsent changes after a refresh / reconnect
+
+  // ---- timer (display only; every sync re-aligns it with the server)
+  function fmt(s) { const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
+    return (h ? h + ':' : '') + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0'); }
+  function left() { return Math.max(0, Math.round(remainingAtSync - (performance.now() - syncedAt) / 1000)); }
+  const timerEl = el('timer'), fillEl = el('progressFill'), banner = el('banner');
+  function tick() {
+    const r = left();
+    timerEl.textContent = fmt(r);
+    fillEl.style.width = (totalSeconds ? r / totalSeconds * 100 : 0) + '%';
+    timerEl.classList.toggle('urgent', r <= 300);
+    if (r <= 60 && r > 0) { banner.className = 'crit'; banner.textContent = 'Less than 1 minute left – your test will be submitted automatically.'; }
+    else if (r <= 300 && r > 0) { banner.className = 'warn'; banner.textContent = 'Only ' + Math.ceil(r / 60) + ' minute(s) left.'; }
+    else { banner.className = ''; }
+    if (r <= 0) finalize(true);
+  }
+  setInterval(tick, 1000); tick();
+
+  // ---- final submission: flush -> send the page's last answers with their timestamps -> server merges and grades
+  function collect() {
+    const out = {};
+    ids.forEach(function (id) {
+      const p = pending[id];
+      if (p) out['q_' + id] = p;                    // newest local change wins on the server by timestamp
+      else if (answers[id]) out['q_' + id] = { v: answers[id], t: 0 };   // t=0: never overrides anything newer
+    });
+    return out;
+  }
+
+  function finalize(auto) {
+    if (finalizing) return;                       // timer + button + second click can never submit twice
+    finalizing = true;
+    clearTimeout(timer);
+    el('submitBtn').disabled = true; el('submitBtn').textContent = 'Submitting…';
+    const go = function () {
+      finishing = true;                           // the page is leaving: no more autosaves
+      el('answersJson').value = JSON.stringify(collect());
+      store.del(PEND); store.del(SEEN);
+      form.submit();
+    };
+    // push unsent changes first (max 6 s; an auto-submit waits at most 1.5 s) - the server merges them by timestamp anyway
+    const wait = new Promise(function (res) { setTimeout(res, auto ? 1500 : 6000); });
+    Promise.race([sync(), wait]).then(go, go);
+  }
+  const modal = el('confirmModal');
+  el('submitBtn').onclick = function () {
+    const total = ids.length, done = ids.filter(function (id) { return answers[id]; }).length;
+    el('cmTotal').textContent = total; el('cmDone').textContent = done; el('cmLeft').textContent = total - done;
+    modal.classList.add('on');
+  };
+  el('cmBack').onclick = function () { modal.classList.remove('on'); };
+  el('cmGo').onclick = function () { modal.classList.remove('on'); finalize(false); };
+  form.addEventListener('submit', function (e) { if (!el('answersJson').value) e.preventDefault(); });   // only finalize() may submit
+  window.addEventListener('beforeunload', function (e) {
+    if (!finishing && Object.keys(pending).length) { e.preventDefault(); e.returnValue = ''; }
+  });
+  show(0);
 })();
 </script>
 {% endblock %}

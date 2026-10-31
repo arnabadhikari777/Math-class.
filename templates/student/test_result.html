@@ -1,13 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Result · {{ test.title }}{% endblock %}
 {% block content %}
+{% if pending %}
+<div class="card text-center" style="padding:1.8rem 1.2rem;max-width:560px;margin-inline:auto">
+  <div style="font-size:2.4rem">✅</div>
+  <h2>{{ test.title }}</h2>
+  <p>Your examination has been submitted successfully. Results will be available after publication by your teacher.</p>
+  <p class="text-muted">Submitted {{ result.submitted_at[:16].replace('T',' ') }}</p>
+  <a href="{{ url_for('student_dashboard') }}" class="btn btn-primary">Back to Dashboard</a>
+</div>
+{% else %}
 {% set I = insights %}
 <div class="card text-center" style="padding:1.8rem 1.2rem">
   <h2>{{ test.title }}</h2>
-  <div class="ring {{ 'good' if pct >= 70 else 'warn' if passed else 'bad' }}" style="--p: {{ pct }}; --size:132px; margin:.6rem auto">
+  <div class="ring {{ 'good' if pct >= 70 else 'warn' if passed else 'bad' }}" style="--p: {{ [pct, 0]|max }}; --size:132px; margin:.6rem auto">
     <span style="font-size:1.7rem">{{ pct|round|int }}%</span>
   </div>
-  <div style="font-size:2rem;font-weight:800;letter-spacing:-0.02em">{{ result.score }} <span class="text-muted" style="font-weight:600">/ {{ result.total_marks }}</span></div>
+  <div style="font-size:2rem;font-weight:800;letter-spacing:-0.02em">{{ result.score|marks }} <span class="text-muted" style="font-weight:600">/ {{ result.total_marks|marks }}</span></div>
   <div style="margin:.6rem 0">
     <span class="badge {{ 'badge-success' if passed else 'badge-danger' }}" style="font-size:.95rem;padding:.35rem .95rem">
       {{ 'Passed 🎉' if passed else 'Keep practicing 💪' }}
@@ -20,10 +29,24 @@
   </div>
 </div>
 
+<div class="card">
+  <h3 style="margin-top:0">Marks breakdown</h3>
+  <table style="width:100%">
+    <tr><td>Correct answers</td><td style="text-align:right"><b>{{ bd.correct }}</b></td></tr>
+    <tr><td>Incorrect answers</td><td style="text-align:right"><b>{{ bd.wrong }}</b></td></tr>
+    <tr><td>Unanswered</td><td style="text-align:right"><b>{{ bd.unanswered }}</b></td></tr>
+    <tr><td>Positive marks earned</td><td style="text-align:right;color:var(--success)"><b>+{{ bd.positive|marks }}</b></td></tr>
+    <tr><td>Negative marks deducted{% if test.negative_marks %} <span class="text-muted">(−{{ test.negative_marks|marks }} per wrong answer)</span>{% endif %}</td>
+        <td style="text-align:right;color:var(--danger)"><b>{{ '−' ~ (bd.negative|marks) if bd.negative else '0' }}</b></td></tr>
+    <tr style="border-top:2px solid var(--border-strong)"><td><b>Final score</b></td><td style="text-align:right"><b>{{ result.score|marks }} / {{ result.total_marks|marks }}</b></td></tr>
+    <tr><td>Percentage</td><td style="text-align:right"><b>{{ pct }}%</b></td></tr>
+  </table>
+</div>
 {% if answers %}
 <div class="stats">
   <div class="stat"><div class="num">{{ I.correct }}</div><div class="label">Correct</div></div>
   <div class="stat"><div class="num">{{ I.wrong }}</div><div class="label">Wrong</div></div>
+  <div class="stat"><div class="num">{{ I.unanswered }}</div><div class="label">Unanswered</div></div>
   <div class="stat"><div class="num">{{ I.accuracy }}%</div><div class="label">Accuracy</div></div>
   {% if I.rank and I.participants > 1 %}<div class="stat"><div class="num">#{{ I.rank }}</div><div class="label">Rank of {{ I.participants }}</div></div>{% endif %}
   {% if I.percentile is not none %}<div class="stat"><div class="num">{{ I.percentile }}</div><div class="label">Percentile</div></div>{% endif %}
@@ -46,10 +69,12 @@
 <div class="card">
   <h2>Answer Review</h2>
   {% for a in answers %}
-  <div class="q-card {{ 'correct' if a.is_correct else 'wrong' }}" id="q{{ loop.index }}">
+  <div class="q-card {{ 'correct' if a.is_correct else 'wrong' if a.selected_option else '' }}" id="q{{ loop.index }}">
     <div style="font-weight:700;margin-bottom:.5rem;font-family:'Noto Sans Bengali',Inter,sans-serif">
       Q{{ loop.index }}. {{ a.question_text }}
-      {% if a.is_correct %}<span class="badge badge-success">Correct</span>{% else %}<span class="badge badge-danger">Incorrect</span>{% endif %}
+      {% if a.is_correct %}<span class="badge badge-success">Correct +{{ a.marks_awarded|marks }}</span>
+      {% elif a.selected_option %}<span class="badge badge-danger">Incorrect {{ '−' ~ ((a.marks_awarded|abs)|marks) if a.marks_awarded else '0' }}</span>
+      {% else %}<span class="badge badge-info">Not answered 0</span>{% endif %}
     </div>
     {% set _img = a.image_url %}{% if _img %}<img src="{{ _img }}" alt="Question image" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;margin:0 0 .8rem;background:#fff">{% endif %}
     {% for opt, letter in [('option_a','A'),('option_b','B'),('option_c','C'),('option_d','D')] %}
@@ -61,6 +86,7 @@
         <strong>{{ letter }}.</strong> {{ a[opt] }}
         {% if letter == a.correct_option %} ✓{% endif %}
         {% if letter == a.selected_option and not a.is_correct %} (your answer){% endif %}
+        {% if letter == a.selected_option and a.is_correct %} (your answer){% endif %}
       </span>
     </div>
     {% endfor %}
@@ -68,10 +94,11 @@
   {% endfor %}
 </div>
 {% endif %}
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
-{% if pct >= 80 %}
+{% if not pending and pct >= 80 %}
 <script>window.addEventListener('load', () => setTimeout(fireConfetti, 300));</script>
 {% endif %}
 {% endblock %}

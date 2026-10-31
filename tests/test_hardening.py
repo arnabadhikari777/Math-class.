@@ -216,7 +216,7 @@ class H(unittest.TestCase):
 
     def test_e11_negative_marking(self):
         cl = self.student_client(self.sd); self.start(cl, self.sd, self.t_neg); self.submit(cl, self.sd, self.t_neg, "B")
-        self.assertEqual(self.q("SELECT score FROM results WHERE test_id=? AND student_id=?", self.t_neg, self.sd)[0][0], 0)   # never below 0
+        self.assertEqual(self.q("SELECT score FROM results WHERE test_id=? AND student_id=?", self.t_neg, self.sd)[0][0], -4)   # stage 4: the formula is shown as it is (MARKS_FLOOR_AT_ZERO=1 restores the floor)
         a = self.attempt(self.sd, self.t_neg)[0]
         self.assertEqual(self.q("SELECT SUM(marks_awarded) FROM answers WHERE attempt_id=?", a["id"])[0][0], -4)
 

@@ -1,5 +1,7 @@
 # TEST_REPORT
 
+**Stage 3+4 update:** 191 tests, 0 failures (17 new in tests/test_exam_stage34.py) + a real-browser run. Details: STAGE_3_4_REPORT.md.
+
 Command: `python -m unittest discover -s tests` — **154 tests, 0 failures, 0 errors** (run 4 times in a row; ~3 s). Tests run on a temporary copy; the real database is never opened. Extra manual check: the real `database.db` backup was migrated on a copy and 14 student/teacher pages returned 200 (integrity ok, 0 FK violations).
 
 Not tested (no network here): real Cloudinary calls, real Web Push delivery, real email/OTP. These use mocks.

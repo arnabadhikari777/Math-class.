@@ -44,7 +44,7 @@ def build_student_insights(conn, student, my_results, tests, attempted_test_ids)
             """SELECT COALESCE(NULLIF(TRIM(t.subject),''),'General') AS subject,
                       r.score, r.total_marks
                FROM results r JOIN tests t ON t.id = r.test_id
-               WHERE r.student_id=?""", (student["id"],)
+               WHERE r.student_id=? AND (COALESCE(t.result_release,'immediate')<>'manual' OR t.results_released_at IS NOT NULL)""", (student["id"],)
         ).fetchall():
             d = subj.setdefault(r["subject"], {"name": r["subject"], "sum": 0.0, "n": 0})
             d["sum"] += percentage(r["score"], r["total_marks"])
@@ -56,7 +56,9 @@ def build_student_insights(conn, student, my_results, tests, attempted_test_ids)
                FROM answers a
                JOIN results r ON r.id = a.result_id
                JOIN tests t ON t.id = r.test_id
-               WHERE r.student_id=? GROUP BY subject""", (student["id"],)
+               WHERE r.student_id=? AND a.selected_option IS NOT NULL
+                 AND (COALESCE(t.result_release,'immediate')<>'manual' OR t.results_released_at IS NOT NULL)
+               GROUP BY subject""", (student["id"],)
         ).fetchall():
             acc[r["subject"]] = (r["ok"] or 0, r["total"] or 0)
             ins["wrong_total"] += (r["total"] or 0) - (r["ok"] or 0)
@@ -147,9 +149,10 @@ def build_result_insights(conn, test, result, answers, student):
     try:
         total_q = len(answers)
         correct = sum(1 for a in answers if a["is_correct"])
-        info["correct"], info["wrong"] = correct, total_q - correct
+        wrong = sum(1 for a in answers if a["selected_option"] and not a["is_correct"])
+        info["correct"], info["wrong"], info["unanswered"] = correct, wrong, total_q - correct - wrong
         info["accuracy"] = round(correct * 100 / total_q) if total_q else 0
-        info["wrong_numbers"] = [i for i, a in enumerate(answers, 1) if not a["is_correct"]][:30]
+        info["wrong_numbers"] = [i for i, a in enumerate(answers, 1) if a["selected_option"] and not a["is_correct"]][:30]
 
         rows = conn.execute(
             """SELECT student_id, score, total_marks, submitted_at FROM results
@@ -170,7 +173,9 @@ def build_result_insights(conn, test, result, answers, student):
             info["vs_avg"] = round(pct - info["class_avg"], 1)
 
         prev = conn.execute(
-            "SELECT score, total_marks FROM results WHERE student_id=? AND test_id<>?",
+            """SELECT r.score, r.total_marks FROM results r JOIN tests t ON t.id=r.test_id
+               WHERE r.student_id=? AND r.test_id<>?
+                 AND (COALESCE(t.result_release,'immediate')<>'manual' OR t.results_released_at IS NOT NULL)""",
             (student["id"], test["id"])
         ).fetchall()
         prev_avg = (sum(percentage(r["score"], r["total_marks"]) for r in prev) / len(prev)) if prev else None

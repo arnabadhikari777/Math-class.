@@ -3,11 +3,14 @@
 
 from werkzeug.utils import secure_filename
 
-from flask import Response, abort, flash, redirect, render_template, url_for
+from datetime import datetime
+
+from flask import Response, abort, flash, redirect, render_template, request, url_for
 
 from backend.core import app
 from backend.db.connection import get_db
 from backend.middleware.auth import teacher_login_required
+from backend.services.activity_service import log_activity
 from backend.services.pdf_service import build_student_result_pdf
 from backend.utils.helpers import percentage
 
@@ -27,6 +30,32 @@ def test_results_view(test_id):
             (test_id,)
         ).fetchall()
     return render_template("teacher/test_results_view.html", test=test, results=results)
+
+
+@app.route("/teacher/tests/<int:test_id>/results/release", methods=["POST"])
+@teacher_login_required
+def release_results(test_id):
+    """Result publication for tests set to 'I release the results': release (students see marks) or hide again.
+    Sends NO notification by itself - the teacher decides separately."""
+    action = request.form.get("action", "release")
+    with get_db() as conn:
+        test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
+        if test is None:
+            abort(404)
+        if (test["result_release"] or "immediate") != "manual":
+            flash("This test shows results immediately; there is nothing to release.", "error")
+        elif action == "hide":
+            conn.execute("UPDATE tests SET results_released_at=NULL WHERE id=?", (test_id,))
+            conn.commit()
+            log_activity("teacher", "hide_results", f"id={test_id}")
+            flash("Results are hidden from students again.", "success")
+        else:
+            conn.execute("UPDATE tests SET results_released_at=COALESCE(results_released_at, ?) WHERE id=?",
+                         (datetime.now().isoformat(), test_id))
+            conn.commit()
+            log_activity("teacher", "release_results", f"id={test_id}")
+            flash("Results released. Students can now see their marks.", "success")
+    return redirect(url_for("test_results_view", test_id=test_id))
 
 
 @app.route("/teacher/tests/<int:test_id>/result/<int:result_id>")

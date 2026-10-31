@@ -57,3 +57,13 @@ def inject_notifications():
     except Exception:
         pass
     return data
+
+
+@app.template_filter("marks")
+def format_marks(value):
+    """21.0 -> '21', 2.5 -> '2.5', -1.0 -> '-1', None -> '0' (marks are stored as numbers, shown without '.0')."""
+    try:
+        v = round(float(value), 4)
+    except (TypeError, ValueError):
+        return "0"
+    return str(int(v)) if v == int(v) else ("%.4f" % v).rstrip("0").rstrip(".")
