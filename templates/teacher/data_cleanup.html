@@ -51,9 +51,9 @@
   <h3>Bulk cleanup actions</h3>
   <div style="display:flex; flex-direction:column; gap:12px; max-width:520px;">
     <form method="POST" action="{{ url_for('cleanup_action') }}"
-          onsubmit="return confirm('Delete ALL inactive tests and their questions/results?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="action" value="delete_inactive_tests">
-      <button class="btn btn-danger btn-full" type="submit">Delete all inactive tests ({{ counts.inactive_tests }})</button>
+          onsubmit="return confirm('Archive all inactive tests? Results and answers are kept.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="archive_inactive_tests">
+      <button class="btn btn-danger btn-full" type="submit">Archive all inactive tests ({{ counts.inactive_tests }}) — results are kept</button>
     </form>
 
     <form method="POST" action="{{ url_for('cleanup_action') }}"

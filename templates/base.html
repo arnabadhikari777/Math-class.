@@ -186,6 +186,12 @@
   .nav-name { color: var(--text); }
   .btn-logout { background: var(--danger-soft) !important; color: var(--danger) !important; }
   .btn-logout:hover { filter: brightness(.96); }
+  /* Logout is a POST form (CSRF-protected); the button looks exactly like the old link */
+  .nav-links form.logout-form { display: contents; margin: 0; }
+  .nav-links button.btn-logout {
+    font: inherit; font-weight: 600; font-size: .875rem; cursor: pointer; border: 0;
+    padding: .45rem .8rem; border-radius: 999px; display: inline-flex; align-items: center; gap: .35rem;
+  }
 
   /* Theme switch: Auto / Light / Dark */
   .theme-seg { display: inline-flex; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 999px; padding: 3px; margin-left: .35rem; }
@@ -421,6 +427,7 @@
     .nav-links { display: none; position: absolute; left: .5rem; right: .5rem; top: calc(100% + 6px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); flex-direction: column; align-items: stretch; padding: .5rem; box-shadow: var(--shadow-lg); z-index: 99; }
     .nav-links.open { display: flex; }
     .nav-links a, .nav-name { padding: .75rem .9rem; font-size: .95rem; border-radius: 12px; }
+    .nav-links button.btn-logout { padding: .75rem .9rem; font-size: .95rem; border-radius: 12px; }
     .nav-links .theme-seg { align-self: flex-start; margin: .4rem .4rem .2rem; }
     .btn-logout { text-align: center; justify-content: center; }
     .container { margin: .9rem auto; padding: 0 .75rem 1.5rem; }
@@ -530,7 +537,7 @@
       <a href="{{ url_for('notes_list') }}" class="{{ 'active' if ep == 'notes_list' }}">Notes</a>
       <a href="{{ url_for('student_profile') }}" class="{{ 'active' if ep == 'student_profile' }}">Profile</a>
       <a href="{{ url_for('contact') }}" class="{{ 'active' if ep == 'contact' }}">Contact</a>
-      <a href="{{ url_for('logout') }}" class="btn-logout">Logout</a>
+      <form method="POST" action="{{ url_for('logout') }}" class="logout-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% if session.get('impersonating') %}<button type="submit" class="btn-logout"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Exit to Teacher</button>{% else %}<button type="submit" class="btn-logout">Logout</button>{% endif %}</form>
     {% elif session.get('is_teacher') and not session.get('student_id') %}
       <span class="nav-name">Sir</span>
       <a href="{{ url_for('teacher_dashboard') }}" class="{{ 'active' if ep == 'teacher_dashboard' }}">Dashboard</a>
@@ -539,10 +546,7 @@
       <a href="{{ url_for('manage_announcements') }}" class="{{ 'active' if ep == 'manage_announcements' }}">Notices</a>
       <a href="{{ url_for('teacher_contacts') }}" class="{{ 'active' if ep == 'teacher_contacts' }}">Inbox</a>
       <a href="{{ url_for('api_ai_admin.page') }}">AI Chats</a>
-      <a href="{{ url_for('teacher_logout') }}" class="btn-logout">Logout</a>
-    {% elif session.get('is_teacher') and session.get('student_id') %}
-      <a href="{{ url_for('student_dashboard') }}">Student view</a>
-      <a href="{{ url_for('logout') }}" class="btn-logout"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Exit to Teacher</a>
+      <form method="POST" action="{{ url_for('teacher_logout') }}" class="logout-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn-logout">Logout</button></form>
     {% else %}
       <a href="{{ url_for('login') }}" class="{{ 'active' if ep == 'login' }}">Student Login</a>
       <a href="{{ url_for('register') }}" class="{{ 'active' if ep == 'register' }}">Register</a>

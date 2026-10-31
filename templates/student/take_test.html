@@ -33,7 +33,7 @@
 
   <div class="flex gap-2 items-center flex-wrap mt-2">
     <button type="submit" class="btn btn-primary" id="submitBtn">Submit Test</button>
-    <span class="text-muted" style="font-size:.85rem">Your answers and timer are kept on this device if you refresh. The test auto-submits when time is up.</span>
+    <span class="text-muted" style="font-size:.85rem">Your answers are saved on the server as you go, so a refresh or a dropped connection does not lose them. The timer runs on the server and the test is submitted automatically when time is up.</span>
   </div>
 </form>
 {% endblock %}
@@ -41,65 +41,83 @@
 {% block extra_js %}
 <script>
 (function() {
-  const totalSeconds = {{ test.duration_minutes }} * 60;
+  // The SERVER owns the clock: `remaining` below was computed from the deadline stored in the database.
+  // This script only displays it. Changing it in the browser cannot extend the real deadline.
+  const totalSeconds = {{ total_seconds }};
+  let remainingAtLoad = {{ remaining }};
+  const loadedAt = performance.now();
   const timerEl = document.getElementById('timer');
   const fillEl = document.getElementById('progressFill');
   const form = document.getElementById('testForm');
   const countEl = document.getElementById('answeredCount');
-  const KEY = 'tt_{{ session.get("student_id") }}_{{ test.id }}';       // per student + per test
-  const ANS = KEY + '_ans';
+  const CSRF = {{ csrf_token()|tojson }};
+  const SAVE_URL = {{ url_for('save_test_progress', test_id=test.id)|tojson }};
+  const ANS = 'tt_{{ session.get("student_id") }}_{{ attempt.id }}_ans';
   const store = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
     del(k) { try { localStorage.removeItem(k); } catch (e) {} }
   };
 
-  // Deadline survives a page refresh (otherwise refreshing would reset the clock).
-  let deadline = parseInt(store.get(KEY) || '0', 10);
-  if (!deadline || deadline < Date.now() - totalSeconds * 1000) {
-    deadline = Date.now() + totalSeconds * 1000;
-    store.set(KEY, String(deadline));
-  }
-
-  // Restore saved answers
-  try {
-    const saved = JSON.parse(store.get(ANS) || '{}');
-    Object.keys(saved).forEach(function(name) {
-      const r = form.querySelector('input[name="' + name + '"][value="' + saved[name] + '"]');
+  // Restore answers: server draft first, then the local copy for anything newer.
+  const serverDraft = {{ draft|tojson }};
+  function applyAnswers(map) {
+    Object.keys(map).forEach(function(id) {
+      const r = form.querySelector('input[name="q_' + id + '"][value="' + map[id] + '"]');
       if (r) r.checked = true;
     });
-  } catch (e) {}
+  }
+  applyAnswers(serverDraft);
+  try { const saved = JSON.parse(store.get(ANS) || '{}'); Object.keys(saved).forEach(function(n) {
+    const r = form.querySelector('input[name="' + n + '"][value="' + saved[n] + '"]'); if (r) r.checked = true; }); } catch (e) {}
 
+  let dirty = false, saving = false;
+  function picked() {
+    const o = {};
+    form.querySelectorAll('input[type=radio]:checked').forEach(function(r) { o[r.name] = r.value; });
+    return o;
+  }
   function refreshAnswers() {
-    const picked = {};
-    form.querySelectorAll('input[type=radio]:checked').forEach(function(r) { picked[r.name] = r.value; });
-    store.set(ANS, JSON.stringify(picked));
-    const n = Object.keys(picked).length;
-    countEl.textContent = n;
+    const p = picked();
+    store.set(ANS, JSON.stringify(p));
+    countEl.textContent = Object.keys(p).length;
     document.querySelectorAll('#qnav a').forEach(function(a) {
-      a.classList.toggle('done', ('q_' + a.dataset.q) in picked);
+      a.classList.toggle('done', ('q_' + a.dataset.q) in p);
     });
+    dirty = true;
   }
   form.addEventListener('change', refreshAnswers);
-  refreshAnswers();
+  refreshAnswers(); dirty = false;
+
+  function save() {
+    if (saving || !dirty) return;
+    saving = true; dirty = false;
+    fetch(SAVE_URL, { method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ answers: picked() }) })
+      .then(function(r) { return r.json(); })
+      .then(function(d) { if (d && typeof d.remaining === 'number') {   // re-sync with the server clock
+          remainingAtLoad = d.remaining; window.__t0 = performance.now(); } })
+      .catch(function() { dirty = true; })        // offline: keep trying, the timer keeps running
+      .finally(function() { saving = false; });
+  }
+  setInterval(save, 4000);
+  window.__t0 = loadedAt;
 
   function fmt(s) {
     const m = Math.floor(s / 60), sec = s % 60;
     return String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
   }
-
   let finished = false;
   function finish() {
     if (finished) return;
     finished = true;
-    store.del(KEY); store.del(ANS);
     form.submit();
   }
-
   function tick() {
-    const remaining = Math.max(0, Math.round((deadline - Date.now()) / 1000));
+    const remaining = Math.max(0, Math.round(remainingAtLoad - (performance.now() - window.__t0) / 1000));
     timerEl.textContent = fmt(remaining);
-    fillEl.style.width = (remaining / totalSeconds * 100) + '%';
+    fillEl.style.width = (totalSeconds ? remaining / totalSeconds * 100 : 0) + '%';
     if (remaining <= 300) timerEl.classList.add('urgent');
     if (remaining <= 0) { clearInterval(iv); finish(); }
   }
@@ -107,11 +125,11 @@
   const iv = setInterval(tick, 1000);
 
   form.addEventListener('submit', function() {
-    if (finished) return;
-    finished = true;
-    store.del(KEY); store.del(ANS);
+    if (finished && form.dataset.sent) return;
+    finished = true; form.dataset.sent = '1';
+    store.del(ANS);
     const b = document.getElementById('submitBtn');
-    b.disabled = true; b.textContent = 'Submitting…';
+    b.disabled = true; b.textContent = 'Submitting\u2026';
   });
 })();
 </script>

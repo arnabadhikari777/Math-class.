@@ -22,6 +22,7 @@
       <option value="verified" {% if status=='verified' %}selected{% endif %}>Verified</option>
       <option value="pending" {% if status=='pending' %}selected{% endif %}>Pending OTP</option>
       <option value="blocked" {% if status=='blocked' %}selected{% endif %}>Blocked</option>
+      <option value="archived" {% if status=='archived' %}selected{% endif %}>Archived</option>
     </select>
     <button class="btn btn-primary btn-sm" type="submit">Search</button>
   </form>
@@ -67,9 +68,16 @@
             <form method="POST" action="{{ url_for('block_student', student_id=s.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="btn btn-sm btn-outline">{{ 'Unblock' if s.is_blocked else 'Block' }}</button>
             </form>
-            <form method="POST" action="{{ url_for('delete_student', student_id=s.id) }}" onsubmit="return confirm('Permanently delete {{ s.name }}?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="btn btn-sm btn-danger">Delete</button>
+            {% if s.is_archived %}
+            <form method="POST" action="{{ url_for('restore_student', student_id=s.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-primary">Restore</button>
             </form>
+            <a class="btn btn-sm btn-danger" href="{{ url_for('delete_student', student_id=s.id) }}">Delete permanently…</a>
+            {% else %}
+            <form method="POST" action="{{ url_for('archive_student', student_id=s.id) }}" onsubmit="return confirm('Archive {{ s.name|e }}? The account is locked and hidden; all results, attendance and AI history are kept.')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline">Archive</button>
+            </form>
+            {% endif %}
           </div>
         </td>
       </tr>

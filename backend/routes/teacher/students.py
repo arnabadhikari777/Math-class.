@@ -12,6 +12,7 @@ from backend.core import app
 from backend.db.connection import get_db
 from backend.middleware.auth import teacher_login_required
 from backend.services.activity_service import log_activity
+from backend.utils.helpers import csv_safe, safe_back
 from backend.utils.validators import normalize_mobile, validate_password_strength
 
 
@@ -22,8 +23,8 @@ def students_list():
     class_filter = request.args.get("class", "").strip()
     status = request.args.get("status", "all")
     with get_db() as conn:
-        sql = "SELECT * FROM students WHERE 1=1"
-        params = []
+        sql = "SELECT * FROM students WHERE is_archived=?"
+        params = [1 if status == "archived" else 0]
         if q:
             sql += " AND (name LIKE ? OR email LIKE ? OR mobile LIKE ? OR roll LIKE ?)"
             like = f"%{q}%"
@@ -138,21 +139,100 @@ def verify_student(student_id):
         s = conn.execute("SELECT name FROM students WHERE id=?", (student_id,)).fetchone()
     log_activity("teacher", "verify_student", f"id={student_id} {s['name'] if s else ''}")
     flash("Student verified without OTP.", "success")
-    return redirect(request.referrer or url_for("students_list"))
+    return redirect(safe_back("students_list"))
 
 
-@app.route("/teacher/students/<int:student_id>/delete", methods=["POST"])
+def student_impact(conn, student_id):
+    """Everything a permanent delete of this student would erase (shown before confirming)."""
+    one = lambda sql: conn.execute(sql, (student_id,)).fetchone()[0]
+    return {
+        "exam attempts": one("SELECT COUNT(*) FROM exam_attempts WHERE student_id=?"),
+        "results": one("SELECT COUNT(*) FROM results WHERE student_id=?"),
+        "answers": one("SELECT COUNT(*) FROM answers WHERE attempt_id IN (SELECT id FROM exam_attempts WHERE student_id=?)"),
+        "attendance records": one("SELECT COUNT(*) FROM attendance WHERE student_id=?"),
+        "AI conversations": one("SELECT COUNT(*) FROM ai_conversations WHERE student_id=?"),
+        "AI messages": one("SELECT COUNT(*) FROM ai_messages WHERE conversation_id IN (SELECT id FROM ai_conversations WHERE student_id=?)"),
+        "login history rows": one("SELECT COUNT(*) FROM login_history WHERE student_id=?"),
+    }
+
+
+def purge_student(conn, student_id):
+    """Explicit ordered permanent delete (the foreign keys are RESTRICT, so nothing cascades by accident)."""
+    att = "SELECT id FROM exam_attempts WHERE student_id=?"
+    conn.execute(f"DELETE FROM answers WHERE attempt_id IN ({att}) OR result_id IN (SELECT id FROM results WHERE student_id=?)",
+                 (student_id, student_id))
+    conn.execute(f"DELETE FROM attempt_questions WHERE attempt_id IN ({att})", (student_id,))
+    conn.execute("DELETE FROM results WHERE student_id=?", (student_id,))
+    conn.execute("DELETE FROM exam_attempts WHERE student_id=?", (student_id,))
+    conn.execute("DELETE FROM ai_messages WHERE conversation_id IN (SELECT id FROM ai_conversations WHERE student_id=?)", (student_id,))
+    conn.execute("DELETE FROM ai_conversations WHERE student_id=?", (student_id,))
+    for table in ("attendance", "login_history", "notification_reads", "push_subscriptions"):
+        conn.execute(f"DELETE FROM {table} WHERE student_id=?", (student_id,))
+    conn.execute("DELETE FROM students WHERE id=?", (student_id,))
+
+
+@app.route("/teacher/students/<int:student_id>/archive", methods=["POST"])
 @teacher_login_required
-def delete_student(student_id):
+def archive_student(student_id):
+    """Archive = hide + lock the account. All results, attempts, attendance and AI history stay."""
     with get_db() as conn:
         s = conn.execute("SELECT name, email FROM students WHERE id=?", (student_id,)).fetchone()
-        if s:
-            conn.execute("DELETE FROM students WHERE id=?", (student_id,))
-            conn.commit()
-            log_activity("teacher", "delete_student", f"{s['name']} <{s['email']}>")
-            flash(f"Student {s['name']} removed.", "success")
-        else:
+        if not s:
             flash("Student not found.", "error")
+            return redirect(url_for("students_list"))
+        conn.execute(
+            """UPDATE students SET is_archived=1, archived_at=?, archive_reason=?,
+                      session_version=COALESCE(session_version,0)+1 WHERE id=?""",
+            (datetime.now().isoformat(), (request.form.get("reason") or "")[:200] or None, student_id))
+        conn.execute("DELETE FROM push_subscriptions WHERE student_id=?", (student_id,))
+        conn.commit()
+    log_activity("teacher", "archive_student", f"{s['name']} <{s['email']}> id={student_id}")
+    flash(f"{s['name']} archived. History is kept; restore any time from the Archived filter.", "success")
+    return redirect(url_for("students_list"))
+
+
+@app.route("/teacher/students/<int:student_id>/restore", methods=["POST"])
+@teacher_login_required
+def restore_student(student_id):
+    with get_db() as conn:
+        s = conn.execute("SELECT name FROM students WHERE id=?", (student_id,)).fetchone()
+        if s:
+            conn.execute("UPDATE students SET is_archived=0, archived_at=NULL, archive_reason=NULL WHERE id=?",
+                         (student_id,))
+            conn.commit()
+            log_activity("teacher", "restore_student", f"id={student_id} {s['name']}")
+            flash(f"{s['name']} restored.", "success")
+    return redirect(url_for("students_list"))
+
+
+@app.route("/teacher/students/<int:student_id>/delete", methods=["GET", "POST"])
+@teacher_login_required
+def delete_student(student_id):
+    """PERMANENT delete: only for an archived student, after showing the impact and typing the email."""
+    with get_db() as conn:
+        s = conn.execute("SELECT * FROM students WHERE id=?", (student_id,)).fetchone()
+        if not s:
+            flash("Student not found.", "error")
+            return redirect(url_for("students_list"))
+        if not s["is_archived"]:
+            flash("Archive the student first. Only an archived student can be deleted permanently.", "error")
+            return redirect(url_for("students_list"))
+        impact = student_impact(conn, student_id)
+        if request.method == "GET":
+            return render_template("teacher/confirm_delete.html", kind="student", name=s["email"], impact=impact,
+                                   action=url_for("delete_student", student_id=student_id),
+                                   back=url_for("students_list"), archive=None)
+        if request.form.get("confirm_name", "").strip().lower() != s["email"].lower():
+            flash("The email you typed does not match - nothing was deleted.", "error")
+            return redirect(url_for("delete_student", student_id=student_id))
+        try:
+            purge_student(conn, student_id)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        log_activity("teacher", "delete_student_permanent", f"{s['name']} <{s['email']}> impact={impact}")
+    flash(f"Student {s['name']} permanently deleted.", "success")
     return redirect(url_for("students_list"))
 
 
@@ -167,36 +247,43 @@ def block_student(student_id):
             conn.commit()
             log_activity("teacher", "block_toggle", f"{row['name']} -> {new_val}")
             flash("Student blocked." if new_val else "Student unblocked.", "success")
-    return redirect(request.referrer or url_for("students_list"))
+    return redirect(safe_back("students_list"))
 
 
 @app.route("/teacher/students/<int:student_id>/login-as", methods=["POST"])
 @teacher_login_required
 def login_as_student(student_id):
+    from backend.services import impersonation_service
     with get_db() as conn:
-        student = conn.execute("SELECT * FROM students WHERE id=? AND is_verified=1", (student_id,)).fetchone()
+        student = conn.execute("SELECT * FROM students WHERE id=? AND is_verified=1 AND is_archived=0",
+                               (student_id,)).fetchone()
     if not student:
-        flash("Student not found or not verified.", "error")
+        flash("Student not found, archived, or not verified.", "error")
         return redirect(url_for("students_list"))
     if student["is_blocked"]:
         flash("Cannot login as a blocked student.", "error")
         return redirect(url_for("students_list"))
+    ip_addr = request.headers.get("X-Forwarded-For", request.remote_addr)
+    log_id = impersonation_service.start(student["id"], ip_addr)
+    # Brand-new session (no fixation): it is a STUDENT session that merely remembers it is a teacher view.
+    # is_teacher is deliberately NOT set, so teacher pages / APIs reject it.
+    session.clear()
     session.permanent = True
     session["student_id"] = student["id"]
     session["student_name"] = student["name"]
     session["student_class"] = student["class_name"]
     session["sv"] = student["session_version"] or 0
     session["impersonating"] = True
-    session["is_teacher"] = True
-    ip_addr = request.headers.get("X-Forwarded-For", request.remote_addr)
+    session["impersonation_log_id"] = log_id
+    session["impersonation_started"] = datetime.now().isoformat()
     with get_db() as conn:
         conn.execute(
             "INSERT INTO login_history (student_id, login_time, ip_address, via_teacher) VALUES (?,?,?,1)",
             (student["id"], datetime.now().isoformat(), ip_addr)
         )
         conn.commit()
-    log_activity("teacher", "impersonate", f"{student['name']} (id={student_id})")
-    flash(f"You are now viewing as {student['name']}. Logout to return to teacher panel.", "success")
+    log_activity("teacher", "impersonate", f"{student['name']} (id={student_id}) log={log_id}")
+    flash(f"You are viewing as {student['name']} (read-only). Use 'Exit to Teacher' to go back.", "success")
     return redirect(url_for("student_dashboard"))
 
 
@@ -231,8 +318,8 @@ def export_students():
     writer = csv.writer(output)
     writer.writerow(["id", "name", "class", "roll", "email", "mobile", "verified", "blocked", "registered_at"])
     for r in rows:
-        writer.writerow([r["id"], r["name"], r["class_name"], r["roll"], r["email"],
-                         r["mobile"], r["is_verified"], r["is_blocked"], r["registered_at"]])
+        writer.writerow([csv_safe(v) for v in (r["id"], r["name"], r["class_name"], r["roll"], r["email"],
+                                               r["mobile"], r["is_verified"], r["is_blocked"], r["registered_at"])])
     log_activity("teacher", "export_students", f"count={len(rows)}")
     return Response(
         output.getvalue(),

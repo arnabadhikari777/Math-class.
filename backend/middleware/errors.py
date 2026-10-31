@@ -10,6 +10,8 @@ from backend.core import app
 def not_found(e):
     return render_template("error.html", code=404, message="Page not found."), 404
 
+from backend.utils.helpers import safe_back  # noqa: E402
+
 
 @app.errorhandler(500)
 def server_error(e):
@@ -19,4 +21,4 @@ def server_error(e):
 @app.errorhandler(413)
 def too_large(e):
     flash("File is too large. Maximum size is 15 MB.", "error")
-    return redirect(request.referrer or url_for("upload_note"))
+    return redirect(safe_back("upload_note"))

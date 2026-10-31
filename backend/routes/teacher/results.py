@@ -39,10 +39,7 @@ def teacher_student_result(test_id, result_id):
             abort(404)
         student = conn.execute("SELECT * FROM students WHERE id=?", (result["student_id"],)).fetchone()
         answers = conn.execute(
-            """SELECT a.*, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d,
-                      q.correct_option, q.marks
-               FROM answers a JOIN questions q ON q.id = a.question_id
-               WHERE a.result_id=? ORDER BY q.id""",
+            """SELECT a.* FROM answers a WHERE a.result_id=? ORDER BY a.position, a.id""",
             (result_id,)
         ).fetchall()
     pct = percentage(result["score"], result["total_marks"])
@@ -62,10 +59,7 @@ def download_student_result_pdf(test_id, result_id):
             abort(404)
         student = conn.execute("SELECT * FROM students WHERE id=?", (result["student_id"],)).fetchone()
         answers = conn.execute(
-            """SELECT a.*, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d,
-                      q.correct_option, q.marks
-               FROM answers a JOIN questions q ON q.id = a.question_id
-               WHERE a.result_id=? ORDER BY q.id""",
+            """SELECT a.* FROM answers a WHERE a.result_id=? ORDER BY a.position, a.id""",
             (result_id,)
         ).fetchall()
     pdf_bytes = build_student_result_pdf(test, student, result, answers)

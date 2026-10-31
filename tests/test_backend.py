@@ -7,6 +7,8 @@ SAFETY: the suite copies the project (including database.db) into a temporary
 directory and imports the app from THAT copy, so the real database is never
 opened, migrated or modified. The temp copy is deleted afterwards.
 """
+import sys as _sys, os as _os  # TESTS_DIR_ON_PATH
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import hashlib
 import importlib
 import json
@@ -58,6 +60,7 @@ class BackendTests(unittest.TestCase):
         shutil.copytree(os.path.join(ROOT, "tests"), os.path.join(cls.proj, "tests"),
                         ignore=shutil.ignore_patterns("__pycache__"))
         cls.db = os.path.join(cls.proj, "database.db")
+        __import__("legacy").ensure_legacy_db(cls.db)
         cls.original_snapshot = _snapshot(cls.db)          # BEFORE the app ever touches the copy
         cls.original_tables = set(cls.original_snapshot)
         os.environ.update({"FORCE_HTTPS": "0", "SECRET_KEY": "unit-test-secret",
@@ -146,8 +149,12 @@ class BackendTests(unittest.TestCase):
                       headers={"X-CSRFToken": CSRF})
 
     def submit(self, c, tid, answer="A"):
-        with self.db_conn() as conn:
-            qids = [r["id"] for r in conn.execute("SELECT id FROM questions WHERE test_id=?", (tid,))]
+        with c.session_transaction() as s:
+            sid = s["student_id"]
+        with self.db_conn() as conn:       # the form posts the attempt's own snapshot question ids
+            qids = [r["id"] for r in conn.execute(
+                "SELECT aq.id FROM attempt_questions aq JOIN exam_attempts a ON a.id=aq.attempt_id "
+                "WHERE a.test_id=? AND a.student_id=? AND a.status='in_progress'", (tid, sid))]
         data = {f"q_{q}": answer for q in qids}
         return c.post(f"/test/{tid}/submit", data=data, headers={"X-CSRFToken": CSRF})
 
@@ -196,17 +203,20 @@ class BackendTests(unittest.TestCase):
     # ------------------------------------------- 2. database / migrations
     def test_10_existing_data_unchanged_after_startup_and_migrations(self):
         for table, rows in self.original_snapshot.items():
+            if table not in self.after_import_snapshot:   # test_attempts -> exam_attempts (migration 009, copy verified)
+                continue
             self.assertTrue(_same_old_data(rows, self.after_import_snapshot[table]), f"data changed in {table}")
 
     def test_11_new_objects_are_additive_only(self):
         with self.db_conn() as conn:
             tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             applied = {r[0] for r in conn.execute("SELECT id FROM schema_migrations")}
-        self.assertTrue(self.original_tables <= tables)
-        self.assertTrue({"test_attempts", "schema_migrations"} <= tables)
+        self.assertTrue((self.original_tables - {"test_attempts"}) <= tables)
+        self.assertTrue({"exam_attempts", "attempt_questions", "exam_versions", "schema_migrations"} <= tables)
         self.assertEqual(applied, {"001_test_attempts", "002_perf_indexes",
                                    "003_unique_results", "004_unique_attendance",
-                                   "005_normalize_class_names", "006_ai_chat", "007_question_bank"})
+                                   "005_normalize_class_names", "006_ai_chat", "007_question_bank",
+                                   "008_exam_system", "009_drop_legacy_attempts", "010_support_tables"})
 
     def test_12_backup_created_before_migrating(self):
         folder = os.path.join(self.proj, "backups")
@@ -229,9 +239,11 @@ class BackendTests(unittest.TestCase):
     def test_14_unique_index_skipped_when_duplicates_exist(self):
         from backend.db import migrations as m
         path = os.path.join(self.tmp, "dupes.db")
-        shutil.copy(os.path.join(ROOT, "database.db"), path)
+        shutil.copy(__import__("legacy").legacy_source(ROOT), path)
         c = sqlite3.connect(path)
         c.execute("PRAGMA foreign_keys=OFF")
+        c.execute("DROP INDEX IF EXISTS uq_results_test_student")
+        c.execute("DELETE FROM schema_migrations WHERE id='003_unique_results'")
         c.execute("INSERT INTO results (test_id,student_id,score,total_marks,submitted_at) VALUES (1,1,1,2,'x')")
         c.execute("INSERT INTO results (test_id,student_id,score,total_marks,submitted_at) VALUES (1,1,2,2,'y')")
         c.commit()
@@ -272,7 +284,11 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(r.status_code, 302)
         self.assertTrue(r.headers["Location"].endswith("/dashboard"))
         self.assertEqual(c.get("/dashboard").status_code, 200)
-        c.get("/logout")
+        self.assertEqual(c.get("/logout").status_code, 302)            # GET changes nothing
+        self.assertEqual(c.get("/dashboard").status_code, 200)
+        with c.session_transaction() as s:
+            token = s["_csrf_token"]                                   # the login created a fresh session
+        c.post("/logout", headers={"X-CSRFToken": token})
         self.assertEqual(c.get("/dashboard").status_code, 302)
 
     def test_21_wrong_password_and_blocked_student_rejected(self):
@@ -322,9 +338,9 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(c.get("/api/v1/me").status_code, 401)
 
     def test_33_impersonating_teacher_is_a_student_only(self):
-        c = self.student_client(self.s10, "10")
-        with c.session_transaction() as s:
-            s.update(is_teacher=True, impersonating=True)
+        c = self.teacher_client()
+        self.assertEqual(c.post(f"/teacher/students/{self.s10}/login-as",
+                                headers={"X-CSRFToken": CSRF}).status_code, 302)
         self.assertEqual(c.get("/api/v1/me").status_code, 200)
         self.assertEqual(c.get("/api/v1/teacher/overview").status_code, 403)
 
@@ -406,14 +422,16 @@ class BackendTests(unittest.TestCase):
 
     def test_52_inactive_test_cannot_be_submitted_cold(self):
         c = self.student_client(self.s10, "10")
-        self.assertEqual(self.submit(c, self.t_off).status_code, 404)
+        self.assertEqual(self.submit(c, self.t_off).status_code, 302)       # no running attempt -> ignored
         self.assertEqual(self.result_count(self.t_off, self.s10), 0)
 
     def test_53_started_test_can_still_be_submitted_after_deactivation(self):
         c = self.student_client(self.s10b, "10")
         conn = self.db_conn()
-        conn.execute("INSERT OR IGNORE INTO test_attempts (test_id,student_id,started_at) VALUES (?,?,?)",
-                     (self.t_inactive_started, self.s10b, datetime.now().isoformat()))
+        conn.execute("UPDATE tests SET is_active=1 WHERE id=?", (self.t_inactive_started,))
+        conn.commit()
+        c.get(f"/test/{self.t_inactive_started}")                         # starts the attempt
+        conn.execute("UPDATE tests SET is_active=0 WHERE id=?", (self.t_inactive_started,))
         conn.commit()
         conn.close()
         self.assertEqual(self.submit(c, self.t_inactive_started, "B").status_code, 302)
@@ -423,11 +441,12 @@ class BackendTests(unittest.TestCase):
         c = self.student_client(self.s9, "9")
         c.get(f"/test/{self.t9}")
         with self.db_conn() as conn:
-            self.assertEqual(conn.execute("SELECT COUNT(*) FROM test_attempts WHERE test_id=? AND student_id=?",
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM exam_attempts WHERE test_id=? AND student_id=?",
                                           (self.t9, self.s9)).fetchone()[0], 1)
 
     def test_55_second_submission_is_ignored(self):
         c = self.student_client(self.s9, "9")
+        c.get(f"/test/{self.t9}")
         self.submit(c, self.t9, "A")
         self.submit(c, self.t9, "B")
         self.assertEqual(self.result_count(self.t9, self.s9), 1)
@@ -437,6 +456,7 @@ class BackendTests(unittest.TestCase):
 
     def test_56_simultaneous_submissions_make_one_result(self):
         c1 = self.student_client(self.s10, "10")
+        c1.get(f"/test/{self.t_race}")
         codes = []
 
         def go():
@@ -447,23 +467,21 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(self.result_count(self.t_race, self.s10), 1)
         self.assertEqual(len(codes), 4)
 
-    def test_57_timer_enforcement_is_opt_in(self):
+    def test_57_timer_is_enforced_by_default_and_kill_switch_works(self):
         sid = self.s10b
         c = self.student_client(sid, "10")
         c.get(f"/test/{self.t_timer}")
         conn = self.db_conn()
-        conn.execute("UPDATE test_attempts SET started_at=? WHERE test_id=? AND student_id=?",
-                     ((datetime.now() - timedelta(minutes=60)).isoformat(), self.t_timer, sid))
+        past = (datetime.now() - timedelta(minutes=60)).isoformat()
+        conn.execute("UPDATE exam_attempts SET deadline_at=? WHERE test_id=? AND student_id=? AND status='in_progress'",
+                     (past, self.t_timer, sid))
         conn.commit()
         conn.close()
-        os.environ["ENFORCE_TEST_TIMER"] = "1"
-        try:
-            self.submit(c, self.t_timer)
-            self.assertEqual(self.result_count(self.t_timer, sid), 0)       # rejected when ON
-        finally:
-            os.environ.pop("ENFORCE_TEST_TIMER", None)
-        self.submit(c, self.t_timer)
-        self.assertEqual(self.result_count(self.t_timer, sid), 1)            # accepted when OFF (old behaviour)
+        self.submit(c, self.t_timer)           # late: posted answers are ignored, saved draft (none) is graded
+        with self.db_conn() as conn:
+            row = conn.execute("SELECT score FROM results WHERE test_id=? AND student_id=?",
+                               (self.t_timer, sid)).fetchone()
+        self.assertEqual(row["score"], 0)
 
     # ----------------------------------------------------- 7. PWA / caching
     def test_60_private_pages_are_no_store(self):

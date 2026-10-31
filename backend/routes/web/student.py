@@ -4,12 +4,13 @@
 from datetime import datetime
 from werkzeug.utils import secure_filename
 
-from flask import abort, flash, redirect, render_template, request, send_from_directory, session, url_for
+from flask import abort, flash, jsonify, redirect, render_template, request, send_from_directory, session, url_for
 
 from backend.config import PASS_PERCENTAGE, UPLOAD_FOLDER
 from backend.core import app
 from backend.db.connection import get_db
 from backend.middleware.auth import student_login_required
+from backend.services import exam_service
 from backend.services.insights_service import build_result_insights, build_student_insights
 from backend.utils.helpers import percentage
 
@@ -20,7 +21,7 @@ def student_dashboard():
     with get_db() as conn:
         student = conn.execute("SELECT * FROM students WHERE id=?", (session["student_id"],)).fetchone()
         tests = conn.execute(
-            """SELECT * FROM tests WHERE is_active=1
+            """SELECT * FROM tests WHERE is_active=1 AND is_archived=0
                AND (class_name=? OR class_name='' OR class_name IS NULL)
                ORDER BY created_at DESC""",
             (student["class_name"],)
@@ -31,7 +32,9 @@ def student_dashboard():
                WHERE results.student_id=? ORDER BY results.submitted_at DESC""",
             (student["id"],)
         ).fetchall()
-        attempted_test_ids = {r["test_id"] for r in my_results}
+        attempted_test_ids = {t["id"] for t in tests
+                              if any(r["test_id"] == t["id"] for r in my_results)
+                              and exam_service.attempts_left(conn, t, student["id"]) == 0}
         announcements = conn.execute(
             """SELECT * FROM announcements WHERE is_active=1
                AND (class_name=? OR class_name='' OR class_name IS NULL)
@@ -106,61 +109,74 @@ def student_profile():
 @app.route("/test/<int:test_id>")
 @student_login_required
 def take_test(test_id):
+    if session.get("impersonating"):
+        # Opening a test STARTS a timed attempt (a database write) - never allowed while viewing as a student.
+        flash("A teacher viewing as a student cannot start a test.", "error")
+        return redirect(url_for("student_dashboard"))
+    sid = session["student_id"]
     with get_db() as conn:
-        test = conn.execute("SELECT * FROM tests WHERE id=? AND is_active=1", (test_id,)).fetchone()
+        test = conn.execute("SELECT * FROM tests WHERE id=? AND is_active=1 AND is_archived=0", (test_id,)).fetchone()
         if test is None:
             abort(404)
-        already = conn.execute(
-            "SELECT * FROM results WHERE test_id=? AND student_id=?",
-            (test_id, session["student_id"])
-        ).fetchone()
-        if already:
-            flash("You have already submitted this test.", "error")
+        attempt, state = exam_service.start_or_resume(conn, test, sid)
+        if attempt is None:
+            msgs = {"limit": "You have used all attempts for this test.",
+                    "empty": "No questions in this test yet.",
+                    "expired": "Your previous attempt ran out of time and was closed."}
+            flash(msgs.get(state, "This test cannot be started."), "error")
             return redirect(url_for("student_dashboard"))
-        questions = conn.execute("SELECT * FROM questions WHERE test_id=? ORDER BY id", (test_id,)).fetchall()
-    if not questions:
-        flash("No questions in this test yet.", "error")
-        return redirect(url_for("student_dashboard"))
-    return render_template("student/take_test.html", test=test, questions=questions)
+        questions = exam_service.attempt_questions(conn, attempt["id"])
+        draft = exam_service.draft_answers(attempt)
+        remaining = exam_service.remaining_seconds(attempt)
+        left = exam_service.attempts_left(conn, test, sid)
+    return render_template("student/take_test.html", test=test, questions=questions, attempt=attempt,
+                           remaining=remaining, total_seconds=attempt["duration_seconds"], draft=draft,
+                           attempts_left=left)
+
+
+@app.route("/test/<int:test_id>/save", methods=["POST"])
+@student_login_required
+def save_test_progress(test_id):
+    """Autosave of the chosen options. The server keeps them, so a reload or a dropped
+    connection never loses work, and the timer is NOT affected by this call."""
+    if session.get("impersonating"):
+        return jsonify({"ok": False, "error": "Not allowed while viewing as a student."}), 403
+    payload = request.get_json(silent=True) or {}
+    with get_db() as conn:
+        run = exam_service.get_running(conn, test_id, session["student_id"])
+        if run is None:
+            return jsonify({"ok": False, "error": "No running attempt."}), 409
+        ok = exam_service.save_draft(conn, run["id"], session["student_id"], payload.get("answers") or {})
+        conn.commit()
+        return jsonify({"ok": bool(ok), "remaining": exam_service.remaining_seconds(run)})
 
 
 @app.route("/test/<int:test_id>/submit", methods=["POST"])
 @student_login_required
 def submit_test(test_id):
+    if session.get("impersonating"):
+        flash("A teacher viewing as a student cannot submit a test.", "error")
+        return redirect(url_for("student_dashboard"))
     with get_db() as conn:
         test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
         if test is None:
             abort(404)
-        already = conn.execute(
-            "SELECT * FROM results WHERE test_id=? AND student_id=?",
-            (test_id, session["student_id"])
-        ).fetchone()
-        if already:
-            flash("Already submitted.", "error")
-            return redirect(url_for("student_dashboard"))
-        questions = conn.execute("SELECT * FROM questions WHERE test_id=?", (test_id,)).fetchall()
-        score = 0
-        total_marks = 0
-        answer_rows = []
-        for q in questions:
-            total_marks += q["marks"]
-            selected = request.form.get(f"q_{q['id']}")
-            is_correct = 1 if selected == q["correct_option"] else 0
-            if is_correct:
-                score += q["marks"]
-            answer_rows.append((q["id"], selected, is_correct))
-        cur = conn.execute(
-            """INSERT INTO results (test_id, student_id, score, total_marks, submitted_at)
-               VALUES (?,?,?,?,?)""",
-            (test_id, session["student_id"], score, total_marks, datetime.now().isoformat())
-        )
-        result_id = cur.lastrowid
-        for qid, selected, is_correct in answer_rows:
-            conn.execute(
-                "INSERT INTO answers (result_id, question_id, selected_option, is_correct) VALUES (?,?,?,?)",
-                (result_id, qid, selected, is_correct)
-            )
-        conn.commit()
+        form = {}
+        for key, val in request.form.items():
+            if key.startswith("q_"):
+                try:
+                    form[int(key[2:])] = val
+                except ValueError:
+                    pass
+        state, _rid = exam_service.submit(conn, test, session["student_id"], form)
+    if state == "already":
+        flash("Already submitted.", "error")
+        return redirect(url_for("student_dashboard"))
+    if state == "rejected":
+        flash("Time was over, so this submission was not accepted.", "error")
+        return redirect(url_for("student_dashboard"))
+    if state == "late_auto":
+        flash("Time was over - your last saved answers were submitted automatically.", "error")
     return redirect(url_for("test_result", test_id=test_id))
 
 
@@ -173,21 +189,18 @@ def test_result(test_id):
             "SELECT * FROM results WHERE test_id=? AND student_id=?",
             (test_id, session["student_id"])
         ).fetchone()
-        if result is None:
+        if result is None or test is None:
             abort(404)
-        answers = conn.execute(
-            """SELECT a.*, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d,
-                      q.correct_option, q.marks
-               FROM answers a JOIN questions q ON q.id = a.question_id
-               WHERE a.result_id=? ORDER BY q.id""",
-            (result["id"],)
-        ).fetchall()
+        answers = exam_service.result_answers(conn, result["id"])
+        attempts = exam_service.student_attempts(conn, test_id, session["student_id"])
         insights = build_result_insights(conn, test, result, answers, {"id": session["student_id"]})
+        left = exam_service.attempts_left(conn, test, session["student_id"])
     pct = percentage(result["score"], result["total_marks"])
     passed = pct >= PASS_PERCENTAGE
     return render_template(
         "student/test_result.html", test=test, result=result, answers=answers,
-        pct=pct, passed=passed, pass_pct=PASS_PERCENTAGE, insights=insights
+        pct=pct, passed=passed, pass_pct=PASS_PERCENTAGE, insights=insights,
+        attempts=attempts, attempts_left=left
     )
 
 
@@ -202,7 +215,7 @@ def test_leaderboard(test_id):
             """SELECT results.score, results.total_marks, results.submitted_at,
                       students.name, students.roll, students.class_name
                FROM results JOIN students ON students.id = results.student_id
-               WHERE results.test_id=?
+               WHERE results.test_id=? AND students.is_archived=0
                ORDER BY results.score DESC, results.submitted_at ASC""",
             (test_id,)
         ).fetchall()

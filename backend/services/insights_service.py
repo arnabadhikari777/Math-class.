@@ -243,11 +243,12 @@ def build_teacher_insights(conn):
         t["top"] = [{"name": p["name"], "class_name": p["class_name"], "avg": round(p["a"], 1), "n": p["n"]} for p in top]
 
         hard = conn.execute(
-            """SELECT q.id, q.question_text, te.title AS test_title, te.id AS test_id,
-                      COUNT(a.id) AS total, SUM(a.is_correct) AS ok
-               FROM answers a JOIN questions q ON q.id = a.question_id
-               JOIN tests te ON te.id = q.test_id
-               GROUP BY q.id HAVING total >= 2
+            """SELECT a.question_id AS id, MAX(a.question_text) AS question_text, te.title AS test_title,
+                      te.id AS test_id, COUNT(a.id) AS total, SUM(a.is_correct) AS ok
+               FROM answers a JOIN exam_attempts ea ON ea.id = a.attempt_id
+               JOIN tests te ON te.id = ea.test_id
+               WHERE a.question_id IS NOT NULL
+               GROUP BY ea.test_id, a.question_id HAVING total >= 2
                ORDER BY (ok * 1.0 / total) ASC, total DESC LIMIT 5"""
         ).fetchall()
         t["hard_questions"] = [{

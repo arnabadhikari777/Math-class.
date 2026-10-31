@@ -21,8 +21,10 @@ from flask import (Blueprint, abort, flash, redirect, render_template, request,
                    session, url_for)
 
 from backend.services import cloudinary_client as cdn
+from backend.services import image_service
 from backend.db import escape_like, get_db
 
+from backend.utils.helpers import safe_back  # noqa: E402
 bp = Blueprint("qbank", __name__, url_prefix="/teacher/bank")
 
 MAX_FILES_PER_UPLOAD = 10
@@ -72,9 +74,9 @@ def _now():
 
 # ------------------------------------------------------------------ helpers
 def _image_usage(conn, image_id):
-    in_bank = conn.execute("SELECT COUNT(*) FROM bank_questions WHERE image_id=?", (image_id,)).fetchone()[0]
-    in_tests = conn.execute("SELECT COUNT(*) FROM questions WHERE bank_image_id=?", (image_id,)).fetchone()[0]
-    return in_bank, in_tests
+    """(question_bank_count, everything_else_count) - delegates to the ONE shared checker."""
+    u = image_service.usage(conn, image_id)
+    return u["bank_questions"], u["total"] - u["bank_questions"]
 
 
 def _categories(conn):
@@ -165,27 +167,12 @@ def image_upload():
     for f in files:
         data = f.read(cdn.max_bytes() + 1)
         try:
-            info = cdn.upload_image(f.filename, data, category=cat["name"])
-        except cdn.CloudinaryError as exc:
+            image_service.upload_and_register(f.filename, data, cat)
+            done += 1
+        except image_service.ImageError as exc:
             errors.append(str(exc))
             if not cdn.is_configured():
                 break
-            continue
-        try:
-            with get_db() as conn:
-                conn.execute(
-                    """INSERT INTO bank_images (category_id, url, public_id, original_name, width, height,
-                       bytes, format, created_at) VALUES (?,?,?,?,?,?,?,?,?)""",
-                    (cid, info["url"], info["public_id"], (f.filename or "")[:150], info["width"],
-                     info["height"], info["bytes"], info["format"], _now()))
-                conn.commit()
-            done += 1
-        except Exception:  # DB failed after Cloudinary succeeded: do not leave an orphan file behind
-            try:
-                cdn.delete_image(info["public_id"])
-            except cdn.CloudinaryError:
-                pass
-            errors.append("'%s': ডাটাবেসে সংরক্ষণ করা যায়নি।" % f.filename)
     if done:
         flash("%d টি ছবি আপলোড হয়েছে।" % done, "success")
     for e in errors:
@@ -198,31 +185,10 @@ def image_upload():
 def image_delete(image_id):
     with get_db() as conn:
         img = conn.execute("SELECT * FROM bank_images WHERE id=?", (image_id,)).fetchone()
-        if img is None:
-            abort(404)
-        in_bank, in_tests = _image_usage(conn, image_id)
-        if in_bank or in_tests:
-            parts = []
-            if in_bank:
-                parts.append("Question Bank-এর %d টি প্রশ্নে" % in_bank)
-            if in_tests:
-                parts.append("Test-এর %d টি প্রশ্নে" % in_tests)
-            flash("ছবিটি " + " ও ".join(parts) + " ব্যবহৃত হচ্ছে, তাই মোছা হয়নি। আগে সেখান থেকে সরান।", "error")
-            return redirect(url_for("qbank.images", category=img["category_id"]))
-    try:
-        cdn.delete_image(img["public_id"])
-    except cdn.CloudinaryError as exc:
-        flash(str(exc), "error")
-        return redirect(url_for("qbank.images", category=img["category_id"]))
-    with get_db() as conn:
-        # re-check inside the write: a question may have picked it while Cloudinary was answering
-        in_bank, in_tests = _image_usage(conn, image_id)
-        if in_bank or in_tests:
-            flash("ছবিটি এইমাত্র কোনো প্রশ্নে ব্যবহৃত হয়েছে; Library রেকর্ড রাখা হয়েছে।", "error")
-        else:
-            conn.execute("DELETE FROM bank_images WHERE id=?", (image_id,))
-            conn.commit()
-            flash("ছবি মুছে ফেলা হয়েছে।", "success")
+    if img is None:
+        abort(404)
+    state, message = image_service.safe_delete(image_id)
+    flash(message, "success" if state == "deleted" else "error")
     return redirect(url_for("qbank.images", category=img["category_id"]))
 
 
@@ -350,7 +316,7 @@ def question_delete(qid):
         flash("প্রশ্নটি Question Bank থেকে মুছে ফেলা হয়েছে। (Test-এ থাকা কপি ও Library-র ছবি অক্ষত আছে।)", "success")
     else:
         flash("প্রশ্নটি পাওয়া যায়নি।", "error")
-    return redirect(request.referrer or url_for("qbank.questions"))
+    return redirect(safe_back("qbank.questions"))
 
 
 # ------------------------------------------------- bank -> existing test

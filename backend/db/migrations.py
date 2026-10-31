@@ -16,6 +16,7 @@ CLI (run from the project folder):
     python -m backend.db.migrations rollback 002_perf_indexes
 """
 import logging
+import json
 import os
 import sqlite3
 import sys
@@ -238,6 +239,33 @@ def _down_question_bank(conn):
     conn.execute("DROP TABLE IF EXISTS bank_categories")
 
 
+from backend.db import m008_exam_system, m010_support_tables  # noqa: E402
+
+
+def _up_drop_legacy_attempts(conn):
+    """009: drop the old test_attempts table ONLY if every row is already represented in exam_attempts."""
+    if not _table_exists(conn, "test_attempts"):
+        return "SKIP: nothing to drop"
+    missing = conn.execute(
+        """SELECT COUNT(*) FROM test_attempts t WHERE NOT EXISTS (
+               SELECT 1 FROM exam_attempts e WHERE e.test_id=t.test_id AND e.student_id=t.student_id)""").fetchone()[0]
+    if missing:
+        return "SKIP: %d legacy test_attempts row(s) are not in exam_attempts - not dropping" % missing
+    conn.execute("DROP TABLE test_attempts")
+    return "legacy test_attempts dropped (all rows live on in exam_attempts)"
+
+
+def _down_drop_legacy_attempts(conn):
+    raise RuntimeError("009 is destructive (drops the legacy table); restore the backup instead.")
+
+
+# Migrations that rebuild tables must run with foreign_keys=OFF (SQLite cannot change the
+# setting inside a transaction); the runner checks PRAGMA foreign_key_check before COMMIT.
+FK_OFF = {"008_exam_system"}
+# Down-migrations that destroy data and therefore refuse to run without --force-destructive.
+DESTRUCTIVE_DOWN = {"001_test_attempts", "006_ai_chat", "007_question_bank", "008_exam_system",
+                    "009_drop_legacy_attempts", "010_support_tables"}
+
 MIGRATIONS = [
     ("001_test_attempts", "Record when a student opens a test (for timer checks)",
      _up_test_attempts, _down_test_attempts),
@@ -253,6 +281,12 @@ MIGRATIONS = [
      _up_ai_chat, _down_ai_chat),
     ("007_question_bank", "Question Bank + image library tables; questions.image_url / bank_image_id (nullable)",
      _up_question_bank, _down_question_bank),
+    ("008_exam_system", "Exam versions, per-attempt question snapshots, multiple attempts, history-safe FKs, archive columns",
+     m008_exam_system.up, m008_exam_system.down),
+    ("009_drop_legacy_attempts", "Drop legacy test_attempts after verifying it is fully copied to exam_attempts",
+     _up_drop_legacy_attempts, _down_drop_legacy_attempts),
+    ("010_support_tables", "Impersonation audit log, deletion retry queue, note/image/push columns",
+     m010_support_tables.up, m010_support_tables.down),
 ]
 
 
@@ -310,12 +344,20 @@ def run_pending(db_file, backup=True):
     conn = _open(db_file)
     try:
         for mid, _desc, up, _down in pending:
+            fk_off = mid in FK_OFF
+            if fk_off:
+                conn.execute("PRAGMA foreign_keys = OFF")
             conn.execute("BEGIN IMMEDIATE")
             try:
                 if conn.execute("SELECT 1 FROM schema_migrations WHERE id=?", (mid,)).fetchone():
                     conn.execute("COMMIT")
                     continue  # another worker already applied it
                 note = up(conn)
+                if fk_off:
+                    bad = conn.execute("PRAGMA foreign_key_check").fetchall()
+                    if bad:
+                        raise RuntimeError("foreign_key_check found %d violation(s): %s"
+                                           % (len(bad), [tuple(b) for b in bad[:5]]))
                 if isinstance(note, str) and note.startswith("SKIP"):
                     conn.execute("ROLLBACK")
                     log.warning("Migration %s skipped: %s", mid, note)
@@ -329,15 +371,23 @@ def run_pending(db_file, backup=True):
                 conn.execute("ROLLBACK")
                 log.error("Migration %s failed and was rolled back: %s", mid, exc)
                 report.append((mid, f"FAILED: {exc}"))
+            finally:
+                if fk_off:
+                    conn.execute("PRAGMA foreign_keys = ON")
     finally:
         conn.close()
     return report
 
 
-def rollback(db_file, migration_id, backup=True):
+def rollback(db_file, migration_id, backup=True, force_destructive=False):
     entry = next((m for m in MIGRATIONS if m[0] == migration_id), None)
     if entry is None:
         raise ValueError(f"Unknown migration: {migration_id}")
+    if migration_id in DESTRUCTIVE_DOWN and not force_destructive:
+        raise PermissionError(
+            f"Rollback of {migration_id} DELETES tables/data. It is not a recovery method - restore a "
+            "backup instead (BACKUP_RESTORE_GUIDE.md). To run it anyway pass force_destructive=True "
+            "(CLI: --force-destructive).")
     if backup:
         backup_database(db_file)
     conn = _open(db_file)
@@ -364,13 +414,33 @@ def _cli(argv):
         done = applied_ids(db_file)
         for mid, desc, _u, _d in MIGRATIONS:
             print(("[applied] " if mid in done else "[pending] ") + mid + " - " + desc)
+    elif cmd == "check":
+        from backend.db import tools
+        rep = tools.check(db_file)
+        print(json.dumps(rep, indent=1, default=str))
+        return 0 if rep["ok"] else 2
+    elif cmd == "duplicates":
+        import sqlite3 as _sq
+        from backend.db import tools
+        c = _sq.connect(db_file)
+        print(json.dumps(tools.duplicates(c), indent=1, default=str))
+    elif cmd == "verify-backup" and len(argv) > 1:
+        from backend.db import tools
+        rep = tools.verify_backup(argv[1])
+        print(json.dumps(rep, indent=1, default=str))
+        return 0 if rep["ok"] else 2
+    elif cmd == "restore-test" and len(argv) > 1:
+        from backend.db import tools
+        rep = tools.restore_test(argv[1])
+        print(json.dumps(rep, indent=1, default=str))
+        return 0 if rep["ok"] else 2
     elif cmd == "backup":
         print("Backup written to", backup_database(db_file))
     elif cmd == "migrate":
         for row in run_pending(db_file):
             print(*row)
     elif cmd == "rollback" and len(argv) > 1:
-        rollback(db_file, argv[1])
+        rollback(db_file, argv[1], force_destructive="--force-destructive" in argv)
         print("Rolled back", argv[1])
     else:
         print(__doc__)

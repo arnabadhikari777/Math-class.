@@ -100,8 +100,8 @@ def verify_otp():
     return render_template("auth/verify_otp.html", email=email)
 
 
-@app.route("/resend-otp")
-@rate_limit("resend_otp", 5, 3600, methods=("GET",))
+@app.route("/resend-otp", methods=["POST"])
+@rate_limit("resend_otp", 5, 3600)
 def resend_otp():
     email = session.get("pending_email")
     if not email:
@@ -238,6 +238,9 @@ def login():
         if student["is_blocked"]:
             flash("Your account has been blocked. Contact Sir.", "error")
             return redirect(url_for("login"))
+        if student["is_archived"]:
+            flash("This account is archived. Contact Sir to have it restored.", "error")
+            return redirect(url_for("login"))
         if student["is_verified"] == 0:
             session["pending_email"] = email
             ok, msg, _ = create_and_send_otp(email, purpose="registration")
@@ -247,13 +250,14 @@ def login():
             )
             return redirect(url_for("verify_otp"))
 
+        # Fresh session on every login (prevents session fixation): nothing from the
+        # anonymous / previous session - including any teacher flag - survives.
+        session.clear()
         session.permanent = True
         session["student_id"] = student["id"]
         session["student_name"] = student["name"]
         session["student_class"] = student["class_name"]
         session["sv"] = student["session_version"] or 0
-        session.pop("is_teacher", None)
-        session.pop("impersonating", None)
         ip_addr = request.headers.get("X-Forwarded-For", request.remote_addr)
         with get_db() as conn:
             conn.execute(
@@ -266,16 +270,27 @@ def login():
     return render_template("auth/login.html")
 
 
-@app.route("/logout")
+@app.route("/logout", methods=["GET", "POST"])
 def logout():
-    was_impersonating = session.get("impersonating")
+    """POST-only state change (CSRF-protected). A GET (old bookmark / link prefetch) changes nothing."""
+    if request.method != "POST":
+        return redirect(url_for("student_dashboard") if session.get("student_id") else url_for("index"))
+    if session.get("impersonating"):
+        return end_impersonation_response()
     session.clear()
-    if was_impersonating:
-        session["is_teacher"] = True
-        flash("Returned to teacher session.", "success")
-        return redirect(url_for("teacher_dashboard"))
     flash("Logged out successfully.", "success")
     return redirect(url_for("index"))
+
+
+def end_impersonation_response():
+    """Teacher leaves 'view as student': audit row closed, session rebuilt from scratch as teacher."""
+    from backend.services import impersonation_service
+    impersonation_service.end(session.get("impersonation_log_id"), "exit")
+    session.clear()
+    session.permanent = True
+    session["is_teacher"] = True
+    flash("Returned to teacher session.", "success")
+    return redirect(url_for("teacher_dashboard"))
 
 
 @app.route("/teacher/login", methods=["GET", "POST"])
@@ -298,7 +313,9 @@ def teacher_login():
     return render_template("auth/teacher_login.html")
 
 
-@app.route("/teacher/logout")
+@app.route("/teacher/logout", methods=["GET", "POST"])
 def teacher_logout():
+    if request.method != "POST":
+        return redirect(url_for("teacher_dashboard") if session.get("is_teacher") else url_for("index"))
     session.clear()
     return redirect(url_for("index"))

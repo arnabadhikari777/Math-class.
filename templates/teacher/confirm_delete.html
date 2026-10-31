@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Confirm permanent delete{% endblock %}
+{% block content %}
+<div class="card" style="max-width:560px;">
+  <h2>Permanently delete {{ kind }}: {{ name }}</h2>
+  <p class="helper-text">This cannot be undone. This is what will be removed:</p>
+  <ul>
+    {% for k, v in impact.items() %}<li><strong>{{ v }}</strong> {{ k }}</li>{% endfor %}
+  </ul>
+  {% if archive %}
+  <form method="POST" action="{{ archive }}" style="margin:12px 0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-outline" type="submit">Archive instead (keeps all history)</button>
+  </form>
+  {% endif %}
+  <form method="POST" action="{{ action }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Type the exact name to confirm</label>
+    <input type="text" name="confirm_name" required autocomplete="off">
+    <button class="btn btn-danger" type="submit">Delete permanently</button>
+    <a class="btn btn-outline" href="{{ back }}">Cancel</a>
+  </form>
+</div>
+{% endblock %}

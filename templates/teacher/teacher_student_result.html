@@ -28,7 +28,7 @@
       {% endif %}
       <span class="badge badge-info">{{ a.marks }} mark{{ 's' if a.marks != 1 else '' }}</span>
     </div>
-    {% set _img = qimg(a.question_id) %}{% if _img %}<img src="{{ _img }}" alt="Question image" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;margin:0 0 .8rem;background:#fff">{% endif %}
+    {% set _img = a.image_url %}{% if _img %}<img src="{{ _img }}" alt="Question image" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;margin:0 0 .8rem;background:#fff">{% endif %}
     {% for opt, letter in [('option_a','A'),('option_b','B'),('option_c','C'),('option_d','D')] %}
     <div class="option-label" style="cursor:default; font-family: 'Noto Sans Bengali', Inter, sans-serif;
       {% if letter == a.correct_option %}background:rgba(5,150,105,.15);font-weight:600;{% endif %}

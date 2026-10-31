@@ -16,8 +16,14 @@
   <p class="text-muted">Pass mark {{ pass_pct }}% · Submitted {{ result.submitted_at[:16].replace('T',' ') }}</p>
   <div class="flex gap-1 flex-wrap mt-2" style="justify-content:center">
     <a href="{{ url_for('test_leaderboard', test_id=test.id) }}" class="btn btn-primary">🏆 Leaderboard</a>
+    {% if attempts_left is none or attempts_left > 0 %}<a href="{{ url_for('take_test', test_id=test.id) }}" class="btn btn-outline">Try again{% if attempts_left is not none %} ({{ attempts_left }} left){% endif %}</a>{% endif %}
     <a href="{{ url_for('student_dashboard') }}" class="btn btn-outline">Back to Dashboard</a>
   </div>
+  {% if attempts|length > 1 %}
+  <p class="text-muted" style="margin-top:.8rem;font-size:.85rem">Attempts:
+    {% for at in attempts if at.status in ('submitted','auto_submitted') %}#{{ at.attempt_no }}: {{ at.score }}/{{ at.total_marks }}{% if at.is_counted %} (counted){% endif %}{% if not loop.last %} · {% endif %}{% endfor %}
+    · counted result: {{ test.result_policy }}</p>
+  {% endif %}
 </div>
 
 {% if answers %}
@@ -51,7 +57,7 @@
       Q{{ loop.index }}. {{ a.question_text }}
       {% if a.is_correct %}<span class="badge badge-success">Correct</span>{% else %}<span class="badge badge-danger">Incorrect</span>{% endif %}
     </div>
-    {% set _img = qimg(a.question_id) %}{% if _img %}<img src="{{ _img }}" alt="Question image" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;margin:0 0 .8rem;background:#fff">{% endif %}
+    {% set _img = a.image_url %}{% if _img %}<img src="{{ _img }}" alt="Question image" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;margin:0 0 .8rem;background:#fff">{% endif %}
     {% for opt, letter in [('option_a','A'),('option_b','B'),('option_c','C'),('option_d','D')] %}
     <div class="option-label" style="cursor:default;font-family:'Noto Sans Bengali',Inter,sans-serif
       {% if letter == a.correct_option %};background:color-mix(in srgb, var(--success) 18%, transparent);font-weight:700{% endif %}

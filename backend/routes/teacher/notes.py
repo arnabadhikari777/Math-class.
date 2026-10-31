@@ -11,6 +11,7 @@ from backend.config import UPLOAD_FOLDER
 from backend.core import app
 from backend.db.connection import get_db
 from backend.middleware.auth import teacher_login_required
+from backend.services import note_storage
 from backend.services.activity_service import log_activity
 from backend.services.notification_service import create_notification
 from backend.utils.validators import allowed_file
@@ -37,33 +38,36 @@ def upload_note():
         if not file or file.filename == "":
             flash("Please choose a PDF file to upload.", "error")
             return redirect(url_for("upload_note"))
-        if not allowed_file(file.filename):
-            flash("Only PDF files are allowed.", "error")
-            return redirect(url_for("upload_note"))
-        # Keep the original PDF-note limit while allowing larger image batches.
-        pdf_data = file.stream.read(15 * 1024 * 1024 + 1)
-        if len(pdf_data) > 15 * 1024 * 1024:
-            flash("PDF ফাইলের সাইজ সর্বোচ্চ 15 MB হতে পারবে।", "error")
-            return redirect(url_for("upload_note"))
-        file.stream.seek(0)
-        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-        original = secure_filename(file.filename) or "note.pdf"
-        if not original.lower().endswith(".pdf"):
-            original = original + ".pdf"
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        filename = f"{timestamp}_{original}"
-        save_path = os.path.join(UPLOAD_FOLDER, filename)
+        data = file.stream.read(note_storage.MAX_PDF_BYTES + 1)
         try:
-            file.save(save_path)
-        except Exception as e:
-            flash(f"Could not save file: {e}", "error")
+            original = note_storage.validate_pdf(file.filename, data)
+        except note_storage.PdfError as e:
+            flash(str(e), "error")
             return redirect(url_for("upload_note"))
-        with get_db() as conn:
-            conn.execute(
-                "INSERT INTO notes (title, subject, class_name, filename, uploaded_at) VALUES (?,?,?,?,?)",
-                (title, subject, class_name, filename, datetime.now().isoformat())
-            )
-            conn.commit()
+        try:
+            filename, digest = note_storage.save_pdf(data)
+        except OSError as e:
+            app.logger.exception("note upload could not save file")
+            flash("Could not save the file on the server.", "error")
+            return redirect(url_for("upload_note"))
+        try:
+            with get_db() as conn:
+                conn.execute(
+                    """INSERT INTO notes (title, subject, class_name, filename, uploaded_at,
+                                          original_filename, file_sha256, file_size)
+                       VALUES (?,?,?,?,?,?,?,?)""",
+                    (title, subject, class_name, filename, datetime.now().isoformat(), original, digest, len(data))
+                )
+                conn.commit()
+        except Exception:
+            # the database refused the row: do not leave an orphan PDF behind
+            try:
+                note_storage.remove_file(filename)
+            except OSError:
+                app.logger.exception("could not clean up orphan upload %s", filename)
+            app.logger.exception("note upload database failure")
+            flash("Could not save the note. Nothing was stored; please try again.", "error")
+            return redirect(url_for("upload_note"))
         log_activity("teacher", "upload_note", title)
         create_notification(
             title=f"New note: {title}",
@@ -84,17 +88,13 @@ def upload_note():
 def delete_note(note_id):
     with get_db() as conn:
         note = conn.execute("SELECT * FROM notes WHERE id=?", (note_id,)).fetchone()
-        if note:
-            path = os.path.join(UPLOAD_FOLDER, note["filename"])
-            if os.path.isfile(path):
-                try:
-                    os.remove(path)
-                except OSError:
-                    pass
-            conn.execute("DELETE FROM notes WHERE id=?", (note_id,))
-            conn.commit()
-            log_activity("teacher", "delete_note", note["title"])
-            flash("Note deleted.", "success")
-        else:
+        if not note:
             flash("Note not found.", "error")
+            return redirect(url_for("upload_note"))
+        conn.execute("DELETE FROM notes WHERE id=?", (note_id,))
+        conn.commit()                                   # row first ...
+        outcome = note_storage.delete_file_if_unreferenced(conn, note["filename"])   # ... then the file
+    log_activity("teacher", "delete_note", f"{note['title']} file={note['filename']} {outcome}")
+    flash("Note deleted." + (" (The PDF is still used by another note, so it was kept.)"
+                             if outcome.startswith("kept") else ""), "success")
     return redirect(url_for("upload_note"))

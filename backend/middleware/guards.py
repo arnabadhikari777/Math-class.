@@ -7,27 +7,20 @@ They are registered once from ``register_backend`` and key off Flask's
 1. Class access: a student can only open / submit / see the leaderboard of a
    test, or download a note, that is visible on their own dashboard
    (same rule the dashboard uses: class matches, or the item has no class).
-2. Test attempts: remember when a student opened a test. Optional server-side
-   time-limit check (off by default: ENFORCE_TEST_TIMER=1 to turn on).
+2. Test attempts / timer: moved to backend/services/exam_service.py (server-side, always on;
+   ENFORCE_TEST_TIMER=0 is an emergency kill-switch only).
 3. Private-data caching: every non-static response is ``Cache-Control: no-store``
    so browsers / proxies / the service worker never keep per-user pages.
 4. A duplicate result insert (double click / two tabs) is turned into a
    friendly "already submitted" instead of a 500.
 """
-import os
 import sqlite3
-from datetime import datetime
 
 from flask import abort, flash, jsonify, redirect, request, session, url_for
 
 from backend.db import get_db
 
-TEST_ENDPOINTS = {"take_test", "submit_test", "test_leaderboard"}
-TIMER_GRACE_SECONDS = 120
-
-
-def _enforce_timer():
-    return os.environ.get("ENFORCE_TEST_TIMER", "0").strip().lower() in ("1", "true", "yes")
+TEST_ENDPOINTS = {"take_test", "submit_test", "test_leaderboard", "save_test_progress"}
 
 
 def _visible(item_class, student_class):
@@ -67,42 +60,15 @@ def access_guard():
             return None  # the view itself returns its normal 404
         if not _visible(test["class_name"], student["class_name"]):
             abort(404)
-        if ep != "submit_test":
-            return None
-        try:
-            attempt = conn.execute(
-                "SELECT started_at FROM test_attempts WHERE test_id=? AND student_id=?",
-                (test["id"], sid)).fetchone()
-        except sqlite3.Error:
-            attempt = None
-    # A test switched off by the teacher cannot be started or submitted from scratch,
-    # but a student who already opened it may still hand in what they wrote.
-    if not test["is_active"] and attempt is None:
-        abort(404)
-    if attempt and _enforce_timer():
-        try:
-            elapsed = (datetime.now() - datetime.fromisoformat(attempt["started_at"])).total_seconds()
-        except ValueError:
-            elapsed = 0
-        if elapsed > (test["duration_minutes"] or 0) * 60 + TIMER_GRACE_SECONDS:
-            flash("Time limit exceeded - this submission was not accepted.", "error")
-            return redirect(url_for("student_dashboard"))
+        if test["is_archived"] and ep != "submit_test":
+            abort(404)
+        # Timer, attempt limits and "already submitted" are decided by services/exam_service.py
+        # from the database (server clock), not here.
     return None
 
 
 def after_guard(resp):
     ep = request.endpoint
-    # remember the first time a student opened a test
-    if ep == "take_test" and resp.status_code == 200 and session.get("student_id"):
-        try:
-            tid = (request.view_args or {}).get("test_id")
-            with get_db() as conn:
-                conn.execute(
-                    "INSERT OR IGNORE INTO test_attempts (test_id, student_id, started_at) VALUES (?,?,?)",
-                    (tid, session["student_id"], datetime.now().isoformat()))
-                conn.commit()
-        except Exception:
-            pass  # never break the page because of bookkeeping
     # no per-user page may be stored by browser/proxy/service worker
     path = request.path
     if ep != "static" and not path.startswith("/static/"):

@@ -31,14 +31,29 @@
             {% if item.test.is_active %}Deactivate{% else %}Activate{% endif %}
           </button>
         </form>
-        <form method="POST" action="{{ url_for('delete_test', test_id=item.test.id) }}"
-              onsubmit="return confirm('Permanently delete this test, all its questions, and all student submissions? This cannot be undone.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-sm btn-danger" type="submit">Delete permanently</button>
+        <a class="btn btn-sm btn-outline" href="{{ url_for('test_settings', test_id=item.test.id) }}">Rules</a>
+        <form method="POST" action="{{ url_for('archive_test', test_id=item.test.id) }}"
+              onsubmit="return confirm('Archive this test? Students will no longer see it; all results are kept.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline" type="submit">Archive</button>
         </form>
+        <a class="btn btn-sm btn-danger" href="{{ url_for('delete_test', test_id=item.test.id) }}">Delete permanently…</a>
       </div>
     </div>
   {% endfor %}
 {% else %}
   <div class="empty-state">No tests have been created yet. Create one to get started.</div>
+{% endif %}
+{% if archived_tests %}
+<div class="card">
+  <h3>Archived tests</h3>
+  {% for t in archived_tests %}
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0">
+    <span>{{ t.title }} <span class="helper-text">({{ t.class_name }})</span></span>
+    <a class="btn btn-sm btn-secondary" href="{{ url_for('test_results_view', test_id=t.id) }}">Results</a>
+    <form method="POST" action="{{ url_for('restore_test', test_id=t.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm" type="submit">Restore</button></form>
+    <a class="btn btn-sm btn-danger" href="{{ url_for('delete_test', test_id=t.id) }}">Delete permanently…</a>
+  </div>
+  {% endfor %}
+</div>
 {% endif %}
 {% endblock %}

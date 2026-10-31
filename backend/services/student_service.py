@@ -80,10 +80,9 @@ def result_detail(conn, sid, test_id):
     if r is None:
         return None
     answers = _rows(conn.execute(
-        """SELECT a.question_id, a.selected_option, a.is_correct, q.question_text,
-                  q.option_a, q.option_b, q.option_c, q.option_d, q.correct_option, q.marks
-           FROM answers a JOIN questions q ON q.id=a.question_id
-           WHERE a.result_id=? ORDER BY q.id""", (r["id"],)))
+        """SELECT a.question_id, a.selected_option, a.is_correct, a.question_text,
+                  a.option_a, a.option_b, a.option_c, a.option_d, a.correct_option, a.marks
+           FROM answers a WHERE a.result_id=? ORDER BY a.position, a.id""", (r["id"],)))
     pct = percentage(r["score"], r["total_marks"])
     return {"result_id": r["id"], "test_id": r["test_id"], "test_title": r["test_title"],
             "score": r["score"], "total_marks": r["total_marks"], "submitted_at": r["submitted_at"],

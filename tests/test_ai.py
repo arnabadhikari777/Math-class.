@@ -5,6 +5,8 @@ SAFETY: like test_backend.py, everything runs on a temporary COPY of the project
 database.db in the real project is never opened. The AI provider is MOCKED
 (requests.post is patched) - no real Gemini/Groq call is made by this suite.
 """
+import sys as _sys, os as _os  # TESTS_DIR_ON_PATH
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import importlib
 import json
 import os
@@ -71,6 +73,7 @@ class AITests(unittest.TestCase):
         shutil.copytree(os.path.join(ROOT, "tests"), os.path.join(cls.proj, "tests"),
                         ignore=shutil.ignore_patterns("__pycache__"))
         cls.db = os.path.join(cls.proj, "database.db")
+        __import__("legacy").ensure_legacy_db(cls.db)
         cls.original_snapshot = _snapshot(cls.db)
         cls._env_backup = dict(os.environ)
         os.environ.update({"FORCE_HTTPS": "0", "SECRET_KEY": "unit-test-secret", "TEACHER_USERNAME": "sir",
@@ -122,13 +125,28 @@ class AITests(unittest.TestCase):
         cls.t_done, qs = test("DoneTestAlice")
         cls.t_live, _ = test("LiveTest")
         cls.t_bob, qb = test("BobSecretTest")
-        rid = conn.execute("INSERT INTO results (test_id,student_id,score,total_marks,submitted_at) VALUES (?,?,5,10,?)",
-                           (cls.t_done, cls.sa, now)).lastrowid
-        conn.execute("INSERT INTO answers (result_id,question_id,selected_option,is_correct) VALUES (?,?,?,1)", (rid, qs[0], "A"))
-        conn.execute("INSERT INTO answers (result_id,question_id,selected_option,is_correct) VALUES (?,?,?,0)", (rid, qs[1], "C"))
-        rid = conn.execute("INSERT INTO results (test_id,student_id,score,total_marks,submitted_at) VALUES (?,?,0,10,?)",
-                           (cls.t_bob, cls.sb, now)).lastrowid
-        conn.execute("INSERT INTO answers (result_id,question_id,selected_option,is_correct) VALUES (?,?,?,0)", (rid, qb[0], "D"))
+        def finished(tid, sid, qids, picks, score):
+            """A submitted attempt with a frozen snapshot, exactly what the exam engine writes."""
+            from backend.services import exam_service
+            conn.commit()
+            vid = conn.execute("INSERT INTO exam_versions (test_id,version_no,content_hash,is_frozen,created_at) "
+                               "VALUES (?,1,'h',1,?)", (tid, now)).lastrowid
+            aid = conn.execute(
+                """INSERT INTO exam_attempts (test_id,student_id,version_id,attempt_no,status,started_at,deadline_at,
+                   duration_seconds,submitted_at,score,total_marks,is_counted) VALUES (?,?,?,1,'submitted',?,?,1800,?,?,10,1)""",
+                (tid, sid, vid, now, now, now, score)).lastrowid
+            rid = conn.execute("INSERT INTO results (test_id,student_id,score,total_marks,submitted_at,attempt_id) "
+                               "VALUES (?,?,?,10,?,?)", (tid, sid, score, now, aid)).lastrowid
+            for pos, (qid, pick) in enumerate(zip(qids, picks), 1):
+                q = conn.execute("SELECT * FROM questions WHERE id=?", (qid,)).fetchone()
+                ok = 1 if pick == "A" else 0
+                conn.execute(
+                    """INSERT INTO answers (result_id,attempt_id,question_id,position,question_text,option_a,option_b,
+                       option_c,option_d,correct_option,marks,selected_option,is_correct,marks_awarded)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,5,?,?,?)""",
+                    (rid, aid, qid, pos, q[2], "a", "b", "c", "d", "A", pick, ok, 5 if ok else 0))
+        finished(cls.t_done, cls.sa, qs, ["A", "C"], 5)
+        finished(cls.t_bob, cls.sb, qb[:1], ["D"], 0)
         conn.commit()
         conn.close()
 
@@ -153,7 +171,8 @@ class AITests(unittest.TestCase):
     def impersonating_client(self, sid):
         c = self.student_client(sid)
         with c.session_transaction() as s:
-            s.update(is_teacher=True, impersonating=True)
+            s.pop("is_teacher", None)      # a view-as-student session is a STUDENT session (read-only)
+            s.update(impersonating=True, impersonation_started=datetime.now().isoformat())
         return c
 
     def chat(self, c, body, router=None):
@@ -328,8 +347,11 @@ class AITests(unittest.TestCase):
     def test_41_expired_attempt_is_not_test_mode(self):
         old = (datetime.now() - timedelta(hours=5)).isoformat()
         with self.dbc() as conn:
-            conn.execute("INSERT OR REPLACE INTO test_attempts (test_id,student_id,started_at) VALUES (?,?,?)",
-                         (self.t_live, self.sb, old))
+            vid = conn.execute("INSERT INTO exam_versions (test_id,version_no,content_hash,is_frozen,created_at) "
+                               "VALUES (?,9,'x',1,?)", (self.t_live, old)).lastrowid
+            conn.execute("INSERT INTO exam_attempts (test_id,student_id,version_id,attempt_no,status,started_at,"
+                         "deadline_at,duration_seconds) VALUES (?,?,?,1,'in_progress',?,?,1800)",
+                         (self.t_live, self.sb, vid, old, old))
             conn.commit()
         _, router = self.chat(self.student_client(self.sb), {"message": "late"})
         self.assertNotIn("TEST MODE", router.system_text())
@@ -548,7 +570,7 @@ class AITests(unittest.TestCase):
         self.assertEqual(migrations.run_pending(self.db), [])           # second run does nothing
         shutil.copy(self.db, self.db + ".bak-test")
         try:
-            migrations.rollback(self.db, "006_ai_chat", backup=False)
+            migrations.rollback(self.db, "006_ai_chat", backup=False, force_destructive=True)
             with self.dbc() as conn:
                 t2 = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
                 self.assertFalse({"ai_conversations", "ai_messages"} & t2)
@@ -583,6 +605,8 @@ class AITests(unittest.TestCase):
     def test_99_original_records_untouched(self):
         now = _snapshot(self.db)
         for table, rows in self.original_snapshot.items():
+            if table not in now:      # test_attempts is intentionally replaced by exam_attempts (migration 009)
+                continue
             self.assertTrue(_same_old_data(rows, now[table]), f"data changed in {table}")
 
 

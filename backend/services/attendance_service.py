@@ -33,7 +33,7 @@ def roster(conn, day, class_name=""):
                     a.status, a.note
              FROM students s
              LEFT JOIN attendance a ON a.student_id=s.id AND a.date=?
-             WHERE s.is_verified=1 AND s.is_blocked=0"""
+             WHERE s.is_verified=1 AND s.is_blocked=0 AND s.is_archived=0"""
     params = [day]
     if class_name:
         sql += " AND s.class_name=?"
@@ -63,19 +63,18 @@ def mark(conn, day, records):
     ids = {c[0] for c in clean}
     marks = ",".join("?" * len(ids))
     found = {r[0] for r in conn.execute(
-        f"SELECT id FROM students WHERE id IN ({marks}) AND is_verified=1", list(ids))}
+        f"SELECT id FROM students WHERE id IN ({marks}) AND is_verified=1 AND is_archived=0", list(ids))}
     missing = sorted(ids - found)
     if missing:
         raise ValidationError(f"unknown or unverified student id(s): {missing[:10]}")
     now = datetime.now().isoformat()
+    # ONE atomic statement per row (no UPDATE-then-INSERT race); UNIQUE(student_id, date) is enforced by the DB.
     for sid, status, note in clean:
-        cur = conn.execute(
-            "UPDATE attendance SET status=?, note=?, marked_at=? WHERE student_id=? AND date=?",
-            (status, note, now, sid, day))
-        if cur.rowcount == 0:
-            conn.execute(
-                "INSERT INTO attendance (student_id, date, status, note, marked_at) VALUES (?,?,?,?,?)",
-                (sid, day, status, note, now))
+        conn.execute(
+            """INSERT INTO attendance (student_id, date, status, note, marked_at) VALUES (?,?,?,?,?)
+               ON CONFLICT(student_id, date) DO UPDATE SET status=excluded.status, note=excluded.note,
+                                                           marked_at=excluded.marked_at""",
+            (sid, day, status, note, now))
     return len(clean)
 
 

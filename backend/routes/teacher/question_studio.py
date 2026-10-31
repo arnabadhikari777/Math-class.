@@ -17,6 +17,7 @@ from functools import wraps
 from flask import (Blueprint, abort, flash, jsonify, redirect, render_template, request,
                    session, url_for)
 
+from backend.services import image_service
 from backend.services import image_store as store
 from backend.db import get_db
 
@@ -70,11 +71,9 @@ def _categories(conn):
 
 
 def _usage(conn, image_id, url):
-    """একটি ছবি কতগুলো Test-প্রশ্নে / (পুরনো) Bank-প্রশ্নে ব্যবহার হচ্ছে।"""
-    tests = conn.execute("SELECT COUNT(*) FROM questions WHERE bank_image_id=? OR image_url=?",
-                         (image_id, url)).fetchone()[0]
-    bank = conn.execute("SELECT COUNT(*) FROM bank_questions WHERE image_id=?", (image_id,)).fetchone()[0]
-    return tests, bank
+    """(test_count, bank_count) - delegates to the ONE shared checker (also covers exam snapshots)."""
+    u = image_service.usage(conn, image_id, url)
+    return u["total"] - u["bank_questions"], u["bank_questions"]
 
 
 def _image_dict(row):
@@ -123,26 +122,12 @@ def _save_uploads(files, cat):
     for f in files:
         data = f.read(store.max_bytes() + 1)
         try:
-            info = store.upload(f.filename, data, category=cat["name"])
-        except store.ImageStoreError as exc:
+            info = image_service.upload_and_register(f.filename, data, cat)
+        except image_service.ImageError as exc:
             errors.append(str(exc))
             continue
-        try:
-            with get_db() as conn:
-                new_id = conn.execute(
-                    """INSERT INTO bank_images (category_id, url, public_id, original_name, width, height,
-                       bytes, format, created_at) VALUES (?,?,?,?,?,?,?,?,?)""",
-                    (cat["id"], info["url"], info["public_id"], (f.filename or "")[:150], info["width"],
-                     info["height"], info["bytes"], info["format"], _now())).lastrowid
-                conn.commit()
-            uploaded.append({"id": new_id, "url": info["url"], "thumb": store.thumb(info["url"], 320),
-                             "name": (f.filename or "")[:150], "category_id": cat["id"], "category": cat["name"]})
-        except Exception:  # ডাটাবেসে না গেলে Cloudinary-তে অনাথ ছবি রাখা হয় না
-            try:
-                store.destroy(info["public_id"])
-            except store.ImageStoreError:
-                pass
-            errors.append("'%s': ডাটাবেসে সংরক্ষণ করা যায়নি।" % f.filename)
+        uploaded.append({"id": info["id"], "url": info["url"], "thumb": store.thumb(info["url"], 320),
+                         "name": (f.filename or "")[:150], "category_id": cat["id"], "category": cat["name"]})
     return uploaded, errors
 
 
@@ -235,27 +220,11 @@ def library_upload():
 def image_delete(image_id):
     with get_db() as conn:
         img = conn.execute("SELECT * FROM bank_images WHERE id=?", (image_id,)).fetchone()
-        if img is None:
-            abort(404)
-        tests, bank = _usage(conn, image_id, img["url"])
-    back = url_for("studio.library", category=img["category_id"])
-    if tests or bank:
-        flash("ছবিটি %d টি প্রশ্নে ব্যবহৃত হচ্ছে, তাই মোছা হয়নি। আগে সেই প্রশ্ন থেকে ছবি সরান।" % (tests + bank), "error")
-        return redirect(back)
-    try:
-        store.destroy(img["public_id"])
-    except store.ImageStoreError as exc:
-        flash(str(exc), "error")
-        return redirect(back)
-    with get_db() as conn:
-        tests, bank = _usage(conn, image_id, img["url"])  # Cloudinary-র উত্তরের ফাঁকে কেউ ব্যবহার করলো কি না
-        if tests or bank:
-            flash("ছবিটি এইমাত্র কোনো প্রশ্নে ব্যবহৃত হয়েছে; Library রেকর্ড রাখা হয়েছে।", "error")
-        else:
-            conn.execute("DELETE FROM bank_images WHERE id=?", (image_id,))
-            conn.commit()
-            flash("ছবি মুছে ফেলা হয়েছে।", "success")
-    return redirect(back)
+    if img is None:
+        abort(404)
+    state, message = image_service.safe_delete(image_id)
+    flash(message, "success" if state == "deleted" else "error")
+    return redirect(url_for("studio.library", category=img["category_id"]))
 
 
 # ================================================================ JSON API

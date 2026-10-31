@@ -21,10 +21,11 @@ def data_cleanup():
             "students": cnt("SELECT COUNT(*) AS c FROM students"),
             "tests": cnt("SELECT COUNT(*) AS c FROM tests"),
             "active_tests": cnt("SELECT COUNT(*) AS c FROM tests WHERE is_active=1"),
-            "inactive_tests": cnt("SELECT COUNT(*) AS c FROM tests WHERE is_active=0"),
+            "inactive_tests": cnt("SELECT COUNT(*) AS c FROM tests WHERE is_active=0 AND is_archived=0"),
             "questions": cnt("SELECT COUNT(*) AS c FROM questions"),
             "results": cnt("SELECT COUNT(*) AS c FROM results"),
             "answers": cnt("SELECT COUNT(*) AS c FROM answers"),
+            "attempts": cnt("SELECT COUNT(*) AS c FROM exam_attempts"),
             "notes": cnt("SELECT COUNT(*) AS c FROM notes"),
             "announcements": cnt("SELECT COUNT(*) AS c FROM announcements"),
             "contacts": cnt("SELECT COUNT(*) AS c FROM contact_requests"),
@@ -33,7 +34,7 @@ def data_cleanup():
             "activity": cnt("SELECT COUNT(*) AS c FROM activity_log"),
         }
         inactive = conn.execute(
-            "SELECT * FROM tests WHERE is_active=0 ORDER BY created_at DESC"
+            "SELECT * FROM tests WHERE is_active=0 AND is_archived=0 ORDER BY created_at DESC"
         ).fetchall()
         inactive_tests = []
         for t in inactive:
@@ -60,22 +61,16 @@ def data_cleanup():
 def cleanup_action():
     action = request.form.get("action", "")
     with get_db() as conn:
-        if action == "delete_inactive_tests":
-            tests = conn.execute("SELECT id, title FROM tests WHERE is_active=0").fetchall()
-            n = 0
-            for t in tests:
-                result_ids = [r["id"] for r in conn.execute(
-                    "SELECT id FROM results WHERE test_id=?", (t["id"],)
-                ).fetchall()]
-                for rid in result_ids:
-                    conn.execute("DELETE FROM answers WHERE result_id=?", (rid,))
-                conn.execute("DELETE FROM results WHERE test_id=?", (t["id"],))
-                conn.execute("DELETE FROM questions WHERE test_id=?", (t["id"],))
-                conn.execute("DELETE FROM tests WHERE id=?", (t["id"],))
-                n += 1
+        if action in ("delete_inactive_tests", "archive_inactive_tests"):
+            # Never a hard delete from a bulk button: inactive tests are ARCHIVED, so every result,
+            # answer and exam snapshot survives. Permanent delete is per test, with a typed confirmation.
+            now = datetime.now().isoformat()
+            n = conn.execute(
+                "UPDATE tests SET is_archived=1, archived_at=? WHERE is_active=0 AND is_archived=0", (now,)).rowcount
             conn.commit()
-            log_activity("teacher", "cleanup", f"deleted {n} inactive tests")
-            flash(f"Deleted {n} inactive test(s) permanently.", "success")
+            log_activity("teacher", "cleanup", f"archived {n} inactive tests")
+            flash(f"Archived {n} inactive test(s). Results are kept; restore or delete them one by one "
+                  f"from All Tests.", "success")
 
         elif action == "clear_otps":
             n = conn.execute("SELECT COUNT(*) AS c FROM otp_codes").fetchone()["c"]

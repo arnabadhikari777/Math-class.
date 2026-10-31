@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Question Bank + Image Library tests (Cloudinary is mocked; no network).
 Run: python -m unittest tests.test_question_bank -v   (works on a temp COPY of the project)"""
+import sys as _sys, os as _os  # TESTS_DIR_ON_PATH
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import importlib, io, os, shutil, sqlite3, sys, tempfile, unittest
 from datetime import datetime
 from unittest import mock
@@ -19,8 +21,9 @@ class QBankTests(unittest.TestCase):
         cls.proj = os.path.join(cls.tmp, "p")
         shutil.copytree(ROOT, cls.proj, ignore=shutil.ignore_patterns("backups", ".secret_key", "__pycache__", ".env", "tests"))
         cls.db = os.path.join(cls.proj, "database.db")
+        __import__("legacy").ensure_legacy_db(cls.db)
         os.environ.update({"FORCE_HTTPS": "0", "SECRET_KEY": "x", "TEACHER_USERNAME": "sir", "TEACHER_PASSWORD": "TeacherPass123",
-                           "CLOUDINARY_CLOUD_NAME": "demo", "CLOUDINARY_API_KEY": "k", "CLOUDINARY_API_SECRET": "s"})
+                           "CLOUDINARY_CLOUD_NAME": "demo", "CLOUDINARY_API_KEY": "123456789012345", "CLOUDINARY_API_SECRET": "s"})
         sys.path.insert(0, cls.proj)
         for n in [m for m in sys.modules if m == "app" or m == "backend" or m.startswith("backend.")]:
             del sys.modules[n]
@@ -149,15 +152,32 @@ class QBankTests(unittest.TestCase):
         # category with images cannot be deleted
         self.post(t, "/teacher/bank/categories/%d/delete" % cat)
         self.assertEqual(len(self.q("SELECT * FROM bank_categories")), 1)
-        # unused image deletes fine (and Cloudinary failure keeps the record)
+        # NEW: the student already took this test, so the image is also referenced by the exam snapshot
+        # (attempt_questions / exam_version_questions / answers) -> still blocked even with no live question
         c = sqlite3.connect(self.db); c.execute("DELETE FROM questions WHERE bank_image_id=?", (iid,)); c.commit(); c.close()
+        with mock.patch("backend.services.cloudinary_client.requests.post") as rp:
+            self.post(t, "/teacher/bank/images/%d/delete" % iid)
+            self.assertEqual(rp.call_count, 0)
+        self.assertEqual(len(self.q("SELECT * FROM bank_images")), 1)
+        self.assertGreater(len(self.q("SELECT * FROM attempt_questions WHERE image_url LIKE '%a.png'")), 0)
+        # once nothing references it any more (here: snapshots purged by hand) it can be deleted
+        c = sqlite3.connect(self.db)
+        for tbl in ("answers", "attempt_questions", "exam_version_questions"):
+            c.execute("DELETE FROM %s WHERE image_url LIKE '%%a.png' OR bank_image_id=?" % tbl, (iid,))
+        c.commit(); c.close()
         import requests
+        # Cloudinary down: the row is HIDDEN (pending_delete) and a retry record is queued - nothing is lost
         with mock.patch("backend.services.cloudinary_client.requests.post", side_effect=requests.ConnectionError()):
             self.post(t, "/teacher/bank/images/%d/delete" % iid)
         self.assertEqual(len(self.q("SELECT * FROM bank_images")), 1)
+        self.assertEqual(self.q("SELECT status FROM bank_images")[0][0], "pending_delete")
+        self.assertEqual(len(self.q("SELECT * FROM deletion_queue WHERE status='pending'")), 1)
+        # reconciliation retries it once Cloudinary is back
+        from backend.services import image_service
         with mock.patch("backend.services.cloudinary_client.requests.post") as rp:
             rp.return_value = mock.Mock(status_code=200, json=lambda: {"result": "ok"})
-            self.post(t, "/teacher/bank/images/%d/delete" % iid)
+            stats = image_service.reconcile()
+        self.assertEqual(stats["done"], 1)
         self.assertEqual(len(self.q("SELECT * FROM bank_images")), 0)
 
     def test_04_cloudinary_signature_and_missing_config(self):

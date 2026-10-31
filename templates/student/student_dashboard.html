@@ -100,6 +100,7 @@
           <a href="{{ url_for('test_result', test_id=t.id) }}" class="btn btn-sm btn-outline">Result</a>
           <a href="{{ url_for('test_leaderboard', test_id=t.id) }}" class="btn btn-sm btn-outline"><i class="fa-solid fa-trophy" aria-hidden="true"></i></a>
         {% else %}
+          {% for r in my_results if r.test_id == t.id %}<a href="{{ url_for('test_result', test_id=t.id) }}" class="btn btn-sm btn-outline">Result</a>{% endfor %}
           <a href="{{ url_for('take_test', test_id=t.id) }}" class="btn btn-sm btn-primary">Start <i class="fa-solid fa-play" aria-hidden="true"></i></a>
         {% endif %}
       </div>

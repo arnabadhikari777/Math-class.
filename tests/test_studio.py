@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Question Studio + image_store tests (Cloudinary mocked, no network).
 Run: python -m unittest tests.test_studio -v"""
+import sys as _sys, os as _os  # TESTS_DIR_ON_PATH
+_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
 import importlib, io, os, shutil, sqlite3, sys, tempfile, unittest
 from datetime import datetime
 from unittest import mock
@@ -55,6 +57,7 @@ class StudioTests(unittest.TestCase):
         cls.proj = os.path.join(cls.tmp, "p")
         shutil.copytree(ROOT, cls.proj, ignore=shutil.ignore_patterns("backups", ".secret_key", "__pycache__", ".env", "tests"))
         cls.db = os.path.join(cls.proj, "database.db")
+        __import__("legacy").ensure_legacy_db(cls.db)
         os.environ.update({"FORCE_HTTPS": "0", "SECRET_KEY": "x", "TEACHER_USERNAME": "sir", "TEACHER_PASSWORD": "TeacherPass123",
                            "CLOUDINARY_CLOUD_NAME": "demo", "CLOUDINARY_API_KEY": "123456789012345", "CLOUDINARY_API_SECRET": "s"})
         sys.path.insert(0, cls.proj)

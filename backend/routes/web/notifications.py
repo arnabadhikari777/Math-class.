@@ -7,6 +7,7 @@ from flask import jsonify, request, session
 
 from backend.config import VAPID_PUBLIC_KEY
 from backend.core import app
+from backend.services import push_validation
 from backend.db.connection import get_db
 from backend.middleware.auth import student_login_required
 
@@ -84,31 +85,35 @@ def api_push_public_key():
 @app.route("/api/push/subscribe", methods=["POST"])
 @student_login_required
 def api_push_subscribe():
-    """
-    Save (or refresh) a student's push subscription — called from the
-    browser right after they tap "Allow" on the notification prompt.
-    """
+    """Save (or refresh) the signed-in student's push subscription after they tap "Allow"."""
     sid = session["student_id"]
     payload = request.get_json(silent=True) or {}
     endpoint = payload.get("endpoint", "")
     keys = payload.get("keys", {}) or {}
-    p256dh = keys.get("p256dh", "")
-    auth = keys.get("auth", "")
-    if not endpoint or not p256dh or not auth:
-        return jsonify({"ok": False, "error": "Invalid subscription."}), 400
+    p256dh, auth = keys.get("p256dh", ""), keys.get("auth", "")
+    ok, err = push_validation.validate_endpoint(endpoint)
+    if ok:
+        ok, err = push_validation.validate_keys(p256dh, auth)
+    if not ok:
+        return jsonify({"ok": False, "error": err or "Invalid subscription."}), 400
+    now = datetime.now().isoformat()
     with get_db() as conn:
         student = conn.execute("SELECT class_name FROM students WHERE id=?", (sid,)).fetchone()
         class_name = student["class_name"] if student else ""
+        existing = conn.execute("SELECT student_id, p256dh, auth FROM push_subscriptions WHERE endpoint=?",
+                                (endpoint,)).fetchone()
+        if existing and existing["student_id"] != sid and (existing["p256dh"], existing["auth"]) != (p256dh, auth):
+            # Same endpoint but different keys, owned by someone else: refuse to overwrite it.
+            return jsonify({"ok": False, "error": "This device is registered to another account."}), 409
+        # Same device + same keys, another account signed in -> the device simply changed hands.
         conn.execute(
-            """INSERT INTO push_subscriptions (student_id, class_name, endpoint, p256dh, auth, created_at)
-               VALUES (?,?,?,?,?,?)
+            """INSERT INTO push_subscriptions (student_id, class_name, endpoint, p256dh, auth, created_at, host,
+                                               fail_count)
+               VALUES (?,?,?,?,?,?,?,0)
                ON CONFLICT(endpoint) DO UPDATE SET
-                 student_id=excluded.student_id,
-                 class_name=excluded.class_name,
-                 p256dh=excluded.p256dh,
-                 auth=excluded.auth""",
-            (sid, class_name, endpoint, p256dh, auth, datetime.now().isoformat())
-        )
+                 student_id=excluded.student_id, class_name=excluded.class_name,
+                 p256dh=excluded.p256dh, auth=excluded.auth, host=excluded.host, fail_count=0""",
+            (sid, class_name, endpoint, p256dh, auth, now, push_validation.endpoint_host(endpoint)))
         conn.commit()
     return jsonify({"ok": True})
 
@@ -116,11 +121,12 @@ def api_push_subscribe():
 @app.route("/api/push/unsubscribe", methods=["POST"])
 @student_login_required
 def api_push_unsubscribe():
-    """Remove a push subscription — called when a student turns notifications off."""
+    """Remove the signed-in student's OWN subscription (endpoint AND student id must match)."""
     payload = request.get_json(silent=True) or {}
     endpoint = payload.get("endpoint", "")
-    if endpoint:
+    if isinstance(endpoint, str) and 0 < len(endpoint) <= push_validation.MAX_ENDPOINT:
         with get_db() as conn:
-            conn.execute("DELETE FROM push_subscriptions WHERE endpoint=?", (endpoint,))
+            conn.execute("DELETE FROM push_subscriptions WHERE endpoint=? AND student_id=?",
+                         (endpoint, session["student_id"]))
             conn.commit()
-    return jsonify({"ok": True})
+    return jsonify({"ok": True})   # same answer whether or not it existed: reveals nothing about other users

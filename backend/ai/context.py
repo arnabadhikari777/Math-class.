@@ -4,7 +4,7 @@
 Nothing here reads a student id, result or answer sent by the browser.
 Only submitted results (rows in `results`) are used for correctness data.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 TIMER_GRACE_SECONDS = 120
 MAX_WRONG_ITEMS = 8
@@ -12,22 +12,22 @@ MAX_RESULTS = 6
 
 
 def active_test(conn, sid):
-    """The test this student has opened but not submitted, still inside its
-    time window (duration + grace) and still switched on. None if no such test.
-    Decided only from server tables (test_attempts, results, tests)."""
+    """The test this student has opened but not submitted, still inside its time window
+    (deadline + the grace stored on the attempt) and still switched on. None if no such test.
+    Decided only from server tables (exam_attempts, tests)."""
     rows = conn.execute(
-        """SELECT t.id, t.title, t.duration_minutes, a.started_at
-           FROM test_attempts a JOIN tests t ON t.id = a.test_id
-           WHERE a.student_id=? AND t.is_active=1
-             AND NOT EXISTS (SELECT 1 FROM results r WHERE r.test_id=t.id AND r.student_id=a.student_id)
+        """SELECT t.id, t.title, a.deadline_at, a.grace_seconds
+           FROM exam_attempts a JOIN tests t ON t.id = a.test_id
+           WHERE a.student_id=? AND a.status='in_progress' AND t.is_active=1
            ORDER BY a.started_at DESC""", (sid,)).fetchall()
     now = datetime.now()
     for row in rows:
         try:
-            elapsed = (now - datetime.fromisoformat(row["started_at"])).total_seconds()
+            end = datetime.fromisoformat(row["deadline_at"]) + timedelta(
+                seconds=(row["grace_seconds"] or 0) + TIMER_GRACE_SECONDS)
         except (TypeError, ValueError):
             continue
-        if elapsed <= (row["duration_minutes"] or 0) * 60 + TIMER_GRACE_SECONDS:
+        if now <= end:
             return {"id": row["id"], "title": row["title"]}
     return None
 
@@ -51,20 +51,24 @@ def learning_summary(conn, sid):
         pct = round(100 * r["score"] / r["total_marks"]) if r["total_marks"] else 0
         lines.append(f"- {_clip(r['title'], 60)} ({_clip(r['subject'], 30)}): "
                      f"{r['score']}/{r['total_marks']} ({pct}%)")
+    # Mistakes come from the FROZEN snapshot stored with each attempt (original question, correct answer,
+    # student answer, marks, date) - never from the live question bank - so editing or deleting a
+    # question later cannot change the learning history. All submitted attempts count, not only the best.
     wrong = conn.execute(
-        """SELECT q.question_text, a.selected_option, q.correct_option, t.title
+        """SELECT a.question_text, a.selected_option, a.correct_option, a.marks, a.marks_awarded,
+                  t.title, ea.submitted_at
            FROM answers a
-           JOIN results r ON r.id = a.result_id
-           JOIN questions q ON q.id = a.question_id
-           JOIN tests t ON t.id = r.test_id
-           WHERE r.student_id=? AND a.is_correct=0
-           ORDER BY r.submitted_at DESC, a.id DESC LIMIT ?""",
+           JOIN exam_attempts ea ON ea.id = a.attempt_id
+           JOIN tests t ON t.id = ea.test_id
+           WHERE ea.student_id=? AND a.is_correct=0 AND ea.status IN ('submitted','auto_submitted')
+           ORDER BY ea.submitted_at DESC, a.id DESC LIMIT ?""",
         (sid, MAX_WRONG_ITEMS)).fetchall()
     if wrong:
         lines.append("Recent mistakes (submitted tests only):")
         for w in wrong:
             lines.append(f"  * [{_clip(w['title'], 40)}] {_clip(w['question_text'], 160)} "
-                         f"| chose {w['selected_option'] or '-'}, correct {w['correct_option']}")
+                         f"| chose {w['selected_option'] or '-'}, correct {w['correct_option']} "
+                         f"| {w['marks_awarded']}/{w['marks']} marks | {str(w['submitted_at'] or '')[:10]}")
     return "\n".join(lines)
 
 

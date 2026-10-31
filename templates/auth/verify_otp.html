@@ -15,7 +15,7 @@
   </form>
 
   <p class="helper-text" style="margin-top:18px;">
-    Didn't receive the code? <span id="resendWrap"><a href="{{ url_for('resend_otp') }}" id="resendLink">Resend OTP</a></span>
+    Didn't receive the code? <span id="resendWrap"><form method="POST" action="{{ url_for('resend_otp') }}" style="display:inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" id="resendLink" style="background:none;border:0;padding:0;color:var(--primary);font:inherit;cursor:pointer;text-decoration:underline">Resend OTP</button></form></span>
     <span id="timerText" style="display:none;">(You can request a new code in <span id="countdown">60</span> seconds)</span>
   </p>
 </div>
