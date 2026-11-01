@@ -27,7 +27,7 @@
 </style>
 <div class="ip-back" id="ipBack" role="dialog" aria-modal="true" aria-label="ছবি বাছুন">
   <div class="ip-box">
-    <div class="ip-head"><h3>🖼️ ছবি বাছুন</h3><button type="button" class="btn btn-sm btn-outline" id="ipClose">✕ বন্ধ</button></div>
+    <div class="ip-head"><h3>🖼️ ছবি বাছুন</h3><button type="button" class="btn btn-sm btn-outline" id="ipClose"><i class="fa-solid fa-xmark" aria-hidden="true"></i> বন্ধ</button></div>
     <div class="ip-tabs">
       <button type="button" class="ip-tab active" data-tab="lib">Library থেকে বাছুন</button>
       <button type="button" class="ip-tab" data-tab="up">⬆️ নতুন ছবি আপলোড</button>
@@ -46,7 +46,7 @@
           <input type="text" id="ipNewCat" maxlength="60" placeholder="অথবা নতুন Category (যেমন: Calculus)">
         </div>
         <div class="ip-drop" id="ipDrop">
-          <div style="font-size:1.6rem">📁</div>
+          <div style="font-size:1.6rem"><i class="fa-solid fa-folder-open" aria-hidden="true"></i></div>
           <div>ছবি এখানে টেনে আনুন, অথবা ক্লিক করে বাছুন</div>
           <small style="color:var(--text-muted)">JPG, PNG, WEBP, GIF · প্রতিটি সর্বোচ্চ {{ max_mb }} MB · একবারে {{ max_files }} টি পর্যন্ত</small>
           <input type="file" id="ipFile" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>

@@ -3,7 +3,7 @@
 {% block content %}
 {% if pending %}
 <div class="card text-center" style="padding:1.8rem 1.2rem;max-width:560px;margin-inline:auto">
-  <div style="font-size:2.4rem">✅</div>
+  <div class="auth-badge" style="background:linear-gradient(135deg,#16a34a,#22c55e)"><i class="fa-solid fa-check" aria-hidden="true"></i></div>
   <h2>{{ test.title }}</h2>
   <p>Your examination has been submitted successfully. Results will be available after publication by your teacher.</p>
   <p class="text-muted">Submitted {{ result.submitted_at[:16].replace('T',' ') }}</p>
@@ -19,12 +19,12 @@
   <div style="font-size:2rem;font-weight:800;letter-spacing:-0.02em">{{ result.score|marks }} <span class="text-muted" style="font-weight:600">/ {{ result.total_marks|marks }}</span></div>
   <div style="margin:.6rem 0">
     <span class="badge {{ 'badge-success' if passed else 'badge-danger' }}" style="font-size:.95rem;padding:.35rem .95rem">
-      {{ 'Passed 🎉' if passed else 'Keep practicing 💪' }}
+      {% if passed %}<i class="fa-solid fa-circle-check" aria-hidden="true"></i> Passed{% else %}<i class="fa-solid fa-rotate-right" aria-hidden="true"></i> Keep practising{% endif %}
     </span>
   </div>
   <p class="text-muted">Pass mark {{ pass_pct }}% · Submitted {{ result.submitted_at[:16].replace('T',' ') }}</p>
   <div class="flex gap-1 flex-wrap mt-2" style="justify-content:center">
-    <a href="{{ url_for('test_leaderboard', test_id=test.id) }}" class="btn btn-primary">🏆 Leaderboard</a>
+    <a href="{{ url_for('test_leaderboard', test_id=test.id) }}" class="btn btn-primary"><i class="fa-solid fa-ranking-star" aria-hidden="true"></i> Leaderboard</a>
     <a href="{{ url_for('student_dashboard') }}" class="btn btn-outline">Back to Dashboard</a>
   </div>
 </div>
@@ -54,7 +54,7 @@
 </div>
 
 <div class="card">
-  <h3>🧠 What this means</h3>
+  <h3><i class="fa-solid fa-lightbulb" aria-hidden="true"></i> What this means</h3>
   <div class="tip {{ I.kind if I.kind != 'info' else '' }}"><span class="ic">{{ '🌟' if I.kind == 'good' else '⚠️' if I.kind == 'warn' else '💡' }}</span><div><b>{{ I.message }}</b>
     {% if I.vs_avg is not none %}<p>You are {{ '%.0f'|format(I.vs_avg|abs) }} points {{ 'above' if I.vs_avg >= 0 else 'below' }} the class average on this test.</p>{% endif %}
   </div></div>
@@ -84,7 +84,7 @@
     ">
       <span>
         <strong>{{ letter }}.</strong> {{ a[opt] }}
-        {% if letter == a.correct_option %} ✓{% endif %}
+        {% if letter == a.correct_option %} <i class="fa-solid fa-check" aria-hidden="true"></i>{% endif %}
         {% if letter == a.selected_option and not a.is_correct %} (your answer){% endif %}
         {% if letter == a.selected_option and a.is_correct %} (your answer){% endif %}
       </span>

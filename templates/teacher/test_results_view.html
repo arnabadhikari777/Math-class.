@@ -13,7 +13,7 @@
     <div class="stat"><div class="num">{{ stats.low }}%</div><div class="label">Lowest</div></div>
     <div class="stat"><div class="num">{{ stats.passed }}/{{ stats.count }}</div><div class="label">Passed (≥{{ stats.pass_pct }}%)</div></div>
   </div>
-  <button type="button" class="btn btn-sm btn-outline no-print" data-print="1">🖨 Print / Save as PDF</button>
+  <button type="button" class="btn btn-sm btn-outline no-print" data-print="1"><i class="fa-solid fa-print" aria-hidden="true"></i> Print / Save as PDF</button>
   {% endif %}
   {% if test.result_release == 'manual' %}
   <form method="POST" action="{{ url_for('release_results', test_id=test.id) }}" class="flex gap-2 items-center flex-wrap" style="margin:.5rem 0 1rem">

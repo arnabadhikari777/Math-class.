@@ -7,17 +7,18 @@
     <h1>Hello, {{ student.name }}</h1>
     <p>Class {{ class_display(student.class_name) }}{% if student.roll %} · Roll {{ student.roll }}{% endif %}</p>
   </div>
-  {% if total_attempted %}
-  <div class="kv" title="Average of your released results">
-    <small>Average score</small>
-    <b>{{ avg_pct|round|int }}%</b> <span class="text-muted">· {{ total_attempted }} test{{ '' if total_attempted == 1 else 's' }}</span>
-  </div>
-  {% endif %}
+  <a href="{{ url_for('notes_list') }}" class="btn btn-outline"><i class="fa-solid fa-book-open" aria-hidden="true"></i> Study notes</a>
+</div>
+
+<div class="stats">
+  <div class="stat"><span class="stat-ic"><i class="fa-solid fa-file-pen" aria-hidden="true"></i></span><div class="label">Open tests</div><div class="num">{{ tests|length - (attempted_test_ids|length) if tests|length >= attempted_test_ids|length else 0 }}</div></div>
+  <div class="stat"><span class="stat-ic green"><i class="fa-solid fa-circle-check" aria-hidden="true"></i></span><div class="label">Tests taken</div><div class="num">{{ attempted_test_ids|length }}</div></div>
+  <div class="stat"><span class="stat-ic amber"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></span><div class="label">Average score</div><div class="num">{% if total_attempted %}{{ avg_pct|round|int }}%{% else %}&mdash;{% endif %}</div></div>
 </div>
 
 {% if announcements %}
 <div class="card">
-  <div class="card-head"><h2>Notices</h2></div>
+  <div class="card-head"><h2><i class="fa-solid fa-bullhorn" aria-hidden="true" style="color:var(--warning);margin-right:.35rem"></i>Notices</h2></div>
   {% for a in announcements %}
   <div class="announce">
     <strong>{{ a.title }}</strong>
@@ -29,7 +30,7 @@
 
 <div class="card" id="tests">
   <div class="card-head">
-    <h2>Available tests</h2>
+    <h2><i class="fa-solid fa-file-pen" aria-hidden="true" style="color:var(--primary);margin-right:.35rem"></i>Available tests</h2>
     <span class="badge badge-info">{{ tests|length }}</span>
   </div>
   {% if tests %}
@@ -46,7 +47,7 @@
         <a href="{{ url_for('test_leaderboard', test_id=t.id) }}" class="btn btn-sm btn-outline" title="Leaderboard" aria-label="Leaderboard"><i class="fa-solid fa-ranking-star" aria-hidden="true"></i></a>
         {% else %}
         {% for r in my_results if r.test_id == t.id %}<a href="{{ url_for('test_result', test_id=t.id) }}" class="btn btn-sm btn-outline">Result</a>{% endfor %}
-        <a href="{{ url_for('take_test', test_id=t.id) }}" class="btn btn-sm btn-primary">Start</a>
+        <a href="{{ url_for('take_test', test_id=t.id) }}" class="btn btn-sm btn-primary"><i class="fa-solid fa-play" aria-hidden="true"></i> Start</a>
         {% endif %}
       </div>
     </div>
@@ -60,7 +61,7 @@
 <div class="grid-2">
   <div class="card">
     <div class="card-head">
-      <h2>Study notes</h2>
+      <h2><i class="fa-solid fa-book-open" aria-hidden="true" style="color:var(--info);margin-right:.35rem"></i>Study notes</h2>
       <a href="{{ url_for('notes_list') }}" class="btn btn-sm btn-outline">All notes</a>
     </div>
     {% if recent_notes %}
@@ -81,7 +82,7 @@
   </div>
 
   <div class="card">
-    <div class="card-head"><h2>Recent results</h2></div>
+    <div class="card-head"><h2><i class="fa-solid fa-square-poll-vertical" aria-hidden="true" style="color:var(--success);margin-right:.35rem"></i>Recent results</h2></div>
     {% if my_results %}
     <div class="row-list">
       {% for r in my_results[:5] %}

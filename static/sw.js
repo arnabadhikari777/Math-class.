@@ -1,4 +1,4 @@
-const CACHE_NAME = 'math-class-v9';
+const CACHE_NAME = 'math-class-v10';
 
 // Only truly static, non-login-dependent assets are safe to precache.
 // '/' and '/download' were removed on purpose: those pages render

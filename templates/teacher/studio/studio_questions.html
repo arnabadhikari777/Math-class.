@@ -16,7 +16,7 @@
   <h2>{{ test.title }}</h2>
   <p class="helper-text">Class: {{ test.class_name }} | Duration: {{ test.duration_minutes }} minutes | মোট প্রশ্ন: {{ questions|length }}</p>
   <div class="flex gap-1 flex-wrap mt-1">
-    <a class="btn btn-outline" href="{{ url_for('manage_tests') }}">← All Tests</a>
+    <a class="btn btn-outline" href="{{ url_for('manage_tests') }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> All Tests</a>
   </div>
 </div>
 
@@ -108,7 +108,7 @@
       prev.innerHTML = '';
       if (im) {
         var img = document.createElement('img'); img.src = im.thumb || im.url; img.alt = '';
-        var x = document.createElement('button'); x.type = 'button'; x.className = 'btn btn-sm btn-outline'; x.textContent = '✕ ছবি সরান';
+        var x = document.createElement('button'); x.type = 'button'; x.className = 'btn btn-sm btn-outline'; x.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i> ছবি সরান';
         x.addEventListener('click', function () { showImage(null); });
         prev.appendChild(img); prev.appendChild(document.createTextNode(' ')); prev.appendChild(x);
         pickBtn.textContent = '🖼️ ছবি বদলান';
