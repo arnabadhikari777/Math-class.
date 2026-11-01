@@ -23,14 +23,12 @@
     {% if editable %}
       <a class="btn btn-outline" href="{{ url_for('add_questions', test_id=test.id) }}">Add / edit questions</a>
       <a class="btn btn-outline" href="{{ url_for('test_settings', test_id=test.id) }}">Change rules</a>
-      <form method="POST" action="{{ url_for('publish_test', test_id=test.id) }}"
-            onsubmit="return confirm('Publish this test? Students of class {{ test.class_name }} will be notified.');">
+      <form method="POST" action="{{ url_for('publish_test', test_id=test.id) }}" data-confirm="Publish this test? Students of class {{ test.class_name }} will be notified.">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-primary" type="submit" {% if issues %}disabled{% endif %}>Publish Test</button>
       </form>
     {% else %}
-      <form method="POST" action="{{ url_for('unpublish_test', test_id=test.id) }}"
-            onsubmit="return confirm('Unpublish? Students will no longer see this test. Nobody is notified.');">
+      <form method="POST" action="{{ url_for('unpublish_test', test_id=test.id) }}" data-confirm="Unpublish? Students will no longer see this test. Nobody is notified.">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-outline" type="submit">Unpublish to edit</button>
       </form>
@@ -40,7 +38,7 @@
 </div>
 
 {% for q in questions %}
-<div class="card">
+<div class="card math-render">
   <div style="font-weight:700">Q{{ loop.index }}. {{ q.question_text }}
     <span class="badge badge-info">{{ q.marks }} mark{{ 's' if q.marks != 1 else '' }}</span></div>
   {% if q.image_url %}<img src="{{ q.image_url }}" alt="Question image" loading="lazy" style="max-width:100%;height:auto;margin:.5rem 0;background:#fff">{% endif %}

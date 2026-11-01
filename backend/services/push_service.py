@@ -2,14 +2,16 @@
 """Web Push (VAPID) delivery to students who allowed notifications."""
 
 import json
+import logging
 
-from backend.config import VAPID_CLAIMS_EMAIL, VAPID_PRIVATE_KEY
+from backend.config import PUSH_ENABLED, VAPID_CLAIMS_EMAIL, VAPID_PRIVATE_KEY
 from datetime import datetime, timedelta
 
 from backend.db.connection import get_db
 from backend.services import push_validation
 
 MAX_FAILURES = 5
+log = logging.getLogger(__name__)
 
 
 # Web Push (real phone/browser notifications for students who allow it)
@@ -28,8 +30,11 @@ def send_push_to_class(title, message, link="", class_name=""):
     subscription is deleted so the list stays clean, but never blocks or
     breaks the calling request.
     """
+    if not PUSH_ENABLED:
+        log.info("push skipped: VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_CLAIMS_EMAIL are not all set in .env")
+        return
     if not WEBPUSH_OK:
-        print("[push] pywebpush not installed — run: pip install pywebpush")
+        log.warning("push skipped: pywebpush is not installed (pip install pywebpush)")
         return
     try:
         with get_db() as conn:
@@ -77,9 +82,9 @@ def send_push_to_class(title, message, link="", class_name=""):
                     dead_endpoints.append(row["endpoint"])
                 else:
                     failed_endpoints.append(row["endpoint"])
-                    print(f"[push] failed for one subscriber: {e}")
+                    log.warning("push: failed for one subscriber: %s", e)
             except Exception as e:
-                print(f"[push] unexpected error for one subscriber: {e}")
+                log.warning("push: unexpected error for one subscriber: %s", e)
 
         if ok_endpoints or failed_endpoints:
             with get_db() as conn:
@@ -98,4 +103,4 @@ def send_push_to_class(title, message, link="", class_name=""):
                 )
                 conn.commit()
     except Exception as e:
-        print(f"[push] send_push_to_class error: {e}")
+        log.error("push: send_push_to_class error: %s", e)

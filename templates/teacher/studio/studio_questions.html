@@ -11,11 +11,11 @@
 </style>
 {% endblock %}
 {% block content %}
+{% include "partials/_studio_nav.html" %}
 <div class="card">
   <h2>{{ test.title }}</h2>
   <p class="helper-text">Class: {{ test.class_name }} | Duration: {{ test.duration_minutes }} minutes | মোট প্রশ্ন: {{ questions|length }}</p>
   <div class="flex gap-1 flex-wrap mt-1">
-    <a class="btn btn-outline" href="{{ url_for('studio.library') }}">🖼️ Image Library</a>
     <a class="btn btn-outline" href="{{ url_for('manage_tests') }}">← All Tests</a>
   </div>
 </div>
@@ -49,12 +49,12 @@
       <div class="flex gap-1 flex-wrap" style="margin-top:8px">
         <button type="button" class="btn btn-sm btn-outline set-img" data-q="{{ q.id }}">🖼️ {{ 'ছবি বদলান' if q.image_url else 'ছবি যোগ করুন' }}</button>
         {% if q.image_url %}
-        <form method="POST" action="{{ url_for('studio.question_set_image', qid=q.id) }}" onsubmit="return confirm('প্রশ্ন থেকে ছবি সরাবেন? (Library-তে ছবি থাকবে)');">
+        <form method="POST" action="{{ url_for('studio.question_set_image', qid=q.id) }}" data-confirm="প্রশ্ন থেকে ছবি সরাবেন? (Library-তে ছবি থাকবে)">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="image_id" value="">
           <button class="btn btn-sm btn-outline" type="submit">ছবি সরান</button>
         </form>
         {% endif %}
-        <form method="POST" action="{{ url_for('delete_question', question_id=q.id, test_id=test.id) }}" onsubmit="return confirm('এই প্রশ্ন মুছবেন?');">
+        <form method="POST" action="{{ url_for('delete_question', question_id=q.id, test_id=test.id) }}" data-confirm="এই প্রশ্ন মুছবেন?">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="btn btn-sm btn-danger" type="submit">Delete</button>
         </form>
@@ -72,7 +72,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   var SAVE_URL = "{{ url_for('studio.test_questions_save', test_id=test.id) }}";
   var SET_URL = "{{ url_for('studio.question_set_image', qid=0) }}";

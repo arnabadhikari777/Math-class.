@@ -6,7 +6,6 @@ from flask import render_template
 from backend.core import app
 from backend.db.connection import get_db
 from backend.middleware.auth import teacher_login_required
-from backend.services.insights_service import build_teacher_insights
 
 
 @app.route("/teacher/dashboard")
@@ -25,9 +24,19 @@ def teacher_dashboard():
                ORDER BY lh.login_time DESC LIMIT 10"""
         ).fetchall()
         announcements = conn.execute("SELECT * FROM announcements ORDER BY created_at DESC LIMIT 5").fetchall()
-        insights = build_teacher_insights(conn)
+        recent_tests = conn.execute(
+            """SELECT t.id, t.title, t.subject, t.class_name, t.status, t.created_at,
+                      (SELECT COUNT(*) FROM questions q WHERE q.test_id = t.id) AS q_count,
+                      (SELECT COUNT(*) FROM results r WHERE r.test_id = t.id) AS r_count
+               FROM tests t WHERE t.is_archived = 0 ORDER BY t.created_at DESC LIMIT 5"""
+        ).fetchall()
+        recent_results = conn.execute(
+            """SELECT r.id, r.test_id, r.score, r.total_marks, r.submitted_at, s.name AS student_name, t.title AS test_title
+               FROM results r JOIN students s ON s.id = r.student_id JOIN tests t ON t.id = r.test_id
+               ORDER BY r.submitted_at DESC LIMIT 6"""
+        ).fetchall()
     return render_template(
-        "teacher/teacher_dashboard.html", insights=insights,
+        "teacher/teacher_dashboard.html", recent_tests=recent_tests, recent_results=recent_results,
         total_students=total_students, pending=pending,
         total_notes=total_notes, total_tests=total_tests,
         total_results=total_results, new_contacts=new_contacts,

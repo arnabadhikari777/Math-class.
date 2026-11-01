@@ -99,7 +99,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   'use strict';
   // The SERVER owns the clock and the answers. This page only shows them and sends changes.

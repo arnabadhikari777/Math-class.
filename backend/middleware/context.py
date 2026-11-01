@@ -3,9 +3,9 @@
 
 from flask import session
 
+from backend.config import PUSH_ENABLED
 from backend.core import app
 from backend.db.connection import get_db
-from backend.utils.jee import jee_sessions_state
 
 
 @app.context_processor
@@ -19,15 +19,6 @@ def inject_class_options():
         "CANONICAL_CLASSES": CANONICAL_CLASSES,
         "CLASS_DISPLAY_LABELS": DISPLAY_LABELS,
     }
-
-
-@app.context_processor
-def inject_jee():
-    """JEE Main session countdown data for every page (header chips + dashboard cards)."""
-    try:
-        return {"jee_sessions": jee_sessions_state()}
-    except Exception:
-        return {"jee_sessions": []}
 
 
 @app.context_processor
@@ -67,3 +58,9 @@ def format_marks(value):
     except (TypeError, ValueError):
         return "0"
     return str(int(v)) if v == int(v) else ("%.4f" % v).rstrip("0").rstrip(".")
+
+
+@app.context_processor
+def inject_push_flag():
+    """Templates hide the "Enable alerts" button when no VAPID keys are configured."""
+    return {"push_enabled": PUSH_ENABLED}

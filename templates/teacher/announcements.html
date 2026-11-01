@@ -45,7 +45,7 @@
           <form method="POST" action="{{ url_for('toggle_announcement', aid=a.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-sm btn-outline">{{ 'Hide' if a.is_active else 'Show' }}</button>
           </form>
-          <form method="POST" action="{{ url_for('delete_announcement', aid=a.id) }}" onsubmit="return confirm('Delete this notice?')"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <form method="POST" action="{{ url_for('delete_announcement', aid=a.id) }}" data-confirm="Delete this notice?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-sm btn-danger">Delete</button>
           </form>
         </td>

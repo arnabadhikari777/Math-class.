@@ -17,7 +17,7 @@
     </div>
   </div>
 </div>
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   var back = document.getElementById('cfBack'), pending = null;
   function close() { back.classList.remove('on'); pending = null; }

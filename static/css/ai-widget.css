@@ -830,3 +830,150 @@ body:has(.aiw-panel.open) .aiw-fab::after {
         transition: none !important;
     }
 }
+
+
+/* =====================================================================
+   v2 - white theme, floating panel (no full-screen takeover)
+   The page behind stays visible and scrollable; only the message list
+   scrolls inside the panel; the input row stays at the bottom.
+   ===================================================================== */
+:root {
+    --aiw-accent: #2563eb;
+    --aiw-line: #e5e7eb;
+    /* the old multi-colour palette collapses to one solid blue */
+    --aiw-g1: #2563eb;
+    --aiw-g2: #2563eb;
+    --aiw-g3: #2563eb;
+    --aiw-g4: #1d4ed8;
+    --aiw-flow: #2563eb;
+    --aiw-solid: #2563eb;
+}
+.aiw-form button,
+.aiw-user,
+.aiw-chip.on {
+    animation: none !important;
+    box-shadow: none;
+}
+.aiw-head {
+    flex-wrap: nowrap;
+}
+.aiw-head b {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+.aiw-head button {
+    flex: none;
+    padding: 0.3rem 0.5rem;
+}
+body.aiw-open {
+    padding-bottom: var(--aiw-pad, 0);
+}
+.aiw-fab {
+    background: var(--aiw-accent);
+    animation: none;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.2);
+    right: calc(1rem + env(safe-area-inset-right, 0px));
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+.aiw-fab::after {
+    display: none;
+}
+.aiw-fab:hover {
+    transform: scale(1.05);
+    filter: none;
+}
+.aiw-panel {
+    right: calc(1rem + env(safe-area-inset-right, 0px));
+    bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+    width: min(380px, calc(100vw - 2rem));
+    height: min(560px, calc(100dvh - 8rem));
+    max-height: min(560px, calc(100dvh - 8rem));
+    background: #fff;
+    border: 1px solid var(--aiw-line);
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+    overscroll-behavior: contain;
+}
+.aiw-panel.open {
+    animation: aiw-fade 0.18s ease both;
+}
+.aiw-head {
+    background: #fff;
+    color: #0f172a;
+    border-bottom: 1px solid var(--aiw-line);
+    animation: none;
+    cursor: default;
+}
+.aiw-head::after {
+    display: none;
+}
+.aiw-head b {
+    color: #0f172a;
+    text-shadow: none;
+    font-weight: 600;
+}
+.aiw-head b::before {
+    background: #16a34a;
+    animation: none;
+}
+.aiw-head button {
+    background: #f1f5f9;
+    color: #334155;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    min-width: 34px;
+    min-height: 34px;
+}
+.aiw-head button:hover {
+    background: #e2e8f0;
+    transform: none;
+}
+.aiw-log {
+    background: #fff;
+    overscroll-behavior: contain;
+    scrollbar-color: #cbd5e1 transparent;
+}
+/* minimized: only the title bar stays, docked at the bottom corner */
+.aiw-panel.min {
+    height: auto;
+    max-height: none;
+}
+.aiw-panel.min > *:not(.aiw-head) {
+    display: none !important;
+}
+.aiw-panel.min .aiw-head b {
+    cursor: pointer;
+}
+
+/* phones: a bottom sheet, not a full screen. The top of the page stays visible. */
+@media (max-width: 520px) {
+    .aiw-panel {
+        top: auto;
+        left: calc(0.5rem + env(safe-area-inset-left, 0px));
+        right: calc(0.5rem + env(safe-area-inset-right, 0px));
+        bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+        width: auto;
+        height: min(68dvh, 520px);
+        max-height: min(68dvh, 520px);
+        border-radius: 16px;
+        border: 1px solid var(--aiw-line);
+    }
+    .aiw-panel.min {
+        height: auto;
+        max-height: none;
+    }
+    .aiw-panel.open {
+        animation: aiw-fade 0.18s ease both;
+    }
+    .aiw-form textarea,
+    .aiw-form input {
+        font-size: 16px; /* stops iOS zooming the page when the input is focused */
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .aiw-panel.open {
+        animation: none;
+    }
+}

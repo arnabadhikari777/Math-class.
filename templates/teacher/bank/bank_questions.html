@@ -1,14 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Question Bank{% endblock %}
 {% block content %}
+{% include "partials/_studio_nav.html" %}
 <div class="card">
-  <h2>📚 Question Bank</h2>
+  <h2>Saved questions</h2>
   <p class="helper-text">মোট প্রশ্ন: {{ total }}</p>
   <div class="flex gap-1 flex-wrap mt-1">
     <a class="btn btn-primary" href="{{ url_for('qbank.question_new') }}">+ নতুন প্রশ্ন</a>
-    <a class="btn btn-outline" href="{{ url_for('qbank.images') }}">Image Library</a>
-    <a class="btn btn-outline" href="{{ url_for('manage_tests') }}">Manage Tests</a>
-    <a class="btn btn-outline" href="{{ url_for('teacher_dashboard') }}">Dashboard</a>
   </div>
 </div>
 
@@ -36,7 +34,7 @@
     </div>
     <div class="flex gap-1 flex-wrap mt-1">
       <a class="btn btn-sm btn-outline" href="{{ url_for('qbank.question_edit', qid=r.id) }}">Edit</a>
-      <form method="POST" action="{{ url_for('qbank.question_delete', qid=r.id) }}" onsubmit="return confirm('প্রশ্নটি Question Bank থেকে মুছবেন? (Test-এ থাকা কপি অক্ষত থাকবে)');">
+      <form method="POST" action="{{ url_for('qbank.question_delete', qid=r.id) }}" data-confirm="প্রশ্নটি Question Bank থেকে মুছবেন? (Test-এ থাকা কপি অক্ষত থাকবে)">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-sm btn-danger" type="submit">Delete</button>
       </form>

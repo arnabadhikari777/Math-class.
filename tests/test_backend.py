@@ -497,7 +497,7 @@ class BackendTests(unittest.TestCase):
         r = self.app.test_client().get("/sw.js")
         self.assertEqual(r.headers["Cache-Control"], "no-cache")
         js = r.get_data(as_text=True)
-        self.assertIn("math-class-v8", js)
+        self.assertIn("math-class-v9", js)
         self.assertIn("startsWith('/static/')", js)
         self.assertNotIn("caches.match(event.request))\n  );\n});", js.split("addEventListener('fetch'")[1][-60:])
         fetch_part = js.split("addEventListener('fetch'")[1]

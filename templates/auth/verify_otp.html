@@ -20,7 +20,7 @@
   </p>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
   // Temporarily disable the resend link to prevent spamming
   var link = document.getElementById('resendLink');
   var timerText = document.getElementById('timerText');

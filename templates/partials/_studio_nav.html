@@ -1,0 +1,13 @@
+{# Shared tabs for everything about questions and images: one place instead of three separate screens. #}
+{% set _ep = request.endpoint or '' %}
+<div class="page-head">
+  <div>
+    <h1>Question Studio</h1>
+    <p>Create questions, reuse saved ones, and manage images - all in one place.</p>
+  </div>
+</div>
+<nav class="subnav" aria-label="Question Studio">
+  <a href="{{ url_for('qbank.questions') }}" class="{{ 'active' if _ep.startswith('qbank.question') or _ep.startswith('qbank.import') }}"><i class="fa-solid fa-layer-group" aria-hidden="true"></i> Saved questions</a>
+  <a href="{{ url_for('manage_tests') }}" class="{{ 'active' if _ep.startswith('studio.test_questions') }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Test questions</a>
+  <a href="{{ url_for('studio.library') }}" class="{{ 'active' if _ep.startswith('studio.library') or _ep.startswith('studio.category') or _ep.startswith('studio.image') }}"><i class="fa-solid fa-images" aria-hidden="true"></i> Image Library</a>
+</nav>

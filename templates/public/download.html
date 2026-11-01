@@ -61,7 +61,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ csp_nonce() }}">
   // Progressive enhancement: show a native "Install" button when the browser supports it.
   let deferredInstallPrompt = null;
   window.addEventListener('beforeinstallprompt', (e) => {

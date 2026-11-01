@@ -4,32 +4,49 @@
 import hmac
 import secrets
 
-from flask import flash, jsonify, redirect, request, session, url_for
+from flask import flash, g, jsonify, redirect, request, session, url_for
 
 from backend.config import DEBUG_MODE, FORCE_HTTPS
 from backend.core import app
 from backend.utils.helpers import safe_back
 
 
-# Content-Security-Policy. The templates still use inline <script>/<style> and inline handlers
-# (onclick, onsubmit), so script/style keep 'unsafe-inline' for now - turning that off would break the UI.
-# Everything else is locked down: no plugins, no foreign <base>/forms/framing, and only the
-# hosts the site really uses (Cloudinary images, cdnjs Font Awesome, Google Fonts) may load.
-# Tighten later by moving inline scripts to /static and adding nonces (see SECURITY_REPORT.md).
-CSP = "; ".join([
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com",
-    "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
-    "font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com",
-    "img-src 'self' data: blob: https://res.cloudinary.com",
-    "connect-src 'self'",
-    "manifest-src 'self'",
-    "worker-src 'self'",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'self'",
-])
+# Content-Security-Policy.
+# * Scripts: only our own files, the cdnjs host, and inline <script> blocks that carry this request's
+#   random nonce (templates write nonce="{{ csp_nonce() }}"). 'unsafe-inline' is gone for scripts, and
+#   script-src-attr 'none' forbids inline event handlers (onclick=...): those became data-* attributes
+#   handled by static/js/app.js. Injected markup therefore cannot run script.
+# * Styles still allow inline style="" attributes (the templates use them for small layout tweaks);
+#   that is a much smaller risk than inline scripts. Move them to CSS classes to remove it later.
+# * Everything else is locked down: no plugins, no foreign <base>/forms/framing, only the hosts the
+#   site really uses (Cloudinary images, cdnjs Font Awesome, Google Fonts).
+def build_csp(nonce):
+    return "; ".join([
+        "default-src 'self'",
+        "script-src 'self' 'nonce-%s' https://cdnjs.cloudflare.com" % nonce,
+        "script-src-attr 'none'",
+        "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
+        "font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com",
+        "img-src 'self' data: blob: https://res.cloudinary.com",
+        "connect-src 'self'",
+        "manifest-src 'self'",
+        "worker-src 'self'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'self'",
+    ])
+
+
+def csp_nonce():
+    """One random nonce per request, shared by the templates and the CSP header."""
+    n = getattr(g, "csp_nonce", None)
+    if not n:
+        n = g.csp_nonce = secrets.token_urlsafe(18)
+    return n
+
+
+app.jinja_env.globals["csp_nonce"] = csp_nonce
 
 
 def get_csrf_token():
@@ -79,5 +96,5 @@ def add_security_headers(resp):
     if FORCE_HTTPS and request.is_secure:
         resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
     resp.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
-    resp.headers.setdefault("Content-Security-Policy", CSP)
+    resp.headers.setdefault("Content-Security-Policy", build_csp(csp_nonce()))
     return resp

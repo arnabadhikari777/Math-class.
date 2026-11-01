@@ -56,7 +56,7 @@
     </div>
   </div>
 </div>
-<script>
+<script nonce="{{ csp_nonce() }}">
 window.ImagePicker = (function () {
   var API = "{{ url_for('studio.api_images') }}", UP = "{{ url_for('studio.api_upload') }}";
   var CSRF = "{{ csrf_token() }}";

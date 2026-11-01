@@ -57,52 +57,61 @@ def revoke_current_session():
                          (jti, now.isoformat(), (now + app.config["PERMANENT_SESSION_LIFETIME"]).isoformat()))
             conn.commit()
     except Exception:
-        pass
+        app.logger.exception("could not record the logout (revoked_sessions)")
 
 
-@app.before_request
-def reject_revoked_session():
-    """A logged-out session id can never be used again (also for API calls)."""
-    jti = session.get("jti")
-    if not jti or request.endpoint in (None, "static", "manifest", "service_worker"):
-        return None
-    try:
-        with get_db() as conn:
-            dead = conn.execute("SELECT 1 FROM revoked_sessions WHERE jti=?", (jti,)).fetchone()
-    except Exception:
-        return None
-    if not dead:
-        return None
-    session.clear()
+_SKIP_ENDPOINTS = (None, "static", "manifest", "service_worker")
+_STUDENT_KEYS = ("student_id", "student_name", "student_class", "sv", "impersonating",
+                 "impersonation_log_id", "impersonation_started")
+
+
+def _session_error(message, status):
     if request.path.startswith("/api/") or request.is_json:
-        return jsonify({"ok": False, "error": "Session ended. Please log in again."}), 401
-    return redirect(url_for("login"))
+        return jsonify({"ok": False, "error": message}), status
+    return None
 
 
 @app.before_request
-def validate_student_session():
-    """Ends a student session when the password was reset (session_version
-    changed) or the account got blocked/deleted — this is what makes
-    'logout from all devices' work with cookie-based sessions."""
+def validate_session():
+    """ONE database round-trip per request (it used to be two) that checks both:
+
+    * a logged-out session id (jti) can never be used again, also for API calls;
+    * a student session ends when the password was reset (session_version changed) or the
+      account was blocked/archived/deleted - this is what makes 'logout from all devices' work.
+
+    Requests with no login cookie cost nothing. If the check itself cannot run (database error)
+    the request is refused with 503 and logged; it is never silently allowed.
+    """
+    jti = session.get("jti")
     sid = session.get("student_id")
-    if not sid or request.endpoint in (None, "static", "manifest", "service_worker"):
+    if not (jti or sid) or request.endpoint in _SKIP_ENDPOINTS:
         return None
     try:
         with get_db() as conn:
+            dead = conn.execute("SELECT 1 FROM revoked_sessions WHERE jti=?", (jti,)).fetchone() if jti else None
             row = conn.execute(
                 "SELECT session_version, is_blocked, is_archived FROM students WHERE id=?", (sid,)
-            ).fetchone()
+            ).fetchone() if (sid and not dead) else None
     except Exception:
-        return None
-    if row is not None and not row["is_blocked"] and not row["is_archived"] and (row["session_version"] or 0) == session.get("sv", 0):
-        return None
-    for k in ("student_id", "student_name", "student_class", "sv", "impersonating", "impersonation_log_id",
-              "impersonation_started"):
-        session.pop(k, None)
-    if request.path.startswith("/api/"):
-        return jsonify({"ok": False, "error": "Session ended. Please log in again."}), 401
-    flash("Your session has ended. Please log in again.", "error")
-    return redirect(url_for("login"))
+        app.logger.exception("session validation failed (database)")
+        err = _session_error("Service temporarily unavailable. Please try again.", 503)
+        if err:
+            return err
+        return ("Service temporarily unavailable. Please try again in a moment.", 503)
+    if dead:
+        session.clear()
+        err = _session_error("Session ended. Please log in again.", 401)
+        return err or redirect(url_for("login"))
+    if sid and not (row is not None and not row["is_blocked"] and not row["is_archived"]
+                    and (row["session_version"] or 0) == session.get("sv", 0)):
+        for k in _STUDENT_KEYS:
+            session.pop(k, None)
+        err = _session_error("Session ended. Please log in again.", 401)
+        if err:
+            return err
+        flash("Your session has ended. Please log in again.", "error")
+        return redirect(url_for("login"))
+    return None
 
 
 def student_login_required(f):

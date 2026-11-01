@@ -1,13 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Image Library{% endblock %}
 {% block content %}
+{% include "partials/_studio_nav.html" %}
 <div class="card">
-  <h2>🖼️ Image Library</h2>
+  <h2>Image Library</h2>
   <p class="helper-text">Category অনুযায়ী ছবি জমিয়ে রাখুন। প্রশ্ন তৈরির সময় এখান থেকেই ছবি বেছে নেওয়া যায়।</p>
-  <div class="flex gap-1 flex-wrap mt-1">
-    <a class="btn btn-outline" href="{{ url_for('manage_tests') }}">📝 Tests ও প্রশ্ন</a>
-    <a class="btn btn-outline" href="{{ url_for('teacher_dashboard') }}">Dashboard</a>
-  </div>
 </div>
 
 {% if problem %}
@@ -33,7 +30,7 @@
     </div>
     <label>ছবি (JPG, PNG, WEBP, GIF — প্রতিটি সর্বোচ্চ {{ max_mb }} MB, একবারে {{ max_files }} টি পর্যন্ত)</label>
     <input type="file" name="images" accept="image/jpeg,image/png,image/webp,image/gif" multiple required>
-    <div class="mt-1"><button class="btn btn-primary" type="submit" onclick="if(this.form.checkValidity()){this.disabled=true;this.textContent='আপলোড হচ্ছে…';this.form.submit();}">আপলোড করুন</button></div>
+    <div class="mt-1"><button class="btn btn-primary" type="submit" data-busy-text="আপলোড হচ্ছে…">আপলোড করুন</button></div>
   </form>
 </div>
 
@@ -47,7 +44,7 @@
   </div>
   {% if selected %}
   {% for c in categories if c.id == selected and c.image_count == 0 %}
-  <form method="POST" action="{{ url_for('studio.category_delete', cid=c.id) }}" class="mt-1" onsubmit="return confirm('এই খালি Category মুছবেন?');">
+  <form method="POST" action="{{ url_for('studio.category_delete', cid=c.id) }}" class="mt-1" data-confirm="এই খালি Category মুছবেন?">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button class="btn btn-sm btn-danger" type="submit">এই খালি Category মুছুন</button>
   </form>
@@ -66,8 +63,7 @@
         {% if im.width %}{{ im.width }}×{{ im.height }}px{% endif %}{% if im.bytes %} · {{ (im.bytes / 1024)|round|int }} KB{% endif %}<br>
         ব্যবহার: {{ used }} টি প্রশ্নে
       </div>
-      <form method="POST" action="{{ url_for('studio.image_delete', image_id=im.id) }}" style="margin-top:6px"
-            onsubmit="return confirm('{{ 'এই ছবিটি প্রশ্নে ব্যবহৃত হচ্ছে, তাই মোছা যাবে না।' if used else 'ছবিটি Cloudinary ও Library থেকে চিরতরে মুছবেন?' }}');">
+      <form method="POST" action="{{ url_for('studio.image_delete', image_id=im.id) }}" style="margin-top:6px" data-confirm="{{ 'এই ছবিটি প্রশ্নে ব্যবহৃত হচ্ছে, তাই মোছা যাবে না।' if used else 'ছবিটি Cloudinary ও Library থেকে চিরতরে মুছবেন?' }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-sm btn-danger" type="submit" {{ 'disabled' if used }}>Delete</button>
       </form>

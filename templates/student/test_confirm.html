@@ -9,7 +9,7 @@
   <p style="margin:1rem 0">Once started, your examination timer will begin.</p>
   <div class="flex gap-1 flex-wrap" style="justify-content:center">
     <a href="{{ url_for('take_test', test_id=test.id) }}" class="btn btn-outline">Go Back</a>
-    <form method="POST" action="{{ url_for('test_start', test_id=test.id) }}" onsubmit="this.querySelector('button').disabled=true">
+    <form method="POST" action="{{ url_for('test_start', test_id=test.id) }}" data-disable-on-submit="1">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn btn-primary">Confirm &amp; Start Test</button>
     </form>

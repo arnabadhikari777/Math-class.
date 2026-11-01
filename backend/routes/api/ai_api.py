@@ -12,6 +12,7 @@ from flask import Blueprint, request, session
 
 from backend.ai import context, provider
 from backend.db import get_db
+from backend.middleware.rate_limit import _bucket_ok
 from backend.utils.api_response import fail, ok, page_meta, paging, student_api
 from backend.services import student_service as svc
 
@@ -28,19 +29,8 @@ def _now():
 
 
 def _limit_ok(bucket, limit, window):
-    """Sliding window on the existing rate_limit_hits table (same as backend/middleware/rate_limit.py)."""
-    now = time.time()
-    try:
-        with get_db() as conn:
-            used = conn.execute("SELECT COUNT(*) FROM rate_limit_hits WHERE bucket=? AND ts>?",
-                                (bucket, now - window)).fetchone()[0]
-            if used >= limit:
-                return False
-            conn.execute("INSERT INTO rate_limit_hits (bucket, ts) VALUES (?,?)", (bucket, now))
-            conn.commit()
-    except Exception:
-        return True  # a DB hiccup must not lock everyone out
-    return True
+    """Same limiter as the rest of the site (backend/middleware/rate_limit.py)."""
+    return _bucket_ok(bucket, limit, window)
 
 
 def _int_env(name, default):

@@ -3,7 +3,7 @@
 {% block content %}
 <div class="hero">
   <h1>Welcome to <strong>Arnab Math Class</strong></h1>
-  <p>Notes, timed tests and smart analytics in one place. Know your weak chapters, track your rank and get ready for JEE Main.</p>
+  <p>Notes, timed tests and clear results in one place. Know your weak chapters, track your rank and get ready for JEE Main.</p>
   <div class="hero-actions">
     {% if session.get('student_id') %}
       <a href="{{ url_for('student_dashboard') }}" class="btn btn-primary">Go to Dashboard</a>
@@ -14,8 +14,6 @@
     <a href="{{ url_for('download_app') }}" class="btn btn-outline"><i class="fa-solid fa-mobile-screen-button" aria-hidden="true"></i> Get the App</a>
   </div>
 </div>
-
-{% include "partials/_jee_cards.html" %}
 
 <div class="stats">
   <div class="stat"><div class="num">{{ total_students }}+</div><div class="label">Registered Students</div></div>

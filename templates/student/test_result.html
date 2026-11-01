@@ -99,6 +99,6 @@
 
 {% block extra_js %}
 {% if not pending and pct >= 80 %}
-<script>window.addEventListener('load', () => setTimeout(fireConfetti, 300));</script>
+<script nonce="{{ csp_nonce() }}">window.addEventListener('load', () => setTimeout(fireConfetti, 300));</script>
 {% endif %}
 {% endblock %}

@@ -45,6 +45,10 @@ init_db()
 if not all(_teacher_creds()):
     log.warning("TEACHER_USERNAME / TEACHER_PASSWORD are not set in .env - teacher login is disabled until they are.")
 
+from backend.config import PUSH_ENABLED  # noqa: E402
+if not PUSH_ENABLED:
+    log.warning("Web Push is OFF: set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY and VAPID_CLAIMS_EMAIL in .env to enable it.")
+
 # Additive migrations (with automatic backup first). Disable with BACKEND_AUTO_MIGRATE=0
 if os.environ.get("BACKEND_AUTO_MIGRATE", "1").strip().lower() not in ("0", "false", "no"):
     try:

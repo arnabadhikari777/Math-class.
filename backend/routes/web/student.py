@@ -12,7 +12,7 @@ from backend.core import app
 from backend.db.connection import get_db
 from backend.middleware.auth import student_login_required
 from backend.services import exam_service
-from backend.services.insights_service import build_result_insights, build_student_insights
+from backend.services.insights_service import build_result_insights
 from backend.utils.helpers import percentage
 
 
@@ -50,12 +50,17 @@ def student_dashboard():
         avg_pct = 0
         if total_attempted:
             avg_pct = round(sum(percentage(r["score"], r["total_marks"]) for r in my_results) / total_attempted, 1)
-        insights = build_student_insights(conn, student, my_results, tests, attempted_test_ids)
+        recent_notes = conn.execute(
+            """SELECT id, title, subject, uploaded_at FROM notes
+               WHERE class_name=? OR class_name='' OR class_name IS NULL
+               ORDER BY uploaded_at DESC LIMIT 4""",
+            (student["class_name"],)
+        ).fetchall()
     return render_template(
         "student/student_dashboard.html",
         student=student, tests=tests, my_results=my_results,
         attempted_test_ids=attempted_test_ids, announcements=announcements,
-        total_attempted=total_attempted, avg_pct=avg_pct, insights=insights
+        total_attempted=total_attempted, avg_pct=avg_pct, recent_notes=recent_notes
     )
 
 

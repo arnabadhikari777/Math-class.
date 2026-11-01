@@ -345,12 +345,17 @@
     histBtn.type = "button";
     var newBtn = el("button", null, "New chat");
     newBtn.type = "button";
+    var minBtn = el("button", "aiw-min");
+    minBtn.appendChild(icon("minus"));
+    minBtn.type = "button";
+    minBtn.setAttribute("aria-label", "Minimize");
     var closeBtn = el("button", null);
     closeBtn.appendChild(icon("xmark"));
     closeBtn.type = "button";
     closeBtn.setAttribute("aria-label", "Close");
     head.appendChild(histBtn);
     head.appendChild(newBtn);
+    head.appendChild(minBtn);
     head.appendChild(closeBtn);
     var note = el(
         "div",
@@ -931,15 +936,42 @@
     });
 
     var loaded = false;
+
+    // The chat floats above the page: the page keeps scrolling normally (no overflow lock). While the
+    // panel is open the body gets extra bottom padding equal to the panel height, so the last part of
+    // the dashboard can always be scrolled up above the chat instead of being covered by it.
+    function reserveSpace() {
+        var open = panel.classList.contains("open");
+        document.body.classList.toggle("aiw-open", open);
+        if (open) {
+            document.body.style.setProperty(
+                "--aiw-pad",
+                panel.offsetHeight + 24 + "px"
+            );
+        } else {
+            document.body.style.removeProperty("--aiw-pad");
+        }
+    }
+    function setMinimized(on) {
+        panel.classList.toggle("min", !!on);
+        minBtn.setAttribute("aria-label", on ? "Restore" : "Minimize");
+        minBtn.firstChild.className = "fa-solid fa-" + (on ? "chevron-up" : "minus");
+        reserveSpace();
+        if (!on) {
+            log.scrollTop = log.scrollHeight;
+            input.focus();
+        }
+    }
     function open() {
         panel.classList.add("open");
+        setMinimized(false);
         fab.setAttribute("aria-expanded", "true");
-        document.body.style.overflow = "hidden";
         if (!loaded) {
             loaded = true;
             loadHistory();
         }
         refreshStatus();
+        reserveSpace();
         setTimeout(function () {
             input.focus();
         }, 50);
@@ -947,10 +979,23 @@
     function close() {
         finishTyping();
         panel.classList.remove("open");
+        panel.classList.remove("min");
         fab.setAttribute("aria-expanded", "false");
-        document.body.style.overflow = "";
+        reserveSpace();
         fab.focus();
     }
+    minBtn.addEventListener("click", function () {
+        setMinimized(!panel.classList.contains("min"));
+    });
+    head.addEventListener("click", function (e) {
+        // tapping the bar of a minimized chat restores it
+        if (panel.classList.contains("min") && e.target === head.querySelector("b")) {
+            setMinimized(false);
+        }
+    });
+    window.addEventListener("resize", function () {
+        if (panel.classList.contains("open")) reserveSpace();
+    });
     fab.addEventListener("click", function () {
         panel.classList.contains("open") ? close() : open();
     });

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Question Bank → {{ test.title }}{% endblock %}
 {% block content %}
+{% include "partials/_studio_nav.html" %}
 <div class="card">
   <h2>Question Bank থেকে প্রশ্ন নিন</h2>
   <p class="helper-text">Test: <strong>{{ test.title }}</strong> · একবারে সর্বোচ্চ {{ limit }} টি। প্রশ্নগুলো Test-এ কপি হবে; পরে Bank-এ বদলালে এই Test বদলাবে না।</p>
@@ -46,7 +47,7 @@
 </div>
 {% endblock %}
 {% block extra_js %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   const all = document.getElementById('selAll');
   if (all) all.addEventListener('change', () => document.querySelectorAll('.pickq').forEach(c => c.checked = all.checked));

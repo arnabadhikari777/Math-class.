@@ -90,27 +90,16 @@ def _categories(conn):
 @bp.route("/")
 @teacher_page
 def home():
-    return redirect(url_for("qbank.images"))
+    return redirect(url_for("qbank.questions"))
 
 
 @bp.route("/images")
 @teacher_page
 def images():
+    """The Image Library has ONE screen now (Question Studio -> Image Library).
+    This old address stays so bookmarks and the upload/delete forms keep working."""
     cat = _int(request.args.get("category"))
-    with get_db() as conn:
-        cats = _categories(conn)
-        sql = """SELECT i.*, c.name AS category_name,
-                        (SELECT COUNT(*) FROM bank_questions q WHERE q.image_id = i.id) AS used_bank,
-                        (SELECT COUNT(*) FROM questions t WHERE t.bank_image_id = i.id) AS used_tests
-                 FROM bank_images i JOIN bank_categories c ON c.id = i.category_id"""
-        args = ()
-        if cat:
-            sql += " WHERE i.category_id=?"
-            args = (cat,)
-        rows = conn.execute(sql + " ORDER BY i.id DESC LIMIT 500", args).fetchall()
-    return render_template("teacher/bank/bank_images.html", categories=cats, images=rows, selected=cat,
-                           configured=cdn.is_configured(),
-                           max_mb=cdn.max_bytes() // (1024 * 1024), max_files=MAX_FILES_PER_UPLOAD)
+    return redirect(url_for("studio.library", category=cat) if cat else url_for("studio.library"))
 
 
 @bp.route("/categories/create", methods=["POST"])

@@ -37,24 +37,12 @@ EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 PASS_PERCENTAGE = 40
 SITE_NAME = "Arnab Math Class"
 
-# JEE Main 2027 sessions shown in the countdown widgets (all times are IST, UTC+05:30).
-# Edit the dates here if NTA changes them. `window_days` = how long the exam window
-# stays "Live now" after the start time before the countdown is hidden.
-JEE_SESSIONS = [
-    {"id": "s1", "short": "Session 1", "label": "JEE Main 2027 · Session 1",
-     "start": "2027-01-22T09:00:00+05:30", "window_days": 10},
-    {"id": "s2", "short": "Session 2", "label": "JEE Main 2027 · Session 2",
-     "start": "2027-04-02T09:00:00+05:30", "window_days": 10},
-]
-
 # --- Web Push (VAPID) config ---
-# These keys let the server send real push notifications to a student's
-# phone/browser (even when the site/app is closed), for anyone who taps
-# "Allow" on the browser's notification permission prompt.
-# A default key pair is included so push works out of the box; for
-# production it's best to set your own via environment variables
-# (generate once and keep them the same forever — changing them makes
-# every previously-subscribed browser resubscribe).
+# These keys let the server send real push notifications to a student's phone/browser, even when the
+# site/app is closed. There is NO built-in default key pair: put your own VAPID_PUBLIC_KEY /
+# VAPID_PRIVATE_KEY in .env (generate once and keep them the same forever - changing them makes every
+# subscribed browser resubscribe). The private key stays on the server and is never sent to the browser.
+# When the keys are missing, push is switched off cleanly (see PUSH_ENABLED) instead of failing silently.
 VAPID_PUBLIC_KEY = os.environ.get(
     "VAPID_PUBLIC_KEY",
     ""
@@ -64,6 +52,7 @@ VAPID_PRIVATE_KEY = os.environ.get(
     ""
 )
 VAPID_CLAIMS_EMAIL = os.environ.get("VAPID_CLAIMS_EMAIL", EMAIL_ADDRESS)
+PUSH_ENABLED = bool(VAPID_PUBLIC_KEY.strip() and VAPID_PRIVATE_KEY.strip() and VAPID_CLAIMS_EMAIL.strip())
 
 DEBUG_MODE = os.environ.get("FLASK_DEBUG", "0").strip().lower() in ("1", "true", "yes")
 # Redirect http -> https (localhost is always exempt). Set FORCE_HTTPS=0 to disable.

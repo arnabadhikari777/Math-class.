@@ -480,7 +480,7 @@ class H(unittest.TestCase):
             c.execute("INSERT INTO push_subscriptions (student_id,class_name,endpoint,p256dh,auth,created_at) VALUES (?,?,?,?,?,?)",
                       (self.sa, "10", "https://169.254.169.254/evil", "x", "y", datetime.now().isoformat())); c.commit()
         called = []
-        with mock.patch.object(push_service, "WEBPUSH_OK", True), mock.patch.object(push_service, "webpush", lambda **kw: called.append(kw), create=True):
+        with mock.patch.object(push_service, "WEBPUSH_OK", True), mock.patch.object(push_service, "PUSH_ENABLED", True), mock.patch.object(push_service, "webpush", lambda **kw: called.append(kw), create=True):
             push_service.send_push_to_class("t", "m", "", "10")
         self.assertFalse([k for k in called if "169.254" in k["subscription_info"]["endpoint"]])   # never contacted
         self.assertEqual(self.q("SELECT COUNT(*) FROM push_subscriptions WHERE endpoint LIKE 'https://169.%'")[0][0], 0)

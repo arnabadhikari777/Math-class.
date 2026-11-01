@@ -34,8 +34,7 @@
           <button class="btn btn-sm {% if item.test.is_active %}btn-outline{% endif %}" type="submit">{% if item.test.is_active %}Pause{% else %}Resume{% endif %}</button>
         </form>
         {% if item.test.is_active %}
-        <form method="POST" action="{{ url_for('renotify_test', test_id=item.test.id) }}"
-              onsubmit="return confirm('Send the new-test notification to students again?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <form method="POST" action="{{ url_for('renotify_test', test_id=item.test.id) }}" data-confirm="Send the new-test notification to students again?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="btn btn-sm btn-outline" type="submit">Notify again</button>
         </form>
         {% endif %}
