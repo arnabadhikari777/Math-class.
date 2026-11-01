@@ -1,165 +1,465 @@
-{% extends "base.html" %}
-{% block content %}
+{% extends "base.html" %} {% block content %}
 <style>
-  .aic-wrap{display:grid;grid-template-columns:300px 1fr;gap:1rem;align-items:start}
-  .aic-card{background:var(--bg-soft);border:1px solid var(--border);border-radius:12px;padding:.8rem}
-  .aic-card h3{margin:.1rem 0 .6rem;font-size:1rem}
-  .aic-in{width:100%;padding:.5rem .6rem;border:1px solid var(--border-strong);border-radius:8px;
-    background:var(--bg);color:var(--text);font:inherit;margin-bottom:.5rem;box-sizing:border-box}
-  .aic-item{display:block;width:100%;text-align:left;border:1px solid var(--border);background:var(--bg);
-    color:var(--text);border-radius:8px;padding:.5rem .6rem;margin:.3rem 0;cursor:pointer;font:inherit}
-  .aic-item:hover,.aic-item.sel{border-color:var(--primary);background:var(--primary-soft)}
-  .aic-item small{display:block;color:var(--text-muted)}
-  .aic-pager{display:flex;gap:.4rem;align-items:center;justify-content:space-between;margin-top:.5rem;font-size:.82rem}
-  .aic-pager button{padding:.25rem .6rem;border-radius:6px;border:1px solid var(--border-strong);
-    background:var(--bg);color:var(--text);cursor:pointer}
-  .aic-pager button:disabled{opacity:.4;cursor:default}
-  .aic-msg{margin:.45rem 0;padding:.55rem .75rem;border-radius:10px;border:1px solid var(--border);
-    background:var(--bg);white-space:pre-wrap;overflow-wrap:anywhere}
-  .aic-msg.user{border-left:4px solid var(--primary)}
-  .aic-msg.assistant{border-left:4px solid #10b981}
-  .aic-meta{font-size:.74rem;color:var(--text-muted);margin-bottom:.2rem}
-  .aic-empty{color:var(--text-muted);font-size:.9rem;padding:.4rem}
-  @media (max-width:800px){.aic-wrap{grid-template-columns:1fr;gap:.75rem}}
-  @media (max-width:480px){.aic-card{padding:.65rem}.aic-msg{font-size:.88rem}}
+    .aic-wrap {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: 1rem;
+        align-items: start;
+    }
+    .aic-card {
+        background: var(--bg-soft);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 0.8rem;
+    }
+    .aic-card h3 {
+        margin: 0.1rem 0 0.6rem;
+        font-size: 1rem;
+    }
+    .aic-in {
+        width: 100%;
+        padding: 0.5rem 0.6rem;
+        border: 1px solid var(--border-strong);
+        border-radius: 8px;
+        background: var(--bg);
+        color: var(--text);
+        font: inherit;
+        margin-bottom: 0.5rem;
+        box-sizing: border-box;
+    }
+    .aic-item {
+        display: block;
+        width: 100%;
+        text-align: left;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--text);
+        border-radius: 8px;
+        padding: 0.5rem 0.6rem;
+        margin: 0.3rem 0;
+        cursor: pointer;
+        font: inherit;
+    }
+    .aic-item:hover,
+    .aic-item.sel {
+        border-color: var(--primary);
+        background: var(--primary-soft);
+    }
+    .aic-item small {
+        display: block;
+        color: var(--text-muted);
+    }
+    .aic-pager {
+        display: flex;
+        gap: 0.4rem;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 0.5rem;
+        font-size: 0.82rem;
+    }
+    .aic-pager button {
+        padding: 0.25rem 0.6rem;
+        border-radius: 6px;
+        border: 1px solid var(--border-strong);
+        background: var(--bg);
+        color: var(--text);
+        cursor: pointer;
+    }
+    .aic-pager button:disabled {
+        opacity: 0.4;
+        cursor: default;
+    }
+    .aic-msg {
+        margin: 0.45rem 0;
+        padding: 0.55rem 0.75rem;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+    .aic-msg.user {
+        border-left: 4px solid var(--primary);
+    }
+    .aic-msg.assistant {
+        border-left: 4px solid #10b981;
+    }
+    .aic-meta {
+        font-size: 0.74rem;
+        color: var(--text-muted);
+        margin-bottom: 0.2rem;
+    }
+    .aic-empty {
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        padding: 0.4rem;
+    }
+    @media (max-width: 800px) {
+        .aic-wrap {
+            grid-template-columns: 1fr;
+            gap: 0.75rem;
+        }
+    }
+    @media (max-width: 480px) {
+        .aic-card {
+            padding: 0.65rem;
+        }
+        .aic-msg {
+            font-size: 0.88rem;
+        }
+    }
 </style>
 <h2>Student AI Chats</h2>
 <p class="aic-empty">Read-only view. Messages are shown oldest to newest.</p>
-<div class="aic-card" style="margin-bottom:1rem">
-  <h3>AI connection test</h3>
-  <p class="aic-empty" style="padding:0 0 .5rem">Sends one tiny question to every AI in <code>.env</code> and shows which work. If one fails, the reason is shown here (only you can see this).</p>
-  <button id="aicTest" class="aic-in" type="button" style="cursor:pointer;width:auto;padding:.5rem 1rem">Test all AIs</button>
-  <div id="aicTestOut" style="margin-top:.6rem"></div>
+<div class="aic-card" style="margin-bottom: 1rem">
+    <h3>AI connection test</h3>
+    <p class="aic-empty" style="padding: 0 0 0.5rem">
+        Sends one tiny question to every AI in <code>.env</code> and shows which
+        work. If one fails, the reason is shown here (only you can see this).
+    </p>
+    <button
+        id="aicTest"
+        class="aic-in"
+        type="button"
+        style="cursor: pointer; width: auto; padding: 0.5rem 1rem"
+    >
+        Test all AIs
+    </button>
+    <div id="aicTestOut" style="margin-top: 0.6rem"></div>
 </div>
 <div class="aic-wrap">
-  <div>
-    <div class="aic-card">
-      <h3>Students</h3>
-      <input id="aicQ" class="aic-in" type="search" placeholder="Search name or roll" aria-label="Search students">
-      <div id="aicStudents"></div><div id="aicStudentsPg" class="aic-pager"></div>
+    <div>
+        <div class="aic-card">
+            <h3>Students</h3>
+            <input
+                id="aicQ"
+                class="aic-in"
+                type="search"
+                placeholder="Search name or roll"
+                aria-label="Search students"
+            />
+            <div id="aicStudents"></div>
+            <div id="aicStudentsPg" class="aic-pager"></div>
+        </div>
+        <div class="aic-card" style="margin-top: 1rem">
+            <h3>Search all messages</h3>
+            <input
+                id="aicS"
+                class="aic-in"
+                type="search"
+                placeholder="Words (min 2 letters)"
+                aria-label="Search messages"
+            />
+            <div id="aicSearch"></div>
+        </div>
     </div>
-    <div class="aic-card" style="margin-top:1rem">
-      <h3>Search all messages</h3>
-      <input id="aicS" class="aic-in" type="search" placeholder="Words (min 2 letters)" aria-label="Search messages">
-      <div id="aicSearch"></div>
+    <div>
+        <div class="aic-card">
+            <h3 id="aicConvTitle">Conversations</h3>
+            <div id="aicConvs">
+                <div class="aic-empty">Select a student.</div>
+            </div>
+            <div id="aicConvsPg" class="aic-pager"></div>
+        </div>
+        <div class="aic-card" style="margin-top: 1rem">
+            <h3 id="aicMsgTitle">Messages</h3>
+            <div id="aicMsgs">
+                <div class="aic-empty">Select a conversation.</div>
+            </div>
+            <div id="aicMsgsPg" class="aic-pager"></div>
+        </div>
     </div>
-  </div>
-  <div>
-    <div class="aic-card"><h3 id="aicConvTitle">Conversations</h3>
-      <div id="aicConvs"><div class="aic-empty">Select a student.</div></div><div id="aicConvsPg" class="aic-pager"></div></div>
-    <div class="aic-card" style="margin-top:1rem"><h3 id="aicMsgTitle">Messages</h3>
-      <div id="aicMsgs"><div class="aic-empty">Select a conversation.</div></div><div id="aicMsgsPg" class="aic-pager"></div></div>
-  </div>
 </div>
 <script>
-(function(){
-  var B='/api/v1/teacher/ai';
-  function $(i){return document.getElementById(i);}
-  function el(t,c,x){var n=document.createElement(t);if(c)n.className=c;if(x!=null)n.textContent=x;return n;}
-  function get(p){return fetch(B+p,{credentials:'same-origin'}).then(function(r){return r.json();});}
-  function pager(box,meta,go){
-    box.textContent='';
-    if(!meta||meta.pages<=1)return;
-    var prev=el('button',null,'‹ Prev'),next=el('button',null,'Next ›');
-    prev.type=next.type='button';
-    prev.disabled=meta.page<=1;next.disabled=meta.page>=meta.pages;
-    prev.onclick=function(){go(meta.page-1);};next.onclick=function(){go(meta.page+1);};
-    box.appendChild(prev);box.appendChild(el('span',null,'Page '+meta.page+' / '+meta.pages));box.appendChild(next);
-  }
-  function who(s){return s.name+' · '+s.class_name+(s.roll?' · Roll '+s.roll:'');}
-  var curStudent=null,curConv=null,timer=null;
-  function loadStudents(page){
-    get('/students?page='+(page||1)+'&q='+encodeURIComponent($('aicQ').value.trim())).then(function(r){
-      var box=$('aicStudents');box.textContent='';
-      if(!r.ok||!r.data.length){box.appendChild(el('div','aic-empty','No students with AI chats.'));pager($('aicStudentsPg'),null);return;}
-      r.data.forEach(function(s){
-        var b=el('button','aic-item'+(curStudent===s.id?' sel':''));b.type='button';
-        b.appendChild(document.createTextNode(who(s)));
-        b.appendChild(el('small',null,s.conversations+' chat(s) · last '+(s.last_activity||'-')));
-        b.onclick=function(){curStudent=s.id;$('aicConvTitle').textContent='Conversations — '+s.name;loadStudents(page);loadConvs(1);};
-        box.appendChild(b);
-      });
-      pager($('aicStudentsPg'),r.meta,loadStudents);
-    });
-  }
-  function loadConvs(page){
-    get('/students/'+curStudent+'/conversations?page='+(page||1)).then(function(r){
-      var box=$('aicConvs');box.textContent='';
-      if(!r.ok||!r.data.conversations.length){box.appendChild(el('div','aic-empty','No conversations.'));return;}
-      r.data.conversations.forEach(function(c){
-        var b=el('button','aic-item');b.type='button';
-        b.appendChild(document.createTextNode(c.title||'(untitled)'));
-        b.appendChild(el('small',null,c.message_count+' messages · '+c.updated_at+(c.test_title?' · Test: '+c.test_title:'')));
-        b.onclick=function(){openConv(c.id,1);};
-        box.appendChild(b);
-      });
-      pager($('aicConvsPg'),r.meta,loadConvs);
-    });
-  }
-  function openConv(id,page){
-    curConv=id;
-    get('/conversations/'+id+'/messages?page='+(page||1)).then(function(r){
-      var box=$('aicMsgs');box.textContent='';
-      if(!r.ok){box.appendChild(el('div','aic-empty','Could not load.'));return;}
-      var d=r.data;
-      $('aicMsgTitle').textContent='Messages — '+who(d.student);
-      if(d.test){
-        var t='Related test: '+d.test.title;
-        if(d.test.result)t+=' · Score '+d.test.result.score+'/'+d.test.result.total_marks;
-        box.appendChild(el('div','aic-meta',t));
-      }
-      d.messages.forEach(function(m){
-        var w=el('div','aic-msg '+m.role);
-        w.appendChild(el('div','aic-meta',(m.role==='user'?d.student.name:'AI'+(m.provider_label?' ('+m.provider_label+')':''))+' · '+m.created_at));
-        w.appendChild(document.createTextNode(m.content));
-        box.appendChild(w);
-      });
-      pager($('aicMsgsPg'),r.meta,function(p){openConv(id,p);});
-    });
-  }
-  $('aicQ').addEventListener('input',function(){clearTimeout(timer);timer=setTimeout(function(){loadStudents(1);},300);});
-  var st=null;
-  $('aicS').addEventListener('input',function(){
-    clearTimeout(st);var v=this.value.trim();
-    st=setTimeout(function(){
-      var box=$('aicSearch');box.textContent='';
-      if(v.length<2)return;
-      get('/search?q='+encodeURIComponent(v)).then(function(r){
-        if(!r.ok||!r.data.length){box.appendChild(el('div','aic-empty','No matches.'));return;}
-        r.data.forEach(function(h){
-          var b=el('button','aic-item');b.type='button';
-          b.appendChild(document.createTextNode(who(h.student)));
-          b.appendChild(el('small',null,h.snippet));
-          b.onclick=function(){curStudent=h.student.id;openConv(h.conversation_id,1);};
-          box.appendChild(b);
+    (function () {
+        var B = "/api/v1/teacher/ai";
+        function $(i) {
+            return document.getElementById(i);
+        }
+        function el(t, c, x) {
+            var n = document.createElement(t);
+            if (c) n.className = c;
+            if (x != null) n.textContent = x;
+            return n;
+        }
+        function get(p) {
+            return fetch(B + p, { credentials: "same-origin" }).then(
+                function (r) {
+                    return r.json();
+                }
+            );
+        }
+        function pager(box, meta, go) {
+            box.textContent = "";
+            if (!meta || meta.pages <= 1) return;
+            var prev = el("button", null, "‹ Prev"),
+                next = el("button", null, "Next ›");
+            prev.type = next.type = "button";
+            prev.disabled = meta.page <= 1;
+            next.disabled = meta.page >= meta.pages;
+            prev.onclick = function () {
+                go(meta.page - 1);
+            };
+            next.onclick = function () {
+                go(meta.page + 1);
+            };
+            box.appendChild(prev);
+            box.appendChild(
+                el("span", null, "Page " + meta.page + " / " + meta.pages)
+            );
+            box.appendChild(next);
+        }
+        function who(s) {
+            return (
+                s.name +
+                " · " +
+                s.class_name +
+                (s.roll ? " · Roll " + s.roll : "")
+            );
+        }
+        var curStudent = null,
+            curConv = null,
+            timer = null;
+        function loadStudents(page) {
+            get(
+                "/students?page=" +
+                    (page || 1) +
+                    "&q=" +
+                    encodeURIComponent($("aicQ").value.trim())
+            ).then(function (r) {
+                var box = $("aicStudents");
+                box.textContent = "";
+                if (!r.ok || !r.data.length) {
+                    box.appendChild(
+                        el("div", "aic-empty", "No students with AI chats.")
+                    );
+                    pager($("aicStudentsPg"), null);
+                    return;
+                }
+                r.data.forEach(function (s) {
+                    var b = el(
+                        "button",
+                        "aic-item" + (curStudent === s.id ? " sel" : "")
+                    );
+                    b.type = "button";
+                    b.appendChild(document.createTextNode(who(s)));
+                    b.appendChild(
+                        el(
+                            "small",
+                            null,
+                            s.conversations +
+                                " chat(s) · last " +
+                                (s.last_activity || "-")
+                        )
+                    );
+                    b.onclick = function () {
+                        curStudent = s.id;
+                        $("aicConvTitle").textContent =
+                            "Conversations — " + s.name;
+                        loadStudents(page);
+                        loadConvs(1);
+                    };
+                    box.appendChild(b);
+                });
+                pager($("aicStudentsPg"), r.meta, loadStudents);
+            });
+        }
+        function loadConvs(page) {
+            get(
+                "/students/" + curStudent + "/conversations?page=" + (page || 1)
+            ).then(function (r) {
+                var box = $("aicConvs");
+                box.textContent = "";
+                if (!r.ok || !r.data.conversations.length) {
+                    box.appendChild(
+                        el("div", "aic-empty", "No conversations.")
+                    );
+                    return;
+                }
+                r.data.conversations.forEach(function (c) {
+                    var b = el("button", "aic-item");
+                    b.type = "button";
+                    b.appendChild(
+                        document.createTextNode(c.title || "(untitled)")
+                    );
+                    b.appendChild(
+                        el(
+                            "small",
+                            null,
+                            c.message_count +
+                                " messages · " +
+                                c.updated_at +
+                                (c.test_title ? " · Test: " + c.test_title : "")
+                        )
+                    );
+                    b.onclick = function () {
+                        openConv(c.id, 1);
+                    };
+                    box.appendChild(b);
+                });
+                pager($("aicConvsPg"), r.meta, loadConvs);
+            });
+        }
+        function openConv(id, page) {
+            curConv = id;
+            get("/conversations/" + id + "/messages?page=" + (page || 1)).then(
+                function (r) {
+                    var box = $("aicMsgs");
+                    box.textContent = "";
+                    if (!r.ok) {
+                        box.appendChild(
+                            el("div", "aic-empty", "Could not load.")
+                        );
+                        return;
+                    }
+                    var d = r.data;
+                    $("aicMsgTitle").textContent =
+                        "Messages — " + who(d.student);
+                    if (d.test) {
+                        var t = "Related test: " + d.test.title;
+                        if (d.test.result)
+                            t +=
+                                " · Score " +
+                                d.test.result.score +
+                                "/" +
+                                d.test.result.total_marks;
+                        box.appendChild(el("div", "aic-meta", t));
+                    }
+                    d.messages.forEach(function (m) {
+                        var w = el("div", "aic-msg " + m.role);
+                        w.appendChild(
+                            el(
+                                "div",
+                                "aic-meta",
+                                (m.role === "user"
+                                    ? d.student.name
+                                    : "AI" +
+                                      (m.provider_label
+                                          ? " (" + m.provider_label + ")"
+                                          : "")) +
+                                    " · " +
+                                    m.created_at
+                            )
+                        );
+                        w.appendChild(document.createTextNode(m.content));
+                        box.appendChild(w);
+                    });
+                    pager($("aicMsgsPg"), r.meta, function (p) {
+                        openConv(id, p);
+                    });
+                }
+            );
+        }
+        $("aicQ").addEventListener("input", function () {
+            clearTimeout(timer);
+            timer = setTimeout(function () {
+                loadStudents(1);
+            }, 300);
         });
-      });
-    },350);
-  });
-  $('aicTest').addEventListener('click',function(){
-    var btn=this,out=$('aicTestOut');
-    btn.disabled=true;btn.textContent='Testing… (can take up to a minute)';out.textContent='';
-    var m=document.querySelector('meta[name="csrf-token"]');
-    fetch(B+'/test',{method:'POST',credentials:'same-origin',headers:{'X-CSRFToken':m?m.getAttribute('content'):'','Content-Type':'application/json'},body:'{}'})
-      .then(function(r){return r.json();}).then(function(r){
-        btn.disabled=false;btn.textContent='Test all AIs';
-        if(!r.ok){out.appendChild(el('div','aic-empty','Could not run the test.'));return;}
-        if(!r.data.results.length){out.appendChild(el('div','aic-empty','No AI has a key or a saved name in .env yet.'));return;}
-        r.data.results.forEach(function(x){
-          var w=el('div','aic-msg '+(x.status==='ok'?'assistant':'user'));
-          var ic=document.createElement('i');
-          ic.className=x.status==='ok'?'fa-solid fa-circle-check':(x.status==='failed'?'fa-solid fa-circle-xmark':'fa-regular fa-circle');
-          ic.setAttribute('aria-hidden','true');
-          var meta=el('div','aic-meta');
-          meta.appendChild(ic);
-          meta.appendChild(document.createTextNode(' '+x.provider+'  \u2192  students see: '+x.shown_as+(x.ms!=null?'  \u00b7  '+x.ms+' ms':'')));
-          w.appendChild(meta);
-          w.appendChild(document.createTextNode(x.detail));
-          out.appendChild(w);
+        var st = null;
+        $("aicS").addEventListener("input", function () {
+            clearTimeout(st);
+            var v = this.value.trim();
+            st = setTimeout(function () {
+                var box = $("aicSearch");
+                box.textContent = "";
+                if (v.length < 2) return;
+                get("/search?q=" + encodeURIComponent(v)).then(function (r) {
+                    if (!r.ok || !r.data.length) {
+                        box.appendChild(el("div", "aic-empty", "No matches."));
+                        return;
+                    }
+                    r.data.forEach(function (h) {
+                        var b = el("button", "aic-item");
+                        b.type = "button";
+                        b.appendChild(document.createTextNode(who(h.student)));
+                        b.appendChild(el("small", null, h.snippet));
+                        b.onclick = function () {
+                            curStudent = h.student.id;
+                            openConv(h.conversation_id, 1);
+                        };
+                        box.appendChild(b);
+                    });
+                });
+            }, 350);
         });
-      }).catch(function(){btn.disabled=false;btn.textContent='Test all AIs';out.appendChild(el('div','aic-empty','No connection.'));});
-  });
-  loadStudents(1);
-})();
+        $("aicTest").addEventListener("click", function () {
+            var btn = this,
+                out = $("aicTestOut");
+            btn.disabled = true;
+            btn.textContent = "Testing… (can take up to a minute)";
+            out.textContent = "";
+            var m = document.querySelector('meta[name="csrf-token"]');
+            fetch(B + "/test", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "X-CSRFToken": m ? m.getAttribute("content") : "",
+                    "Content-Type": "application/json"
+                },
+                body: "{}"
+            })
+                .then(function (r) {
+                    return r.json();
+                })
+                .then(function (r) {
+                    btn.disabled = false;
+                    btn.textContent = "Test all AIs";
+                    if (!r.ok) {
+                        out.appendChild(
+                            el("div", "aic-empty", "Could not run the test.")
+                        );
+                        return;
+                    }
+                    if (!r.data.results.length) {
+                        out.appendChild(
+                            el(
+                                "div",
+                                "aic-empty",
+                                "No AI has a key or a saved name in .env yet."
+                            )
+                        );
+                        return;
+                    }
+                    r.data.results.forEach(function (x) {
+                        var w = el(
+                            "div",
+                            "aic-msg " +
+                                (x.status === "ok" ? "assistant" : "user")
+                        );
+                        var ic = document.createElement("i");
+                        ic.className =
+                            x.status === "ok"
+                                ? "fa-solid fa-circle-check"
+                                : x.status === "failed"
+                                  ? "fa-solid fa-circle-xmark"
+                                  : "fa-regular fa-circle";
+                        ic.setAttribute("aria-hidden", "true");
+                        var meta = el("div", "aic-meta");
+                        meta.appendChild(ic);
+                        meta.appendChild(
+                            document.createTextNode(
+                                " " +
+                                    x.provider +
+                                    "  \u2192  students see: " +
+                                    x.shown_as +
+                                    (x.ms != null
+                                        ? "  \u00b7  " + x.ms + " ms"
+                                        : "")
+                            )
+                        );
+                        w.appendChild(meta);
+                        w.appendChild(document.createTextNode(x.detail));
+                        out.appendChild(w);
+                    });
+                })
+                .catch(function () {
+                    btn.disabled = false;
+                    btn.textContent = "Test all AIs";
+                    out.appendChild(el("div", "aic-empty", "No connection."));
+                });
+        });
+        loadStudents(1);
+    })();
 </script>
 {% endblock %}

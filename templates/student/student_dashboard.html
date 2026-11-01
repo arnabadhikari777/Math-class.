@@ -1,138 +1,278 @@
-{% extends "base.html" %}
-{% block title %}Dashboard{% endblock %}
-{% block content %}
-{% set I = insights %}
+{% extends "base.html" %} {% block title %}Dashboard{% endblock %} {% block
+content %} {% set I = insights %}
 
 <div class="card">
-  <div class="welcome">
-    <div>
-      <h2>Hello, {{ student.name }} <i class="fa-solid fa-hand" aria-hidden="true"></i></h2>
-      <p class="text-muted">Class <strong>{{ class_display(student.class_name) }}</strong>{% if student.roll %} · Roll {{ student.roll }}{% endif %}</p>
-      <div class="chip-row">
-        <span class="chip lvl"><i class="fa-solid fa-star" aria-hidden="true"></i> Level {{ I.level }} · {{ I.xp }} XP</span>
-        {% if I.streak %}<span class="chip fire"><i class="fa-solid fa-fire" aria-hidden="true"></i> {{ I.streak }}-day streak</span>{% endif %}
-        {% if I.rank %}<span class="chip"><i class="fa-solid fa-award" aria-hidden="true"></i> Rank #{{ I.rank }} of {{ I.class_size }} in class</span>{% endif %}
-      </div>
+    <div class="welcome">
+        <div>
+            <h2>
+                Hello, {{ student.name }}
+                <i class="fa-solid fa-hand" aria-hidden="true"></i>
+            </h2>
+            <p class="text-muted">
+                Class <strong>{{ class_display(student.class_name) }}</strong>{%
+                if student.roll %} · Roll {{ student.roll }}{% endif %}
+            </p>
+            <div class="chip-row">
+                <span class="chip lvl"
+                    ><i class="fa-solid fa-star" aria-hidden="true"></i> Level
+                    {{ I.level }} · {{ I.xp }} XP</span
+                >
+                {% if I.streak %}<span class="chip fire"
+                    ><i class="fa-solid fa-fire" aria-hidden="true"></i> {{
+                    I.streak }}-day streak</span
+                >{% endif %} {% if I.rank %}<span class="chip"
+                    ><i class="fa-solid fa-award" aria-hidden="true"></i> Rank
+                    #{{ I.rank }} of {{ I.class_size }} in class</span
+                >{% endif %}
+            </div>
+        </div>
+        <div class="ring-wrap" title="Average score">
+            {% set avg = I.avg %}
+            <div
+                class="ring {{ 'good' if avg >= 70 else 'warn' if avg >= 40 else 'bad' if total_attempted else '' }}"
+                style="--p: {{ avg }}"
+            >
+                <span>{{ avg|round|int }}%</span>
+            </div>
+            <div class="kv">
+                <small>Average</small
+                ><b
+                    >{{ total_attempted }} test{{ '' if total_attempted == 1
+                    else 's' }}</b
+                >
+            </div>
+        </div>
     </div>
-    <div class="ring-wrap" title="Average score">
-      {% set avg = I.avg %}
-      <div class="ring {{ 'good' if avg >= 70 else 'warn' if avg >= 40 else 'bad' if total_attempted else '' }}" style="--p: {{ avg }}"><span>{{ avg|round|int }}%</span></div>
-      <div class="kv"><small>Average</small><b>{{ total_attempted }} test{{ '' if total_attempted == 1 else 's' }}</b></div>
+    <div
+        class="bar"
+        style="margin-top: 0.9rem; height: 7px"
+        title="{{ I.xp_to_next }} XP to Level {{ I.level + 1 }}"
+    >
+        <i style="width: {{ I.level_pct }}%"></i>
     </div>
-  </div>
-  <div class="bar" style="margin-top:.9rem;height:7px" title="{{ I.xp_to_next }} XP to Level {{ I.level + 1 }}"><i style="width: {{ I.level_pct }}%"></i></div>
-  <div class="helper-text">{{ I.xp_to_next }} XP to Level {{ I.level + 1 }}: every test and correct answer earns XP.</div>
+    <div class="helper-text">
+        {{ I.xp_to_next }} XP to Level {{ I.level + 1 }}: every test and correct
+        answer earns XP.
+    </div>
 </div>
 
 {% include "partials/_jee_cards.html" %}
 
 <div class="stats">
-  <div class="stat"><div class="num">{{ total_attempted }}</div><div class="label">Tests Taken</div></div>
-  <div class="stat"><div class="num">{{ I.best|round|int if total_attempted else '–' }}{{ '%' if total_attempted }}</div><div class="label">Best Score</div></div>
-  <div class="stat"><div class="num">{{ I.week_done }}<span style="font-size:1rem">/{{ I.week_goal }}</span></div><div class="label">This week's goal</div></div>
-  <div class="stat"><div class="num">{{ I.pending }}</div><div class="label">Tests waiting</div></div>
+    <div class="stat">
+        <div class="num">{{ total_attempted }}</div>
+        <div class="label">Tests Taken</div>
+    </div>
+    <div class="stat">
+        <div class="num">
+            {{ I.best|round|int if total_attempted else '–' }}{{ '%' if
+            total_attempted }}
+        </div>
+        <div class="label">Best Score</div>
+    </div>
+    <div class="stat">
+        <div class="num">
+            {{ I.week_done }}<span style="font-size: 1rem"
+                >/{{ I.week_goal }}</span
+            >
+        </div>
+        <div class="label">This week's goal</div>
+    </div>
+    <div class="stat">
+        <div class="num">{{ I.pending }}</div>
+        <div class="label">Tests waiting</div>
+    </div>
 </div>
 
 {% if I.tips %}
 <div class="card">
-  <div class="card-head"><h2><i class="fa-solid fa-brain" aria-hidden="true"></i> Smart coach</h2><span class="badge badge-info">personalised</span></div>
-  {% for t in I.tips %}
-  <div class="tip {{ t.kind }}{% if t.jee %} jee-only{% endif %}"><span class="ic"><i class="fa-solid fa-{{ t.icon }}" aria-hidden="true"></i></span><div><b>{{ t.title }}</b><p>{{ t.text }}</p></div></div>
-  {% endfor %}
-</div>
-{% endif %}
-
-{% if I.pcts or I.subjects %}
-<div class="grid-auto">
-  {% if I.pcts %}
-  <div class="card">
     <div class="card-head">
-      <h3><i class="fa-solid fa-arrow-trend-up" aria-hidden="true"></i> Score trend</h3>
-      {% if I.trend == 'up' %}<span class="badge badge-success"><i class="fa-solid fa-caret-up" aria-hidden="true"></i> +{{ I.delta|abs|round|int }} pts</span>
-      {% elif I.trend == 'down' %}<span class="badge badge-danger"><i class="fa-solid fa-caret-down" aria-hidden="true"></i> −{{ I.delta|abs|round|int }} pts</span>
-      {% elif I.trend == 'flat' %}<span class="badge badge-gray">steady</span>{% endif %}
+        <h2>
+            <i class="fa-solid fa-brain" aria-hidden="true"></i> Smart coach
+        </h2>
+        <span class="badge badge-info">personalised</span>
     </div>
-    <div class="spark">
-      {% for p in I.pcts %}<i style="height: {{ [p, 6]|max }}%" data-v="{{ p|round|int }}"></i>{% endfor %}
-    </div>
-    <div class="helper-text">Last {{ I.pcts|length }} test{{ '' if I.pcts|length == 1 else 's' }}, oldest to newest. Tap a bar to see its score.</div>
-  </div>
-  {% endif %}
-  {% if I.subjects %}
-  <div class="card">
-    <h3><i class="fa-solid fa-bullseye" aria-hidden="true"></i> Subject strength</h3>
-    {% for s in I.subjects %}
-    <div class="bar-row">
-      <span class="nm" title="{{ s.name }}">{{ s.name }}</span>
-      <div class="bar {{ 'good' if s.avg >= 70 else 'warn' if s.avg >= 40 else 'bad' }}"><i style="width: {{ s.avg }}%"></i></div>
-      <span class="pc">{{ s.avg|round|int }}%</span>
+    {% for t in I.tips %}
+    <div class="tip {{ t.kind }}{% if t.jee %} jee-only{% endif %}">
+        <span class="ic"
+            ><i class="fa-solid fa-{{ t.icon }}" aria-hidden="true"></i
+        ></span>
+        <div>
+            <b>{{ t.title }}</b>
+            <p>{{ t.text }}</p>
+        </div>
     </div>
     {% endfor %}
-    {% if I.weakest %}<div class="helper-text">Weakest: <strong>{{ I.weakest.name }}</strong>. Start your next practice there.</div>{% endif %}
-  </div>
-  {% endif %}
 </div>
-{% endif %}
-
-{% if announcements %}
+{% endif %} {% if I.pcts or I.subjects %}
+<div class="grid-auto">
+    {% if I.pcts %}
+    <div class="card">
+        <div class="card-head">
+            <h3>
+                <i class="fa-solid fa-arrow-trend-up" aria-hidden="true"></i>
+                Score trend
+            </h3>
+            {% if I.trend == 'up' %}<span class="badge badge-success"
+                ><i class="fa-solid fa-caret-up" aria-hidden="true"></i> +{{
+                I.delta|abs|round|int }} pts</span
+            >
+            {% elif I.trend == 'down' %}<span class="badge badge-danger"
+                ><i class="fa-solid fa-caret-down" aria-hidden="true"></i> −{{
+                I.delta|abs|round|int }} pts</span
+            >
+            {% elif I.trend == 'flat' %}<span class="badge badge-gray"
+                >steady</span
+            >{% endif %}
+        </div>
+        <div class="spark">
+            {% for p in I.pcts %}<i
+                style="height: {{ [p, 6]|max }}%"
+                data-v="{{ p|round|int }}"
+            ></i
+            >{% endfor %}
+        </div>
+        <div class="helper-text">
+            Last {{ I.pcts|length }} test{{ '' if I.pcts|length == 1 else 's'
+            }}, oldest to newest. Tap a bar to see its score.
+        </div>
+    </div>
+    {% endif %} {% if I.subjects %}
+    <div class="card">
+        <h3>
+            <i class="fa-solid fa-bullseye" aria-hidden="true"></i> Subject
+            strength
+        </h3>
+        {% for s in I.subjects %}
+        <div class="bar-row">
+            <span class="nm" title="{{ s.name }}">{{ s.name }}</span>
+            <div
+                class="bar {{ 'good' if s.avg >= 70 else 'warn' if s.avg >= 40 else 'bad' }}"
+            >
+                <i style="width: {{ s.avg }}%"></i>
+            </div>
+            <span class="pc">{{ s.avg|round|int }}%</span>
+        </div>
+        {% endfor %} {% if I.weakest %}
+        <div class="helper-text">
+            Weakest: <strong>{{ I.weakest.name }}</strong>. Start your next
+            practice there.
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endif %} {% if announcements %}
 <div class="card">
-  <h3><i class="fa-solid fa-bullhorn" aria-hidden="true"></i> Notices for you</h3>
-  {% for a in announcements %}
-  <div class="announce">
-    <strong>{{ a.title }}</strong>
-    <div style="white-space:pre-wrap;font-size:.92rem">{{ a.content }}</div>
-  </div>
-  {% endfor %}
+    <h3>
+        <i class="fa-solid fa-bullhorn" aria-hidden="true"></i> Notices for you
+    </h3>
+    {% for a in announcements %}
+    <div class="announce">
+        <strong>{{ a.title }}</strong>
+        <div style="white-space: pre-wrap; font-size: 0.92rem">
+            {{ a.content }}
+        </div>
+    </div>
+    {% endfor %}
 </div>
 {% endif %}
 
 <div class="card" id="tests">
-  <div class="card-head"><h2><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Available Tests</h2><span class="badge badge-info">{{ tests|length }}</span></div>
-  {% if tests %}
-    {% for t in tests %}
-    <div class="test-item">
-      <div>
-        <div class="ttl">{{ t.title }}</div>
-        <div class="meta">{{ t.subject or 'General' }} · <i class="fa-solid fa-stopwatch" aria-hidden="true"></i> {{ t.duration_minutes }} min</div>
-      </div>
-      <div class="flex gap-1 flex-wrap" style="justify-content:flex-end">
-        {% if t.id in attempted_test_ids %}
-          <a href="{{ url_for('test_result', test_id=t.id) }}" class="btn btn-sm btn-outline">Result</a>
-          <a href="{{ url_for('test_leaderboard', test_id=t.id) }}" class="btn btn-sm btn-outline"><i class="fa-solid fa-trophy" aria-hidden="true"></i></a>
-        {% else %}
-          {% for r in my_results if r.test_id == t.id %}<a href="{{ url_for('test_result', test_id=t.id) }}" class="btn btn-sm btn-outline">Result</a>{% endfor %}
-          <a href="{{ url_for('take_test', test_id=t.id) }}" class="btn btn-sm btn-primary">Start <i class="fa-solid fa-play" aria-hidden="true"></i></a>
-        {% endif %}
-      </div>
+    <div class="card-head">
+        <h2>
+            <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+            Available Tests
+        </h2>
+        <span class="badge badge-info">{{ tests|length }}</span>
     </div>
-    {% endfor %}
-  {% else %}
-  <p class="text-muted empty-state">No active tests for your class right now. <i class="fa-solid fa-circle-check" aria-hidden="true"></i></p>
-  {% endif %}
+    {% if tests %} {% for t in tests %}
+    <div class="test-item">
+        <div>
+            <div class="ttl">{{ t.title }}</div>
+            <div class="meta">
+                {{ t.subject or 'General' }} ·
+                <i class="fa-solid fa-stopwatch" aria-hidden="true"></i> {{
+                t.duration_minutes }} min
+            </div>
+        </div>
+        <div class="flex gap-1 flex-wrap" style="justify-content: flex-end">
+            {% if t.id in attempted_test_ids %}
+            <a
+                href="{{ url_for('test_result', test_id=t.id) }}"
+                class="btn btn-sm btn-outline"
+                >Result</a
+            >
+            <a
+                href="{{ url_for('test_leaderboard', test_id=t.id) }}"
+                class="btn btn-sm btn-outline"
+                ><i class="fa-solid fa-trophy" aria-hidden="true"></i
+            ></a>
+            {% else %} {% for r in my_results if r.test_id == t.id %}<a
+                href="{{ url_for('test_result', test_id=t.id) }}"
+                class="btn btn-sm btn-outline"
+                >Result</a
+            >{% endfor %}
+            <a
+                href="{{ url_for('take_test', test_id=t.id) }}"
+                class="btn btn-sm btn-primary"
+                >Start <i class="fa-solid fa-play" aria-hidden="true"></i
+            ></a>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %} {% else %}
+    <p class="text-muted empty-state">
+        No active tests for your class right now.
+        <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+    </p>
+    {% endif %}
 </div>
 
 {% if my_results %}
 <div class="card">
-  <h2><i class="fa-solid fa-folder-open" aria-hidden="true"></i> Your Recent Results</h2>
-  <div style="overflow-x:auto">
-  <table>
-    <thead><tr><th>Test</th><th>Score</th><th>%</th><th>Date</th><th></th></tr></thead>
-    <tbody>
-      {% for r in my_results[:8] %}
-      <tr>
-        <td>{{ r.test_title }}</td>
-        <td>{{ r.score }} / {{ r.total_marks }}</td>
-        <td>
-          {% set p = ((r.score / r.total_marks * 100) if r.total_marks else 0) | round(1) %}
-          <span class="badge {{ 'badge-success' if p >= 40 else 'badge-danger' }}">{{ p }}%</span>
-        </td>
-        <td class="text-muted">{{ r.submitted_at[:16].replace('T',' ') }}</td>
-        <td><a href="{{ url_for('test_result', test_id=r.test_id) }}" class="btn btn-sm btn-outline">Review</a></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
+    <h2>
+        <i class="fa-solid fa-folder-open" aria-hidden="true"></i> Your Recent
+        Results
+    </h2>
+    <div style="overflow-x: auto">
+        <table>
+            <thead>
+                <tr>
+                    <th>Test</th>
+                    <th>Score</th>
+                    <th>%</th>
+                    <th>Date</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in my_results[:8] %}
+                <tr>
+                    <td>{{ r.test_title }}</td>
+                    <td>{{ r.score }} / {{ r.total_marks }}</td>
+                    <td>
+                        {% set p = ((r.score / r.total_marks * 100) if
+                        r.total_marks else 0) | round(1) %}
+                        <span
+                            class="badge {{ 'badge-success' if p >= 40 else 'badge-danger' }}"
+                            >{{ p }}%</span
+                        >
+                    </td>
+                    <td class="text-muted">
+                        {{ r.submitted_at[:16].replace('T',' ') }}
+                    </td>
+                    <td>
+                        <a
+                            href="{{ url_for('test_result', test_id=r.test_id) }}"
+                            class="btn btn-sm btn-outline"
+                            >Review</a
+                        >
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
-{% endif %}
-{% endblock %}
+{% endif %} {% endblock %}
