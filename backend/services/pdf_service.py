@@ -47,6 +47,24 @@ def _register_pdf_fonts():
     return regular, bold
 
 
+def _m(v):
+    """21.0 -> '21', 2.5 -> '2.5'"""
+    try:
+        v = round(float(v), 4)
+    except (TypeError, ValueError):
+        return "0"
+    return str(int(v)) if v == int(v) else ("%.4f" % v).rstrip("0").rstrip(".")
+
+
+def _breakdown_line(answers):
+    ok = sum(1 for a in answers if a["is_correct"])
+    none = sum(1 for a in answers if not a["selected_option"])
+    pos = sum(float(a["marks_awarded"] or 0) for a in answers if float(a["marks_awarded"] or 0) > 0)
+    neg = -sum(float(a["marks_awarded"] or 0) for a in answers if float(a["marks_awarded"] or 0) < 0)
+    return (f"Correct: {ok}  |  Incorrect: {len(answers) - ok - none}  |  Unanswered: {none}  |  "
+            f"Earned: +{_m(pos)}  |  Negative deducted: -{_m(neg)}")
+
+
 def build_student_result_pdf(test, student, result, answers):
     """Generate PDF bytes of student's answer sheet (Bengali-safe)."""
     if not REPORTLAB_OK:
@@ -108,7 +126,8 @@ def build_student_result_pdf(test, student, result, answers):
     meta = [
         f"Test: {test['title']}",
         f"Student: {student['name']}  |  Class: {student['class_name']}  |  Roll: {student['roll'] or '-'}",
-        f"Score: {result['score']} / {result['total_marks']}  ({pct}%)",
+        f"Score: {_m(result['score'])} / {_m(result['total_marks'])}  ({pct}%)",
+        _breakdown_line(answers),
         f"Submitted: {str(result['submitted_at'])[:16].replace('T', ' ')}",
     ]
     for m in meta:
@@ -122,8 +141,10 @@ def build_student_result_pdf(test, student, result, answers):
 
     for i, a in enumerate(answers, 1):
         new_page_if_needed(40 * mm)
-        status = "Correct" if a["is_correct"] else "Incorrect"
-        color = (0.02, 0.59, 0.41) if a["is_correct"] else (0.86, 0.15, 0.15)
+        got = float(a["marks_awarded"] or 0)
+        status = ("Correct +" + _m(got)) if a["is_correct"] else (
+            ("Incorrect -" + _m(abs(got))) if a["selected_option"] else "Not answered 0")
+        color = (0.02, 0.59, 0.41) if a["is_correct"] else ((0.86, 0.15, 0.15) if a["selected_option"] else (0.45, 0.45, 0.45))
         draw_wrapped(
             f"Q{i}. {a['question_text']}  [{a['marks']} mark(s)]  {status}",
             left, fontsize=10, bold=True, color=color

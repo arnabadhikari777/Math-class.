@@ -10,6 +10,11 @@
     <label>Password</label>
     <input type="password" name="password" required placeholder="Password" autocomplete="current-password">
 
+    <label style="display:flex;align-items:center;gap:.5rem;font-weight:500;margin:.6rem 0 0">
+      <input type="hidden" name="remember_form" value="1">
+      <input type="checkbox" name="remember" value="1" checked style="width:auto;margin:0"> Keep me signed in on this device
+    </label>
+
     <button class="btn btn-primary btn-full mt-2" type="submit" style="width:100%">Login</button>
   </form>
   <p class="helper-text text-center mt-2">

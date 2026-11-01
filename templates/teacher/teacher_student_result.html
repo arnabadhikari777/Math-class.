@@ -5,9 +5,14 @@
   <h2>📝 {{ student.name }} — Answer Sheet</h2>
   <p class="helper-text">
     Test: <strong>{{ test.title }}</strong> · Class: {{ student.class_name }} ·
-    Roll: {{ student.roll or '-' }} · Score: <strong>{{ result.score }} / {{ result.total_marks }}</strong>
+    Roll: {{ student.roll or '-' }} · Score: <strong>{{ result.score|marks }} / {{ result.total_marks|marks }}</strong>
     ({{ pct }}%) · Submitted: {{ result.submitted_at[:16].replace('T',' ') }}
   </p>
+  {% if bd %}
+  <p style="margin:.6rem 0 0">✅ Correct <strong>{{ bd.correct }}</strong> · ❌ Incorrect <strong>{{ bd.wrong }}</strong> · ⬜ Unanswered <strong>{{ bd.unanswered }}</strong>
+     · Earned <strong style="color:var(--success)">+{{ bd.positive|marks }}</strong>
+     · Negative deducted <strong style="color:var(--danger)">{{ '−' ~ (bd.negative|marks) if bd.negative else '0' }}</strong></p>
+  {% endif %}
   <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
     <a class="btn" href="{{ url_for('download_student_result_pdf', test_id=test.id, result_id=result.id) }}">📄 Download PDF</a>
     <a class="btn btn-secondary" href="{{ url_for('test_results_view', test_id=test.id) }}">← Back to Results</a>
@@ -18,15 +23,17 @@
 <div class="card">
   <h3>Student's Selected Options</h3>
   {% for a in answers %}
-  <div class="q-card {{ 'correct' if a.is_correct else 'wrong' }}" style="margin-bottom:14px;">
+  <div class="q-card {{ 'correct' if a.is_correct else 'wrong' if a.selected_option else '' }}" style="margin-bottom:14px;">
     <div style="font-weight:700; margin-bottom:.5rem; font-family: 'Noto Sans Bengali', Inter, sans-serif;">
       Q{{ loop.index }}. {{ a.question_text }}
       {% if a.is_correct %}
-        <span class="badge badge-success">Correct</span>
+        <span class="badge badge-success">Correct +{{ a.marks_awarded|marks }}</span>
+      {% elif a.selected_option %}
+        <span class="badge badge-danger">Incorrect {{ '−' ~ ((a.marks_awarded|abs)|marks) if a.marks_awarded else '0' }}</span>
       {% else %}
-        <span class="badge badge-danger">Incorrect</span>
+        <span class="badge badge-info">Not answered 0</span>
       {% endif %}
-      <span class="badge badge-info">{{ a.marks }} mark{{ 's' if a.marks != 1 else '' }}</span>
+      <span class="badge badge-info">{{ a.marks|marks }} mark{{ 's' if a.marks != 1 else '' }}</span>
     </div>
     {% set _img = a.image_url %}{% if _img %}<img src="{{ _img }}" alt="Question image" loading="lazy" style="max-width:100%;height:auto;border-radius:8px;margin:0 0 .8rem;background:#fff">{% endif %}
     {% for opt, letter in [('option_a','A'),('option_b','B'),('option_c','C'),('option_d','D')] %}

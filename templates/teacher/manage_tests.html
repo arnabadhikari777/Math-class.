@@ -41,11 +41,12 @@
         {% endif %}
         {% endif %}
         <a class="btn btn-sm btn-outline" href="{{ url_for('test_settings', test_id=item.test.id) }}">Rules</a>
-        <form method="POST" action="{{ url_for('archive_test', test_id=item.test.id) }}"
-              onsubmit="return confirm('Archive this test? Students will no longer see it; all results are kept.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-sm btn-outline" type="submit">Archive</button>
+        <form method="POST" action="{{ url_for('archive_test', test_id=item.test.id) }}" class="js-confirm"
+              data-title="Are you sure you want to delete this test?" data-name="{{ item.test.title }}"
+              data-text="Students will no longer see it. All questions, results and answers are kept, and you can restore it from “Deleted tests”."
+              data-ok-label="Delete Test"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-danger" type="submit">Delete</button>
         </form>
-        <a class="btn btn-sm btn-danger" href="{{ url_for('delete_test', test_id=item.test.id) }}">Delete permanently…</a>
       </div>
     </div>
   {% endfor %}
@@ -54,15 +55,21 @@
 {% endif %}
 {% if archived_tests %}
 <div class="card">
-  <h3>Archived tests</h3>
+  <h3>Deleted tests <span class="helper-text">(can be restored)</span></h3>
   {% for t in archived_tests %}
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0">
     <span>{{ t.title }} <span class="helper-text">({{ t.class_name }})</span></span>
     <a class="btn btn-sm btn-secondary" href="{{ url_for('test_results_view', test_id=t.id) }}">Results</a>
     <form method="POST" action="{{ url_for('restore_test', test_id=t.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm" type="submit">Restore</button></form>
-    <a class="btn btn-sm btn-danger" href="{{ url_for('delete_test', test_id=t.id) }}">Delete permanently…</a>
+    <form method="POST" action="{{ url_for('delete_test', test_id=t.id) }}" class="js-confirm"
+          data-title="Delete this test forever?" data-name="{{ t.title }}"
+          data-text="This permanently removes the test, its questions and ALL student attempts and results. This cannot be undone."
+          data-ok-label="Delete forever"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-sm btn-outline" type="submit">Delete forever</button>
+    </form>
   </div>
   {% endfor %}
 </div>
 {% endif %}
+{% include 'teacher/_confirm_modal.html' %}
 {% endblock %}

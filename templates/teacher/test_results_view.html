@@ -1,9 +1,20 @@
 {% extends "base.html" %}
 {% block title %}Results - {{ test.title }}{% endblock %}
 {% block content %}
+<style>@media print { nav, header, footer, .no-print, form, .btn { display: none !important; } .card { box-shadow: none; border: 0; } }</style>
 <div class="card">
   <h2><i class="fa-solid fa-chart-column" aria-hidden="true"></i> {{ test.title }} - Results Overview</h2>
   <p class="helper-text">Total Submissions: {{ results|length }} students</p>
+  {% if stats.count %}
+  <div class="stat-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.6rem;margin:.6rem 0 1rem">
+    <div class="stat"><div class="num">{{ stats.count }}</div><div class="label">Submitted</div></div>
+    <div class="stat"><div class="num">{{ stats.avg }}%</div><div class="label">Average</div></div>
+    <div class="stat"><div class="num">{{ stats.high }}%</div><div class="label">Highest</div></div>
+    <div class="stat"><div class="num">{{ stats.low }}%</div><div class="label">Lowest</div></div>
+    <div class="stat"><div class="num">{{ stats.passed }}/{{ stats.count }}</div><div class="label">Passed (≥{{ stats.pass_pct }}%)</div></div>
+  </div>
+  <button type="button" class="btn btn-sm btn-outline no-print" onclick="window.print()">🖨 Print / Save as PDF</button>
+  {% endif %}
   {% if test.result_release == 'manual' %}
   <form method="POST" action="{{ url_for('release_results', test_id=test.id) }}" class="flex gap-2 items-center flex-wrap" style="margin:.5rem 0 1rem">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

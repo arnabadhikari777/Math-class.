@@ -329,10 +329,11 @@ class H(unittest.TestCase):
         self.assertEqual(self.student_client(self.sb).get(f"/test/{tid}").status_code, 404)
         self.post(t, "/teacher/cleanup/action", {"action": "delete_inactive_tests"})           # bulk button archives, never deletes
         self.assertGreater(self.q("SELECT COUNT(*) FROM tests")[0][0], 0)
-        self.assertIn("attempts", t.get(f"/teacher/tests/{tid}/delete").get_data(as_text=True))   # impact preview
-        self.post(t, f"/teacher/tests/{tid}/delete", {"confirm_name": "nope"})
-        self.assertEqual(self.q("SELECT COUNT(*) FROM tests WHERE id=?", tid)[0][0], 1)
-        self.post(t, f"/teacher/tests/{tid}/delete", {"confirm_name": "Race"})
+        page = t.get(f"/teacher/tests/{tid}/delete").get_data(as_text=True)      # impact preview, plain Cancel / Delete (no typing)
+        self.assertIn("attempts", page); self.assertIn("Are you sure you want to delete this test?", page)
+        self.assertNotIn("Type the exact name", page); self.assertNotIn("confirm_name", page)
+        self.assertEqual(self.q("SELECT COUNT(*) FROM tests WHERE id=?", tid)[0][0], 1)   # opening the page deletes nothing
+        self.post(t, f"/teacher/tests/{tid}/delete")
         self.assertEqual(self.q("SELECT COUNT(*) FROM tests WHERE id=?", tid)[0][0], 0)
         self.assertEqual(self.q("SELECT COUNT(*) FROM results WHERE test_id=?", tid)[0][0], 0)
 

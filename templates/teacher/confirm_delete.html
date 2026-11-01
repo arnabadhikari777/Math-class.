@@ -1,22 +1,21 @@
 {% extends "base.html" %}
-{% block title %}Confirm permanent delete{% endblock %}
+{% block title %}Delete {{ kind }}{% endblock %}
 {% block content %}
-<div class="card" style="max-width:560px;">
-  <h2>Permanently delete {{ kind }}: {{ name }}</h2>
-  <p class="helper-text">This cannot be undone. This is what will be removed:</p>
+<div class="card" style="max-width:520px;">
+  <h2>Are you sure you want to delete this {{ kind }}?</h2>
+  <p style="font-weight:700">{{ name }}</p>
+  <p class="helper-text">This permanently removes it and cannot be undone:</p>
   <ul>
     {% for k, v in impact.items() %}<li><strong>{{ v }}</strong> {{ k }}</li>{% endfor %}
   </ul>
   {% if archive %}
   <form method="POST" action="{{ archive }}" style="margin:12px 0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button class="btn btn-outline" type="submit">Archive instead (keeps all history)</button>
+    <button class="btn btn-outline" type="submit">Move to “Deleted tests” instead (keeps all history, can be restored)</button>
   </form>
   {% endif %}
-  <form method="POST" action="{{ action }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>Type the exact name to confirm</label>
-    <input type="text" name="confirm_name" required autocomplete="off">
-    <button class="btn btn-danger" type="submit">Delete permanently</button>
+  <form method="POST" action="{{ action }}" style="display:flex;gap:.5rem;flex-wrap:wrap"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <a class="btn btn-outline" href="{{ back }}">Cancel</a>
+    <button class="btn btn-danger" type="submit">Delete {{ kind|capitalize }}</button>
   </form>
 </div>
 {% endblock %}

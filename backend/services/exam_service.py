@@ -21,7 +21,6 @@ from backend.db.m008_exam_system import question_hash
 
 log = logging.getLogger(__name__)
 
-POLICIES_RESULT = ("best", "latest")   # legacy only: kept so old multi-attempt history still resolves
 POLICIES_LATE = ("auto_submit", "reject")
 OPTIONS = ("A", "B", "C", "D")
 
@@ -474,18 +473,19 @@ def sweep_expired(conn, test_id=None):
 
 # ----------------------------------------------------------- counted result
 def refresh_counted_result(conn, test, student_id):
-    """Pick the attempt that counts (best / latest) and mirror it into `results` + answers.result_id.
+    """Mirror the student's finished attempt into `results` + answers.result_id (one attempt per test now).
+    Old tests that already hold several historic attempts keep the result they had: it is never re-picked.
     Never touches attempts, answers' snapshots or other students. Returns results.id (or None)."""
-    pol = test["result_policy"] if test["result_policy"] in POLICIES_RESULT else "best"
     done = conn.execute(
         """SELECT * FROM exam_attempts WHERE test_id=? AND student_id=? AND status IN ('submitted','auto_submitted')
            ORDER BY id""", (test["id"], student_id)).fetchall()
     if not done:
         return None
-    if pol == "latest":
-        pick = done[-1]
-    else:
-        pick = max(done, key=lambda a: (a["score"] or 0, -a["id"]))  # highest; earliest wins ties
+    existing = conn.execute("SELECT id, attempt_id FROM results WHERE test_id=? AND student_id=?",
+                            (test["id"], student_id)).fetchone()
+    if len(done) > 1 and existing is not None and existing["attempt_id"] in {a["id"] for a in done}:
+        return existing["id"]               # legacy multi-attempt history: leave the counted result as it was
+    pick = done[-1]
     row = conn.execute("SELECT id FROM results WHERE test_id=? AND student_id=?",
                        (test["id"], student_id)).fetchone()
     if row is None:

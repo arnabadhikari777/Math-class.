@@ -10,6 +10,7 @@ from flask import flash, redirect, render_template, request, session, url_for
 from backend.config import EMAIL_RE, EMAIL_SENDER_NAME, RESET_COOLDOWN_SECONDS, RESET_EMAIL_PER_HOUR, SITE_NAME
 from backend.core import app
 from backend.db.connection import get_db
+from backend.middleware.auth import revoke_current_session, start_session
 from backend.middleware.rate_limit import _bucket_ok, rate_limit
 from backend.services.activity_service import log_activity
 from backend.services.email_service import _send_email_async
@@ -252,8 +253,7 @@ def login():
 
         # Fresh session on every login (prevents session fixation): nothing from the
         # anonymous / previous session - including any teacher flag - survives.
-        session.clear()
-        session.permanent = True
+        start_session(remember=_remember())
         session["student_id"] = student["id"]
         session["student_name"] = student["name"]
         session["student_class"] = student["class_name"]
@@ -270,6 +270,13 @@ def login():
     return render_template("auth/login.html")
 
 
+def _remember():
+    """'Keep me signed in' checkbox. An old login page without the checkbox keeps the previous behaviour (stay signed in)."""
+    if request.form.get("remember_form") != "1":
+        return True
+    return request.form.get("remember") == "1"
+
+
 @app.route("/logout", methods=["GET", "POST"])
 def logout():
     """POST-only state change (CSRF-protected). A GET (old bookmark / link prefetch) changes nothing."""
@@ -277,6 +284,7 @@ def logout():
         return redirect(url_for("student_dashboard") if session.get("student_id") else url_for("index"))
     if session.get("impersonating"):
         return end_impersonation_response()
+    revoke_current_session()
     session.clear()
     flash("Logged out successfully.", "success")
     return redirect(url_for("index"))
@@ -302,8 +310,7 @@ def teacher_login():
         username = request.form.get("username", "")
         password = request.form.get("password", "")
         if check_teacher_credentials(username, password):
-            session.clear()
-            session.permanent = True
+            start_session(remember=_remember())
             session["is_teacher"] = True
             log_activity("teacher", "login", "Teacher logged in")
             flash("Welcome, Sir!", "success")
@@ -317,5 +324,6 @@ def teacher_login():
 def teacher_logout():
     if request.method != "POST":
         return redirect(url_for("teacher_dashboard") if session.get("is_teacher") else url_for("index"))
+    revoke_current_session()
     session.clear()
     return redirect(url_for("index"))

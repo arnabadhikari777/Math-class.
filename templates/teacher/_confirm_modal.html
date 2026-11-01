@@ -1,0 +1,42 @@
+{# One confirmation dialog for the whole page. Any <form class="js-confirm" data-title data-name data-text data-ok [data-danger]>
+   opens it instead of submitting; Cancel closes it, the red button submits. Without JavaScript the form just submits. #}
+<style>
+  #cfBack { position: fixed; inset: 0; background: rgba(8,12,30,.55); display: none; align-items: center; justify-content: center; z-index: 500; padding: 1rem; }
+  #cfBack.on { display: flex; }
+  #cfBox { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 1.4rem; max-width: 420px; width: 100%; box-shadow: var(--shadow-md); }
+  #cfBox h3 { margin: 0 0 .4rem; } #cfName { font-weight: 700; word-break: break-word; margin: .3rem 0; }
+</style>
+<div id="cfBack" role="dialog" aria-modal="true" aria-labelledby="cfTitle">
+  <div id="cfBox">
+    <h3 id="cfTitle">Are you sure?</h3>
+    <div id="cfName"></div>
+    <p class="text-muted" id="cfText" style="font-size:.9rem"></p>
+    <div style="display:flex;gap:.5rem;justify-content:flex-end;flex-wrap:wrap">
+      <button type="button" class="btn btn-outline" id="cfCancel">Cancel</button>
+      <button type="button" class="btn btn-danger" id="cfOk">Delete</button>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var back = document.getElementById('cfBack'), pending = null;
+  function close() { back.classList.remove('on'); pending = null; }
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (!f.classList || !f.classList.contains('js-confirm') || f.dataset.ok === 'done') return;
+    e.preventDefault(); pending = f;
+    document.getElementById('cfTitle').textContent = f.dataset.title || 'Are you sure?';
+    document.getElementById('cfName').textContent = f.dataset.name || '';
+    document.getElementById('cfText').textContent = f.dataset.text || '';
+    document.getElementById('cfOk').textContent = f.dataset.okLabel || 'Delete';
+    back.classList.add('on'); document.getElementById('cfCancel').focus();
+  }, true);
+  document.getElementById('cfCancel').onclick = close;
+  back.addEventListener('click', function (e) { if (e.target === back) close(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+  document.getElementById('cfOk').onclick = function () {
+    if (!pending) return;
+    var f = pending; f.dataset.ok = 'done'; document.getElementById('cfOk').disabled = true; f.submit();   // submit once
+  };
+})();
+</script>

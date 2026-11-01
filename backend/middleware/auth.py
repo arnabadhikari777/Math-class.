@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Session validation and student / teacher login-required decorators."""
 
+import secrets
+from datetime import datetime, timedelta
 from functools import wraps
 
 from flask import flash, jsonify, redirect, request, session, url_for
@@ -30,6 +32,51 @@ def impersonation_guard():
         flash("Read-only: a teacher viewing as a student cannot change anything. Use Exit to Teacher.", "error")
         return redirect(url_for("student_dashboard"))
     return None
+
+
+def start_session(remember=True):
+    """Brand-new session at login (no fixation: nothing of the old one survives).
+    remember=True  -> persistent cookie (PERMANENT_SESSION_LIFETIME, 30 days): survives closing the browser.
+    remember=False -> browser-session cookie: gone when the browser closes.
+    The cookie is HttpOnly + SameSite=Lax (+ Secure on HTTPS) and holds only ids - never the password."""
+    session.clear()
+    session.permanent = bool(remember)
+    session["jti"] = secrets.token_urlsafe(16)
+
+
+def revoke_current_session():
+    """Logout: remember this session id as dead, so a copied cookie stops working at once."""
+    jti = session.get("jti")
+    if not jti:
+        return
+    now = datetime.now()
+    try:
+        with get_db() as conn:
+            conn.execute("DELETE FROM revoked_sessions WHERE expires_at < ?", (now.isoformat(),))
+            conn.execute("INSERT OR IGNORE INTO revoked_sessions (jti, revoked_at, expires_at) VALUES (?,?,?)",
+                         (jti, now.isoformat(), (now + app.config["PERMANENT_SESSION_LIFETIME"]).isoformat()))
+            conn.commit()
+    except Exception:
+        pass
+
+
+@app.before_request
+def reject_revoked_session():
+    """A logged-out session id can never be used again (also for API calls)."""
+    jti = session.get("jti")
+    if not jti or request.endpoint in (None, "static", "manifest", "service_worker"):
+        return None
+    try:
+        with get_db() as conn:
+            dead = conn.execute("SELECT 1 FROM revoked_sessions WHERE jti=?", (jti,)).fetchone()
+    except Exception:
+        return None
+    if not dead:
+        return None
+    session.clear()
+    if request.path.startswith("/api/") or request.is_json:
+        return jsonify({"ok": False, "error": "Session ended. Please log in again."}), 401
+    return redirect(url_for("login"))
 
 
 @app.before_request

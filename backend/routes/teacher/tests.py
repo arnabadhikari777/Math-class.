@@ -20,6 +20,8 @@ def _read_rules(form):
             v = cast(str(form.get(name, default)).strip() or default)
         except (TypeError, ValueError):
             v = default
+        if v != v or v in (float("inf"), float("-inf")):      # "nan" / "inf" typed into a number box
+            v = default
         return max(lo, min(hi, v))
     lp = form.get("late_policy", "auto_submit")
     rr = form.get("result_release", "immediate")
@@ -288,7 +290,7 @@ def archive_test(test_id):
                      (datetime.now().isoformat(), test_id))
         conn.commit()
     log_activity("teacher", "archive_test", f"id={test_id}")
-    flash("Test archived. Results and answers are kept; you can restore it any time.", "success")
+    flash("Test deleted. Results and answers are kept; you can restore it from “Deleted tests”.", "success")
     return redirect(url_for("manage_tests"))
 
 
@@ -306,7 +308,7 @@ def restore_test(test_id):
 @app.route("/teacher/tests/<int:test_id>/delete", methods=["GET", "POST"])
 @teacher_login_required
 def delete_test(test_id):
-    """PERMANENT delete. GET shows exactly what will be lost; POST needs the test title typed in."""
+    """PERMANENT delete. GET shows exactly what will be lost; POST (Cancel / Delete buttons - no typing) deletes."""
     with get_db() as conn:
         test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
         if not test:
@@ -317,9 +319,6 @@ def delete_test(test_id):
             return render_template("teacher/confirm_delete.html", kind="test", name=test["title"], impact=impact,
                                    action=url_for("delete_test", test_id=test_id),
                                    back=url_for("manage_tests"), archive=url_for("archive_test", test_id=test_id))
-        if request.form.get("confirm_name", "").strip() != test["title"]:
-            flash("The name you typed does not match - nothing was deleted.", "error")
-            return redirect(url_for("delete_test", test_id=test_id))
         title = test["title"]
         try:
             purge_test(conn, test_id)

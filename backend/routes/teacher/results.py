@@ -10,6 +10,7 @@ from flask import Response, abort, flash, redirect, render_template, request, ur
 from backend.core import app
 from backend.db.connection import get_db
 from backend.middleware.auth import teacher_login_required
+from backend.services import exam_service
 from backend.services.activity_service import log_activity
 from backend.services.pdf_service import build_student_result_pdf
 from backend.utils.helpers import percentage
@@ -29,7 +30,15 @@ def test_results_view(test_id):
                WHERE results.test_id=? ORDER BY results.score DESC""",
             (test_id,)
         ).fetchall()
-    return render_template("teacher/test_results_view.html", test=test, results=results)
+    pass_pct = app.config.get("PASS_PERCENTAGE", 40)
+    pcts = [percentage(r["score"], r["total_marks"]) for r in results]
+    stats = {
+        "count": len(results),
+        "avg": round(sum(pcts) / len(pcts), 1) if pcts else 0,
+        "high": max(pcts) if pcts else 0, "low": min(pcts) if pcts else 0,
+        "passed": sum(1 for x in pcts if x >= pass_pct), "pass_pct": pass_pct,
+    }
+    return render_template("teacher/test_results_view.html", test=test, results=results, stats=stats)
 
 
 @app.route("/teacher/tests/<int:test_id>/results/release", methods=["POST"])
@@ -72,9 +81,10 @@ def teacher_student_result(test_id, result_id):
             (result_id,)
         ).fetchall()
     pct = percentage(result["score"], result["total_marks"])
+    bd = exam_service.breakdown_from_answers(answers) if answers else None
     return render_template(
         "teacher/teacher_student_result.html",
-        test=test, student=student, result=result, answers=answers, pct=pct
+        test=test, student=student, result=result, answers=answers, pct=pct, bd=bd
     )
 
 
