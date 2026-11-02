@@ -12,18 +12,8 @@
 {% endblock %}
 {% block content %}
 {% include "partials/_studio_nav.html" %}
-<<<<<<< HEAD
 {% set ws_count = questions|length %}{% set ws_marks = total_marks %}
 {% include "partials/_workspace_head.html" %}
-=======
-<div class="card">
-  <h2>{{ test.title }}</h2>
-  <p class="helper-text">Class: {{ test.class_name }} | Duration: {{ test.duration_minutes }} minutes | মোট প্রশ্ন: {{ questions|length }}</p>
-  <div class="flex gap-1 flex-wrap mt-1">
-    <a class="btn btn-outline" href="{{ url_for('manage_tests') }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> All Tests</a>
-  </div>
-</div>
->>>>>>> 151620971b9f64b3d20ea4cebb51e32c21c1870d
 
 {% if problem %}
 <div class="card"><p style="color:var(--danger)"><strong>{{ problem }}</strong> (ছবি আপলোড না হওয়া পর্যন্ত শুধু আগে আপলোড করা ছবি বাছা যাবে।)</p></div>

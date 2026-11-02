@@ -1,9 +1,5 @@
 {% extends "base.html" %}
-<<<<<<< HEAD
 {% block title %}Import from My Questions · {{ test.title }}{% endblock %}
-=======
-{% block title %}Question Bank · {{ test.title }}{% endblock %}
->>>>>>> 151620971b9f64b3d20ea4cebb51e32c21c1870d
 {% block content %}
 {% include "partials/_studio_nav.html" %}
 {% set crumb = 'Import from My Questions' %}
@@ -12,13 +8,8 @@
   <h2>My Questions থেকে প্রশ্ন নিন</h2>
   <p class="helper-text">প্রশ্নগুলো <strong>{{ test.title }}</strong> Test-এ কপি হবে (একবারে সর্বোচ্চ {{ limit }} টি)। পরে My Questions-এ বা Test-এ বদলালে অন্যটি বদলাবে না। যে প্রশ্ন Test-এ আগেই আছে সেটি আবার যোগ হবে না।</p>
   <div class="flex gap-1 flex-wrap mt-1">
-<<<<<<< HEAD
     <a class="btn btn-outline" href="{{ url_for('studio.test_questions', test_id=test.id) }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Test Workspace-এ ফিরুন</a>
     <a class="btn btn-outline" href="{{ url_for('qbank.question_new') }}">+ My Questions-এ নতুন প্রশ্ন</a>
-=======
-    <a class="btn btn-outline" href="{{ url_for('add_questions', test_id=test.id) }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Test-এ ফিরুন</a>
-    <a class="btn btn-outline" href="{{ url_for('qbank.question_new') }}">+ Bank-এ নতুন প্রশ্ন</a>
->>>>>>> 151620971b9f64b3d20ea4cebb51e32c21c1870d
   </div>
 </div>
 <div class="card">
