@@ -4,20 +4,49 @@
 (function () {
     "use strict";
 
-    // <form data-confirm="Are you sure?"> asks before submitting.
+    var confirmed = typeof WeakSet === "function" ? new WeakSet() : null;
+
+    // <form data-confirm="Are you sure?"> asks (in a styled dialog) before submitting.
+    // Add data-confirm-title / data-confirm-ok / data-danger="0" to tune the dialog.
     document.addEventListener("submit", function (e) {
         var form = e.target;
         if (!form || !form.getAttribute) return;
         var msg = form.getAttribute("data-confirm");
-        if (msg && !window.confirm(msg)) {
+        if (msg && !(confirmed && confirmed.has(form))) {
             e.preventDefault();
+            e.stopImmediatePropagation();
+            var submitter = e.submitter || null;
+            var danger = form.getAttribute("data-danger");
+            danger = danger == null
+                ? /delete|remove|purge|erase|permanent|মুছ|চিরতরে|ডিলিট/i.test(msg)
+                : danger !== "0";
+            var ask = window.AMC && window.AMC.confirm
+                ? window.AMC.confirm({
+                    title: form.getAttribute("data-confirm-title") || "",
+                    message: msg,
+                    confirmText: form.getAttribute("data-confirm-ok") || "",
+                    danger: danger
+                })
+                : Promise.resolve(window.confirm(msg));
+            ask.then(function (ok) {
+                if (!ok) return;
+                if (confirmed) confirmed.add(form);
+                try {
+                    if (form.requestSubmit) form.requestSubmit(submitter && submitter.form === form ? submitter : undefined);
+                    else form.submit();
+                } catch (err) {
+                    form.submit();
+                } finally {
+                    if (confirmed) confirmed.delete(form);
+                }
+            });
             return;
         }
         if (form.hasAttribute("data-disable-on-submit")) {
             var b = form.querySelector("button");
             if (b) setTimeout(function () { b.disabled = true; }, 0); // after the form data is read
         }
-    });
+    }, true);
 
     document.addEventListener("click", function (e) {
         var t = e.target.closest ? e.target.closest("[data-print], [data-busy-text]") : null;

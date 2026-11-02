@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Edit question · {{ test.title }}{% endblock %}
+{% block content %}
+{% include "partials/_studio_nav.html" %}
+{% set crumb = 'Edit question' %}
+{% include "partials/_workspace_head.html" %}
+<div class="card">
+  <h3>Edit question</h3>
+  <p class="helper-text">This changes only the copy inside <strong>{{ test.title }}</strong>. The saved question in My Questions stays as it is.</p>
+  <form method="POST" accept-charset="UTF-8" id="qeForm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="image_id" id="qeImageId" value="{{ q.bank_image_id or '' }}">
+    <label>প্রশ্নের লেখা (ছবি থাকলে ঐচ্ছিক)</label>
+    <textarea name="question_text" rows="3" style="font-family:'Noto Sans Bengali',Inter,sans-serif">{{ q.question_text }}</textarea>
+    <label>প্রশ্নের ছবি (ঐচ্ছিক)</label>
+    <div class="flex gap-1 flex-wrap items-center" style="margin:6px 0 12px">
+      <img id="qePrev" src="{{ image_url or '' }}" alt="" style="max-width:200px;max-height:140px;object-fit:contain;background:#fff;border-radius:8px;border:1px solid var(--border);{{ '' if image_url else 'display:none' }}">
+      <button type="button" class="btn btn-sm btn-outline" id="qePick">🖼️ ছবি বাছুন / আপলোড করুন</button>
+      <button type="button" class="btn btn-sm btn-outline" id="qeClear" {{ '' if image_url else 'style=display:none' }}>ছবি সরান</button>
+    </div>
+    {% for k in ['a','b','c','d'] %}
+    <label>Option {{ k|upper }}</label>
+    <input type="text" name="option_{{ k }}" value="{{ q['option_' ~ k] }}" style="font-family:'Noto Sans Bengali',Inter,sans-serif">
+    {% endfor %}
+    <div class="flex gap-2 flex-wrap" style="margin-top:8px">
+      <div style="flex:1;min-width:140px"><label>Correct Option</label>
+        <select name="correct_option">{% for k in ['A','B','C','D'] %}<option {{ 'selected' if q.correct_option == k }}>{{ k }}</option>{% endfor %}</select></div>
+      <div style="flex:1;min-width:100px"><label>Marks</label><input type="number" name="marks" min="1" max="100" value="{{ q.marks or 1 }}"></div>
+    </div>
+    <div class="flex gap-1 flex-wrap" style="margin-top:14px">
+      <button class="btn btn-primary" type="submit" data-busy-text="Saving…">Save changes</button>
+      <a class="btn btn-outline" href="{{ url_for('studio.test_questions', test_id=test.id) }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% set picker_test_id = test.id %}{% set picker_test_name = test.title %}
+{% include "partials/_image_picker.html" %}
+{% endblock %}
+{% block extra_js %}
+<script nonce="{{ csp_nonce() }}">
+(function () {
+  var id = document.getElementById('qeImageId'), prev = document.getElementById('qePrev'), clr = document.getElementById('qeClear');
+  document.getElementById('qePick').addEventListener('click', function () {
+    ImagePicker.open(function (im) { id.value = im.id; prev.src = im.thumb || im.url; prev.style.display = ''; clr.style.display = ''; });
+  });
+  clr.addEventListener('click', function () { id.value = ''; prev.removeAttribute('src'); prev.style.display = 'none'; clr.style.display = 'none'; });
+})();
+</script>
+{% endblock %}

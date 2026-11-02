@@ -57,3 +57,44 @@ PUSH_ENABLED = bool(VAPID_PUBLIC_KEY.strip() and VAPID_PRIVATE_KEY.strip() and V
 DEBUG_MODE = os.environ.get("FLASK_DEBUG", "0").strip().lower() in ("1", "true", "yes")
 # Redirect http -> https (localhost is always exempt). Set FORCE_HTTPS=0 to disable.
 FORCE_HTTPS = os.environ.get("FORCE_HTTPS", "1").strip().lower() not in ("0", "false", "no")
+
+# --- Local development OTP mode ---------------------------------------------------------------------
+# LOCAL_OTP_MODE=console  -> no email is sent; the OTP is printed in the terminal that runs Flask.
+# Strictly for a developer's own computer. validate_local_otp_mode() runs when the app starts and
+# REFUSES to start if the mode is switched on anywhere that is not a local debug run.
+LOCAL_OTP_MODE = os.environ.get("LOCAL_OTP_MODE", "").strip().lower()
+_PRODUCTION_ENV_HINTS = ("PYTHONANYWHERE_DOMAIN", "PYTHONANYWHERE_SITE", "DYNO", "RENDER", "K_SERVICE",
+                         "WEBSITE_SITE_NAME", "VERCEL", "FLY_APP_NAME", "RAILWAY_ENVIRONMENT")
+
+
+class ConfigurationError(RuntimeError):
+    """The configuration is unsafe or invalid; the application must not start."""
+
+
+def local_otp_console_enabled():
+    return LOCAL_OTP_MODE == "console"
+
+
+def validate_local_otp_mode(mode=None, debug=None, force_https=None, environ=None):
+    """Raise ConfigurationError unless LOCAL_OTP_MODE is empty, or 'console' on a local debug run.
+    (Arguments exist only so the tests can check every combination without touching the real environment.)"""
+    mode = LOCAL_OTP_MODE if mode is None else mode
+    debug = DEBUG_MODE if debug is None else debug
+    force_https = FORCE_HTTPS if force_https is None else force_https
+    environ = os.environ if environ is None else environ
+    if mode in ("", "off", "0", "false", "no"):
+        return
+    if mode != "console":
+        raise ConfigurationError("LOCAL_OTP_MODE must be empty or 'console' (got %r)." % mode)
+    problems = []
+    if not debug:
+        problems.append("FLASK_DEBUG=1 is required")
+    if force_https:
+        problems.append("FORCE_HTTPS=0 is required (a real production site always forces HTTPS)")
+    found = [k for k in _PRODUCTION_ENV_HINTS if environ.get(k)]
+    if found:
+        problems.append("this looks like a hosted/production environment (%s)" % ", ".join(found))
+    if problems:
+        raise ConfigurationError(
+            "LOCAL_OTP_MODE=console is for local development only and was refused: " + "; ".join(problems) +
+            ". Remove LOCAL_OTP_MODE from the environment/.env of this server.")

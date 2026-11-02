@@ -1,13 +1,18 @@
-{# Shared tabs for everything about questions and images: one place instead of three separate screens. #}
+{# Shared header + tabs for My Questions, Test Workspace and Image Library (one consistent navigation). #}
 {% set _ep = request.endpoint or '' %}
+{% set _lib = _ep.startswith('studio.library') or _ep.startswith('studio.category') or _ep.startswith('studio.image') %}
+{% set _my = _ep.startswith('qbank.') and _ep != 'qbank.import_to_test' %}
+{% set _ws = not _lib and not _my %}
 <div class="page-head">
   <div>
-    <h1>Question Studio</h1>
-    <p>Create questions, reuse saved ones, and manage images - all in one place.</p>
+    <h1>{{ 'Image Library' if _lib else ('My Questions' if _my else 'Test Workspace') }}</h1>
+    <p>{% if _lib %}Keep images in categories and reuse them in any question.
+       {% elif _my %}Your saved question library. Questions saved here are not in any test until you import them.
+       {% else %}Create, import, edit and order the questions of one selected test.{% endif %}</p>
   </div>
 </div>
-<nav class="subnav" aria-label="Question Studio">
-  <a href="{{ url_for('qbank.questions') }}" class="{{ 'active' if _ep.startswith('qbank.question') or _ep.startswith('qbank.import') }}"><i class="fa-solid fa-layer-group" aria-hidden="true"></i> Saved questions</a>
-  <a href="{{ url_for('manage_tests') }}" class="{{ 'active' if _ep.startswith('studio.test_questions') }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Test questions</a>
-  <a href="{{ url_for('studio.library') }}" class="{{ 'active' if _ep.startswith('studio.library') or _ep.startswith('studio.category') or _ep.startswith('studio.image') }}"><i class="fa-solid fa-images" aria-hidden="true"></i> Image Library</a>
+<nav class="subnav" aria-label="Questions and images">
+  <a href="{{ url_for('qbank.questions') }}" class="{{ 'active' if _my }}"><i class="fa-solid fa-layer-group" aria-hidden="true"></i> My Questions</a>
+  <a href="{{ url_for('studio.workspace_home') }}" class="{{ 'active' if _ws }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Test Workspace</a>
+  <a href="{{ url_for('studio.library') }}" class="{{ 'active' if _lib }}"><i class="fa-solid fa-images" aria-hidden="true"></i> Image Library</a>
 </nav>

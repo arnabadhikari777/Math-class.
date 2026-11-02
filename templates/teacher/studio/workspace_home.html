@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Test Workspace{% endblock %}
+{% block content %}
+{% include "partials/_studio_nav.html" %}
+<div class="card">
+  <h2>Choose a test</h2>
+  <p class="helper-text">Questions are always created and imported inside one selected test. Pick the test to open its Test Workspace.</p>
+</div>
+<div class="card">
+  {% if tests %}
+  <div class="row-list">
+    {% for t in tests %}
+    <div class="row-item">
+      <div>
+        <div class="ttl">{{ t.title }} {% if (t.status or 'draft') == 'draft' %}<span class="badge badge-gray">Draft</span>{% else %}<span class="badge badge-green">Published</span>{% endif %}</div>
+        <div class="meta">Class {{ t.class_name }} &middot; {{ t.q_count }} questions &middot; {{ t.total_marks }} marks</div>
+      </div>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('studio.test_questions', test_id=t.id) }}">Open Workspace</a>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">No tests yet. <a href="{{ url_for('create_test') }}">Create a test</a> first, then open its Test Workspace.</div>
+  {% endif %}
+</div>
+{% endblock %}

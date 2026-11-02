@@ -65,7 +65,7 @@ def _parse(ts):
 # --------------------------------------------------------------- versions
 def ensure_version(conn, test):
     """Return the exam_versions id new attempts must use (creating/refreshing it as needed)."""
-    qs = conn.execute("SELECT * FROM questions WHERE test_id=? ORDER BY id", (test["id"],)).fetchall()
+    qs = conn.execute("SELECT * FROM questions WHERE test_id=? ORDER BY COALESCE(sort_order, id), id", (test["id"],)).fetchall()
     h = question_hash(qs)
     neg = float(test["negative_marks"] or 0)
     latest = conn.execute(

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Compatibility wrapper. The ONE Cloudinary implementation lives in backend/services/image_store.py
 (used through backend/services/image_service.py). This module only keeps the old names importable
-so existing code (Question Bank pages) keeps working with identical behaviour and error messages."""
+so existing code (My Questions pages) keeps working with identical behaviour and error messages."""
 import requests  # noqa: F401  (kept importable: tests patch cloudinary_client.requests.post)
 
 from backend.services import image_store as _s

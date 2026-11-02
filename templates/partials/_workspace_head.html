@@ -1,0 +1,21 @@
+{# Same selected-test header on every page that works on ONE test. Needs: test. Optional: crumb (last breadcrumb text). #}
+<nav class="breadcrumb" aria-label="Breadcrumb" style="font-size:.88rem;margin-bottom:8px">
+  <a href="{{ url_for('manage_tests') }}">Manage Tests</a> &rsaquo;
+  {% if crumb %}<a href="{{ url_for('studio.test_questions', test_id=test.id) }}">{{ test.title }} &middot; Test Workspace</a> &rsaquo; <span>{{ crumb }}</span>
+  {% else %}<span>{{ test.title }} &middot; Test Workspace</span>{% endif %}
+</nav>
+<div class="card" id="wsHead" data-test-id="{{ test.id }}">
+  <div class="flex gap-1 flex-wrap items-center" style="justify-content:space-between">
+    <div>
+      <div class="helper-text" style="margin:0">Selected test</div>
+      <h2 style="margin:2px 0">{{ test.title }}
+        {% if (test.status or 'draft') == 'draft' %}<span class="badge badge-gray">Draft</span>{% else %}<span class="badge badge-green">Published</span>{% endif %}
+      </h2>
+      <p class="helper-text" style="margin:0">Class: {{ test.class_name }} | Duration: {{ test.duration_minutes }} minutes{% if ws_count is defined %} | Questions: {{ ws_count }} | Total marks: {{ ws_marks }}{% endif %}</p>
+    </div>
+    <div class="flex gap-1 flex-wrap">
+      <a class="btn btn-sm btn-outline" href="{{ url_for('manage_tests') }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> All Tests</a>
+      <a class="btn btn-sm btn-outline" href="{{ url_for('test_review', test_id=test.id) }}"><i class="fa-solid fa-eye" aria-hidden="true"></i> Preview{% if (test.status or 'draft') == 'draft' %} &amp; Publish{% endif %}</a>
+    </div>
+  </div>
+</div>

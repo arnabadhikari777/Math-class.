@@ -132,7 +132,7 @@ def create_test():
 @app.route("/teacher/tests/<int:test_id>/questions", methods=["GET", "POST"])
 @teacher_login_required
 def add_questions(test_id):
-    """Kept as the stable endpoint name (templates/guards use it); the page is the Question Studio."""
+    """Kept as the stable endpoint name (templates/guards use it); the page is the Test Workspace of that test."""
     return redirect(url_for("studio.test_questions", test_id=test_id))
 
 
@@ -177,7 +177,7 @@ def test_review(test_id):
         test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
         if test is None:
             abort(404)
-        questions = conn.execute("SELECT * FROM questions WHERE test_id=? ORDER BY id", (test_id,)).fetchall()
+        questions = conn.execute("SELECT * FROM questions WHERE test_id=? ORDER BY COALESCE(sort_order, id), id", (test_id,)).fetchall()
         issues = publish_service.problems(conn, test)
         total = publish_service.total_marks(conn, test_id)
     return render_template("teacher/test_review.html", test=test, questions=questions, issues=issues,

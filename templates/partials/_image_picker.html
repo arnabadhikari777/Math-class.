@@ -24,10 +24,16 @@
   .ip-row>*{flex:1;min-width:150px}
   .ip-msg{margin-top:10px;font-size:.88rem}
   .ip-msg.err{color:var(--danger)} .ip-msg.ok{color:var(--success)}
+  .ip-ctx{background:var(--primary-soft);border:1px solid var(--primary);border-radius:10px;padding:8px 12px;font-size:.86rem;margin-bottom:10px}
+  .ip-bar{height:8px;border-radius:999px;background:var(--surface2);border:1px solid var(--border);overflow:hidden;margin-top:10px;display:none}
+  .ip-bar>i{display:block;height:100%;width:0;background:var(--primary);transition:width .15s}
+  .ip-card.ip-new{border-color:var(--success)}
+  .ip-card .ip-badge{display:inline-block;background:var(--success);color:#fff;border-radius:999px;font-size:.66rem;padding:1px 8px;margin-top:3px}
+  .ip-box.busy .ip-drop{opacity:.55;pointer-events:none}
 </style>
 <div class="ip-back" id="ipBack" role="dialog" aria-modal="true" aria-label="ছবি বাছুন">
-  <div class="ip-box">
-    <div class="ip-head"><h3>🖼️ ছবি বাছুন</h3><button type="button" class="btn btn-sm btn-outline" id="ipClose">✕ বন্ধ</button></div>
+  <div class="ip-box" id="ipBox">
+    <div class="ip-head"><h3>🖼️ ছবি বাছুন</h3><button type="button" class="btn btn-sm btn-outline" id="ipClose"><i class="fa-solid fa-xmark" aria-hidden="true"></i> বন্ধ</button></div>
     <div class="ip-tabs">
       <button type="button" class="ip-tab active" data-tab="lib">Library থেকে বাছুন</button>
       <button type="button" class="ip-tab" data-tab="up">⬆️ নতুন ছবি আপলোড</button>
@@ -41,17 +47,19 @@
       </div>
       <div id="ipUp" style="display:none">
         {% if problem %}<p class="ip-msg err"><strong>{{ problem }}</strong></p>{% endif %}
+        {% if picker_test_id %}<div class="ip-ctx" id="ipCtx">এই Test: <strong>{{ picker_test_name }}</strong><br>নতুন ছবি ডিফল্টভাবে এই নামের Category-তে সংরক্ষণ হবে। চাইলে নিচে অন্য Category বেছে নিন বা নতুন Category লিখুন।</div>{% endif %}
         <div class="ip-row">
-          <select id="ipCatSel"></select>
-          <input type="text" id="ipNewCat" maxlength="60" placeholder="অথবা নতুন Category (যেমন: Calculus)">
+          <div><label for="ipCatSel" style="font-size:.82rem">Category</label><select id="ipCatSel"></select></div>
+          <div><label for="ipNewCat" style="font-size:.82rem">অথবা নতুন Category</label><input type="text" id="ipNewCat" maxlength="60" placeholder="যেমন: Calculus"></div>
         </div>
         <div class="ip-drop" id="ipDrop">
-          <div style="font-size:1.6rem">📁</div>
-          <div>ছবি এখানে টেনে আনুন, অথবা ক্লিক করে বাছুন</div>
+          <div style="font-size:1.6rem"><i class="fa-solid fa-folder-open" aria-hidden="true"></i></div>
+          <div>ছবি এখানে টেনে আনুন, অথবা ক্লিক করে বাছুন (একসঙ্গে একাধিক)</div>
           <small style="color:var(--text-muted)">JPG, PNG, WEBP, GIF · প্রতিটি সর্বোচ্চ {{ max_mb }} MB · একবারে {{ max_files }} টি পর্যন্ত</small>
           <input type="file" id="ipFile" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
         </div>
-        <div class="ip-msg" id="ipUpMsg"></div>
+        <div class="ip-bar" id="ipBar"><i id="ipBarFill"></i></div>
+        <div class="ip-msg" id="ipUpMsg" role="status" aria-live="polite"></div>
       </div>
     </div>
   </div>
@@ -60,9 +68,11 @@
 window.ImagePicker = (function () {
   var API = "{{ url_for('studio.api_images') }}", UP = "{{ url_for('studio.api_upload') }}";
   var CSRF = "{{ csrf_token() }}";
+  var TEST_ID = {{ (picker_test_id or 0)|int }};
+  var MAX_FILES = {{ max_files|int }}, MAX_BYTES = {{ (max_mb or 5)|int }} * 1024 * 1024;
   var $ = function (id) { return document.getElementById(id); };
-  var back = $('ipBack'), grid = $('ipGrid'), chips = $('ipChips'), search = $('ipSearch');
-  var state = { cat: 0, cats: [], images: [], cb: null, timer: null };
+  var back = $('ipBack'), grid = $('ipGrid'), chips = $('ipChips'), search = $('ipSearch'), box = $('ipBox');
+  var state = { cat: 0, cats: [], images: [], cb: null, timer: null, def: null, chosen: false, fresh: {}, busy: false };
 
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
   function tab(name) {
@@ -70,67 +80,101 @@ window.ImagePicker = (function () {
     $('ipLib').style.display = name === 'lib' ? '' : 'none';
     $('ipUp').style.display = name === 'up' ? '' : 'none';
   }
-  function renderChips() {
+  function renderCats() {
     var html = '<button type="button" class="ip-chip ' + (!state.cat ? 'active' : '') + '" data-c="0">সব</button>';
     state.cats.forEach(function (c) {
       html += '<button type="button" class="ip-chip ' + (state.cat === c.id ? 'active' : '') + '" data-c="' + c.id + '">' + esc(c.name) + ' (' + c.count + ')</button>';
     });
     chips.innerHTML = html;
-    var sel = $('ipCatSel'), keep = sel.value;
-    sel.innerHTML = state.cats.map(function (c) { return '<option value="' + c.id + '">' + esc(c.name) + '</option>'; }).join('') || '<option value="">(কোনো Category নেই)</option>';
-    if (keep) sel.value = keep; else if (state.cat) sel.value = String(state.cat);
+    var sel = $('ipCatSel'), keep = sel.value, opts = '';
+    if (state.def && !state.def.exists) opts += '<option value="__default__">' + esc(state.def.name) + ' (নতুন - আপলোডের সময় তৈরি হবে)</option>';
+    opts += state.cats.map(function (c) { return '<option value="' + c.id + '">' + esc(c.name) + '</option>'; }).join('');
+    sel.innerHTML = opts || '<option value="">(কোনো Category নেই — নতুন নাম লিখুন)</option>';
+    if (state.chosen && keep && sel.querySelector('option[value="' + keep + '"]')) sel.value = keep;      // the teacher changed it: keep that
+    else if (state.def) sel.value = state.def.exists ? String(state.def.id) : '__default__';              // otherwise the current test's category
+    else if (state.cat) sel.value = String(state.cat);
   }
   function renderGrid() {
     grid.innerHTML = state.images.map(function (im, i) {
-      return '<div class="ip-card" data-i="' + i + '"><img loading="lazy" src="' + esc(im.thumb) + '" alt=""><small>' + esc(im.category) + ' · ' + esc(im.name) + '</small></div>';
+      var fresh = state.fresh[im.id];
+      return '<div class="ip-card ' + (fresh ? 'ip-new' : '') + '" data-i="' + i + '"><img loading="lazy" src="' + esc(im.thumb) + '" alt=""><small>' + esc(im.category) + ' · ' + esc(im.name) + '</small>' + (fresh ? '<span class="ip-badge">নতুন</span>' : '') + '</div>';
     }).join('');
     $('ipEmpty').style.display = state.images.length ? 'none' : '';
   }
   function load() {
-    var url = API + '?category=' + (state.cat || '') + '&q=' + encodeURIComponent(search.value.trim());
+    var url = API + '?category=' + (state.cat || '') + '&q=' + encodeURIComponent(search.value.trim()) + (TEST_ID ? '&test_id=' + TEST_ID : '');
     return fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
       .then(function (r) { return r.json(); })
-      .then(function (d) { state.images = d.images || []; state.cats = d.categories || []; renderChips(); renderGrid(); })
+      .then(function (d) { state.images = d.images || []; state.cats = d.categories || []; state.def = d.default_category || null; renderCats(); renderGrid(); })
       .catch(function () { $('ipEmpty').style.display = ''; $('ipEmpty').textContent = 'ছবির তালিকা আনা যায়নি। পেজ রিলোড করে দেখুন।'; });
   }
-  function close() { back.classList.remove('open'); state.cb = null; }
-  function pick(im) { var cb = state.cb; close(); if (cb) cb(im); }
+  function close() { if (state.busy) return; back.classList.remove('open'); state.cb = null; }
+  function pick(im) { var cb = state.cb; back.classList.remove('open'); state.cb = null; if (cb) cb(im); }
 
   chips.addEventListener('click', function (e) { var b = e.target.closest('.ip-chip'); if (b) { state.cat = parseInt(b.dataset.c, 10) || 0; load(); } });
   grid.addEventListener('click', function (e) { var c = e.target.closest('.ip-card'); if (c) pick(state.images[parseInt(c.dataset.i, 10)]); });
   search.addEventListener('input', function () { clearTimeout(state.timer); state.timer = setTimeout(load, 250); });
+  $('ipCatSel').addEventListener('change', function () { state.chosen = true; });
   document.querySelectorAll('.ip-tab').forEach(function (t) { t.addEventListener('click', function () { tab(t.dataset.tab); }); });
   $('ipClose').addEventListener('click', close);
   back.addEventListener('click', function (e) { if (e.target === back) close(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && back.classList.contains('open')) close(); });
 
-  var drop = $('ipDrop'), file = $('ipFile'), msg = $('ipUpMsg');
+  var drop = $('ipDrop'), file = $('ipFile'), msg = $('ipUpMsg'), bar = $('ipBar'), fill = $('ipBarFill');
   drop.addEventListener('click', function () { file.click(); });
   ['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
   ['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
   drop.addEventListener('drop', function (e) { upload(e.dataTransfer.files); });
   file.addEventListener('change', function () { upload(file.files); file.value = ''; });
 
+  function say(cls, text) { msg.className = 'ip-msg ' + cls; msg.textContent = text; }
+  function busy(on) { state.busy = on; box.classList.toggle('busy', on); bar.style.display = on ? 'block' : 'none'; if (!on) fill.style.width = '0'; }
+
   function upload(files) {
-    if (!files || !files.length) return;
+    if (state.busy || !files || !files.length) return;
+    if (files.length > MAX_FILES) { say('err', 'একবারে সর্বোচ্চ ' + MAX_FILES + ' টি ছবি আপলোড করা যাবে।'); return; }
+    for (var k = 0; k < files.length; k++) if (files[k].size > MAX_BYTES) { say('err', '"' + files[k].name + '" অনেক বড়। প্রতিটি ছবি সর্বোচ্চ ' + (MAX_BYTES / 1048576) + ' MB।'); return; }
     var fd = new FormData();
     var cat = $('ipCatSel').value, nc = $('ipNewCat').value.trim();
-    if (nc) fd.append('new_category', nc); else if (cat) fd.append('category_id', cat);
+    if (nc) fd.append('new_category', nc);                                   // typed name wins
+    else if (cat && cat !== '__default__') fd.append('category_id', cat);    // an existing category (default or chosen)
+    else if (TEST_ID) fd.append('test_id', TEST_ID);                         // default: category named like the current test
     for (var i = 0; i < files.length; i++) fd.append('images', files[i]);
-    msg.className = 'ip-msg'; msg.textContent = 'আপলোড হচ্ছে… একটু অপেক্ষা করুন';
-    fetch(UP, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRFToken': CSRF, 'Accept': 'application/json' } })
-      .then(function (r) { return r.json().catch(function () { return { ok: false, errors: ['সার্ভার থেকে ভুল উত্তর এসেছে।'] }; }); })
-      .then(function (d) {
-        var errs = (d.errors || []).concat(d.error ? [d.error] : []);
-        if (d.ok && d.images && d.images.length) {
-          $('ipNewCat').value = '';
-          msg.className = 'ip-msg ok'; msg.textContent = d.images.length + ' টি ছবি আপলোড হয়েছে।' + (errs.length ? ' (কিছু ব্যর্থ: ' + errs.join(' | ') + ')' : '');
-          if (d.images.length === 1 && !errs.length) { load(); pick(d.images[0]); return; }
-          state.cat = d.category ? d.category.id : state.cat; load().then(function () { tab('lib'); });
-        } else { msg.className = 'ip-msg err'; msg.textContent = errs.join(' | ') || 'আপলোড হয়নি।'; }
-      })
-      .catch(function () { msg.className = 'ip-msg err'; msg.textContent = 'নেটওয়ার্ক সমস্যা। আবার চেষ্টা করুন।'; });
+    busy(true); say('', 'আপলোড শুরু হচ্ছে… (' + files.length + ' টি ছবি)');
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', UP); xhr.withCredentials = true;
+    xhr.setRequestHeader('X-CSRFToken', CSRF); xhr.setRequestHeader('Accept', 'application/json');
+    xhr.upload.onprogress = function (e) {
+      if (!e.lengthComputable) return;
+      var pct = Math.round(e.loaded * 100 / e.total); fill.style.width = pct + '%';
+      say('', pct < 100 ? 'আপলোড হচ্ছে… ' + pct + '%' : 'Cloudinary-তে সংরক্ষণ হচ্ছে… একটু অপেক্ষা করুন');
+    };
+    xhr.onerror = function () { busy(false); say('err', 'নেটওয়ার্ক সমস্যা। আবার চেষ্টা করুন।'); };
+    xhr.onload = function () {
+      var d; try { d = JSON.parse(xhr.responseText); } catch (e) { d = { ok: false, errors: ['সার্ভার থেকে ভুল উত্তর এসেছে।'] }; }
+      busy(false);
+      var errs = (d.errors || []).concat(d.error ? [d.error] : []);
+      if (d.ok && d.images && d.images.length) {
+        $('ipNewCat').value = '';
+        d.images.forEach(function (im) { state.fresh[im.id] = true; });
+        state.cat = d.category ? d.category.id : state.cat;
+        state.chosen = false;
+        load().then(function () {
+          tab('lib');
+          var m = document.createElement('div'); m.className = 'ip-msg ok';
+          m.textContent = d.images.length + ' টি ছবি "' + (d.category ? d.category.name : '') + '" Category-তে আপলোড হয়েছে। নিচের তালিকা থেকে ছবিটি বেছে নিন।' + (errs.length ? ' (কিছু ব্যর্থ: ' + errs.join(' | ') + ')' : '');
+          var old = document.getElementById('ipLibMsg'); if (old) old.remove();
+          m.id = 'ipLibMsg'; $('ipLib').insertBefore(m, $('ipLib').firstChild);
+        });
+        say('ok', d.images.length + ' টি ছবি আপলোড হয়েছে।');
+      } else { say('err', errs.join(' | ') || 'আপলোড হয়নি।'); }
+    };
+    xhr.send(fd);
   }
-  return { open: function (cb) { state.cb = cb; tab('lib'); msg.textContent = ''; back.classList.add('open'); load(); } };
+  return { open: function (cb) {
+    state.cb = cb; state.chosen = false; state.fresh = {}; tab('lib'); msg.textContent = '';
+    var old = document.getElementById('ipLibMsg'); if (old) old.remove();
+    back.classList.add('open'); load();
+  } };
 })();
 </script>

@@ -11,7 +11,8 @@ from datetime import datetime, timedelta
 from backend.config import OTP_EXPIRY_MINUTES, OTP_MAX_ATTEMPTS, RESET_COOLDOWN_SECONDS
 from backend.core import app
 from backend.db.connection import get_db
-from backend.services.email_service import send_otp_email
+from backend.config import local_otp_console_enabled
+from backend.services import email_service
 
 
 def generate_otp():
@@ -28,7 +29,7 @@ def create_and_send_otp(email, purpose="registration", background=False, cooldow
     """
     Create OTP, invalidate older unused codes for same email+purpose,
     enforce a short resend cooldown, then send email.
-    Returns (ok: bool, message: str, otp_code: str|None)
+    Returns (ok: bool, message: str, None) - the OTP is never returned, so it can never leak into a response
     """
     email = (email or "").strip().lower()
     if not email:
@@ -67,19 +68,23 @@ def create_and_send_otp(email, purpose="registration", background=False, cooldow
         )
         conn.commit()
 
-    if background:
-        # Fire-and-forget (used by forgot-password so timing never leaks anything)
-        threading.Thread(target=send_otp_email, args=(email, otp_code, purpose), daemon=True).start()
+    if background and not local_otp_console_enabled():
+        # Fire-and-forget (used by forgot-password so timing never leaks anything). The outcome is only logged.
+        threading.Thread(target=email_service.send_otp_result, args=(email, otp_code, purpose), daemon=True).start()
         return True, "OTP sent.", None
 
-    ok, err = send_otp_email(email, otp_code, purpose)
-    if ok:
-        return True, "OTP sent to your email. Check inbox and spam folder.", otp_code
-    # Email failed — keep the technical reason in the server log only (not shown to the user)
-    return False, (
-        "Could not send email right now (Gmail limit or configuration). "
-        "Please try again in a few minutes, or ask Sir to verify your account."
-    ), otp_code
+    result = email_service.send_otp_result(email, otp_code, purpose)   # (console mode runs here, inside the request)
+    if result.ok:
+        if result.stage == "local_console":
+            return True, "Local test mode: OTP ইমেইলে যায়নি - Flask চলছে যে Terminal-এ সেখানে OTP দেখুন।", None
+        return True, "OTP sent to your email. Check inbox and spam folder.", None
+    # The mail did not leave: this code is useless, so remove it (the cooldown must not punish a failed send).
+    with get_db() as conn:
+        conn.execute("DELETE FROM otp_codes WHERE email=? AND purpose=? AND otp_code=? AND is_used=0",
+                     (email, purpose, _otp_hash(email, purpose, otp_code)))
+        conn.commit()
+    # The technical reason is in the server log (see email_service); the student gets a simple Bengali message.
+    return False, result.user_message or "ইমেইল পাঠানো যায়নি। কিছুক্ষণ পরে আবার চেষ্টা করুন।", None
 
 
 def verify_otp_code(email, entered_code, purpose="registration", generic=False):

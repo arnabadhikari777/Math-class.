@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Questions - {{ test.title }}{% endblock %}
+{% block title %}Test Workspace · {{ test.title }}{% endblock %}
 {% block extra_head %}
 <style>
   .sq-block{margin-bottom:18px;padding:16px;border:2px solid var(--border);border-radius:14px;background:var(--surface2)}
@@ -12,41 +12,62 @@
 {% endblock %}
 {% block content %}
 {% include "partials/_studio_nav.html" %}
-<div class="card">
-  <h2>{{ test.title }}</h2>
-  <p class="helper-text">Class: {{ test.class_name }} | Duration: {{ test.duration_minutes }} minutes | মোট প্রশ্ন: {{ questions|length }}</p>
-  <div class="flex gap-1 flex-wrap mt-1">
-    <a class="btn btn-outline" href="{{ url_for('manage_tests') }}">← All Tests</a>
-  </div>
-</div>
+{% set ws_count = questions|length %}{% set ws_marks = total_marks %}
+{% include "partials/_workspace_head.html" %}
 
 {% if problem %}
 <div class="card"><p style="color:var(--danger)"><strong>{{ problem }}</strong> (ছবি আপলোড না হওয়া পর্যন্ত শুধু আগে আপলোড করা ছবি বাছা যাবে।)</p></div>
 {% endif %}
 
+{% if not editable %}
+<div class="card" style="border-left:4px solid var(--warning,#d97706)">
+  <strong>This test is published.</strong> Questions are locked so students see exactly what was published.
+  To add, import, edit, reorder or delete questions, <a href="{{ url_for('test_review', test_id=test.id) }}">Unpublish the test</a> first.
+  Saving a question to My Questions is still possible.
+</div>
+{% else %}
 <div class="card">
-  <h3>নতুন প্রশ্ন যোগ করুন</h3>
-  <p class="helper-text" style="margin-bottom:14px">প্রশ্নে <strong>লেখা</strong>, <strong>ছবি</strong>, অথবা দুটোই দিতে পারেন (শুধু ছবি দিলেও চলবে)। ছবি Library থেকে বাছুন বা সরাসরি নতুন আপলোড করুন।</p>
+  <h3>My Questions থেকে নিন</h3>
+  <p class="helper-text">আগে সংরক্ষিত প্রশ্ন এই Test-এ কপি হয়ে যোগ হবে। একই প্রশ্ন একই Test-এ দুইবার যাবে না।</p>
+  <a class="btn btn-secondary" id="importBtn" href="{{ url_for('qbank.import_to_test', test_id=test.id) }}"><i class="fa-solid fa-layer-group" aria-hidden="true"></i> Import from My Questions</a>
+</div>
+
+<div class="card">
+  <h3>নতুন প্রশ্ন তৈরি করুন</h3>
+  <p class="helper-text" style="margin-bottom:14px">এখানে তৈরি করা প্রশ্ন সরাসরি <strong>{{ test.title }}</strong> Test-এ যোগ হবে (My Questions-এ নয়)। প্রশ্নে <strong>লেখা</strong>, <strong>ছবি</strong>, অথবা দুটোই দিতে পারেন। নতুন ছবি আপলোড করলে সেটি ডিফল্টভাবে &ldquo;{{ test.title }}&rdquo; Category-তে জমা হয়।</p>
   <div id="blocks"></div>
   <div id="saveErr" class="flash error" style="display:none"></div>
   <div class="flex gap-1 flex-wrap" style="margin-top:14px">
     <button type="button" class="btn btn-secondary" id="addBtn">+ আরেকটি প্রশ্ন</button>
-    <button type="button" class="btn btn-primary" id="saveBtn">সব প্রশ্ন সেভ করুন</button>
+    <button type="button" class="btn btn-primary" id="saveBtn">সব প্রশ্ন Test-এ সেভ করুন</button>
   </div>
 </div>
+{% endif %}
 
 <div class="card">
-  <h3>এই Test-এর সব প্রশ্ন ({{ questions|length }})</h3>
+  <h3>এই Test-এর সব প্রশ্ন ({{ questions|length }}) &middot; মোট Marks: {{ total_marks }}</h3>
   {% if questions %}
     {% for q in questions %}
-    <div class="item-box" style="margin-bottom:12px">
+    <div class="item-box" id="q{{ q.id }}" style="margin-bottom:12px">
       <div class="item-title sq-bn">{{ loop.index }}. {{ q.question_text }}</div>
       {% if q.image_url %}<img src="{{ q.image_url }}" alt="Question image" loading="lazy" style="max-width:240px;max-height:160px;object-fit:contain;background:#fff;border-radius:8px;margin:8px 0;display:block">{% endif %}
       <div class="item-meta sq-bn">
         A) {{ q.option_a }} &nbsp; B) {{ q.option_b }} &nbsp; C) {{ q.option_c }} &nbsp; D) {{ q.option_d }}<br>
         Correct: <span class="badge badge-green">{{ q.correct_option }}</span> | Marks: {{ q.marks }}
+        {% if q.id in in_library %}<span class="badge badge-info">My Questions-এ আছে</span>{% endif %}
       </div>
+      <details style="margin-top:8px"><summary style="cursor:pointer">Preview (as students see it)</summary>
+        <div class="sq-bn" style="padding:10px;border:1px dashed var(--border);border-radius:10px;margin-top:6px">
+          <div><strong>Q{{ loop.index }}.</strong> {{ q.question_text }} <span class="helper-text">[{{ q.marks }} mark{{ 's' if q.marks != 1 }}]</span></div>
+          {% if q.image_url %}<img src="{{ q.image_url }}" alt="" style="max-width:260px;display:block;margin:6px 0;background:#fff">{% endif %}
+          <ol type="A" style="margin:6px 0 0 18px"><li>{{ q.option_a }}</li><li>{{ q.option_b }}</li><li>{{ q.option_c }}</li><li>{{ q.option_d }}</li></ol>
+        </div>
+      </details>
       <div class="flex gap-1 flex-wrap" style="margin-top:8px">
+        {% if editable %}
+        <a class="btn btn-sm btn-outline" href="{{ url_for('studio.question_edit', test_id=test.id, qid=q.id) }}">Edit</a>
+        <form method="POST" action="{{ url_for('studio.question_move', test_id=test.id, qid=q.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="dir" value="up"><button class="btn btn-sm btn-outline" type="submit" aria-label="Move up" {{ 'disabled' if loop.first }}>&uarr;</button></form>
+        <form method="POST" action="{{ url_for('studio.question_move', test_id=test.id, qid=q.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="dir" value="down"><button class="btn btn-sm btn-outline" type="submit" aria-label="Move down" {{ 'disabled' if loop.last }}>&darr;</button></form>
         <button type="button" class="btn btn-sm btn-outline set-img" data-q="{{ q.id }}">🖼️ {{ 'ছবি বদলান' if q.image_url else 'ছবি যোগ করুন' }}</button>
         {% if q.image_url %}
         <form method="POST" action="{{ url_for('studio.question_set_image', qid=q.id) }}" data-confirm="প্রশ্ন থেকে ছবি সরাবেন? (Library-তে ছবি থাকবে)">
@@ -54,20 +75,30 @@
           <button class="btn btn-sm btn-outline" type="submit">ছবি সরান</button>
         </form>
         {% endif %}
-        <form method="POST" action="{{ url_for('delete_question', question_id=q.id, test_id=test.id) }}" data-confirm="এই প্রশ্ন মুছবেন?">
+        {% endif %}
+        {% if q.id not in in_library %}
+        <form method="POST" action="{{ url_for('studio.question_save_to_library', qid=q.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-secondary" type="submit">Save to My Questions</button>
+        </form>
+        {% endif %}
+        {% if editable %}
+        <form method="POST" action="{{ url_for('delete_question', question_id=q.id, test_id=test.id) }}" data-confirm="এই প্রশ্ন Test থেকে মুছবেন? (My Questions-এর কপি থাকলে অক্ষত থাকবে)">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="btn btn-sm btn-danger" type="submit">Delete</button>
         </form>
+        {% endif %}
       </div>
     </div>
     {% endfor %}
-  {% else %}<div class="empty-state">এখনো কোনো প্রশ্ন নেই। উপরে যোগ করুন।</div>{% endif %}
+  {% else %}<div class="empty-state">এখনো কোনো প্রশ্ন নেই।{% if editable %} উপরে তৈরি করুন অথবা My Questions থেকে Import করুন।{% endif %}</div>{% endif %}
 </div>
 
 <form id="setImgForm" method="POST" style="display:none">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="image_id" id="setImgId">
 </form>
 
+{% set picker_test_id = test.id %}{% set picker_test_name = test.title %}
 {% include "partials/_image_picker.html" %}
 {% endblock %}
 
@@ -80,6 +111,7 @@
   var blocks = document.getElementById('blocks');
   var saveErr = document.getElementById('saveErr');
   var saving = false;
+  if (!blocks) { return; }   // published test: the create form is not on the page
 
   function el(html) { var d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstChild; }
 
@@ -108,7 +140,7 @@
       prev.innerHTML = '';
       if (im) {
         var img = document.createElement('img'); img.src = im.thumb || im.url; img.alt = '';
-        var x = document.createElement('button'); x.type = 'button'; x.className = 'btn btn-sm btn-outline'; x.textContent = '✕ ছবি সরান';
+        var x = document.createElement('button'); x.type = 'button'; x.className = 'btn btn-sm btn-outline'; x.innerHTML = '<i class="fa-solid fa-xmark" aria-hidden="true"></i> ছবি সরান';
         x.addEventListener('click', function () { showImage(null); });
         prev.appendChild(img); prev.appendChild(document.createTextNode(' ')); prev.appendChild(x);
         pickBtn.textContent = '🖼️ ছবি বদলান';

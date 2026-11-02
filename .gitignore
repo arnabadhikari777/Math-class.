@@ -49,3 +49,6 @@ desktop.ini
 *.bak
 *.orig
 *.zip
+
+# test fixture (schema only, zero rows) must be committed
+!tests/fixtures/*.db

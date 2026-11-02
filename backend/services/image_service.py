@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""ONE image service for the whole site (Question Bank pages AND Question Studio use it).
+"""ONE image service for the whole site (My Questions pages AND Test Workspace use it).
 
   * upload / validation / Cloudinary errors  -> backend.services.image_store (the single implementation;
     cloudinary_client.py is now only a thin compatibility wrapper around it)
@@ -13,6 +13,7 @@
 Existing Cloudinary URLs and bank_images ids are never changed.
 """
 import logging
+import sqlite3
 from datetime import datetime
 
 from backend.db.connection import get_db
@@ -51,7 +52,7 @@ def usage_message(u):
     if u["test_questions"]:
         parts.append("Test-এর %d টি প্রশ্নে" % u["test_questions"])
     if u["bank_questions"]:
-        parts.append("Question Bank-এর %d টি প্রশ্নে" % u["bank_questions"])
+        parts.append("My Questions-এর %d টি প্রশ্নে" % u["bank_questions"])
     if u["exam_versions"] or u["attempt_snapshots"] or u["stored_answers"]:
         parts.append("পুরনো পরীক্ষার Snapshot/Result-এ (%d টি রেফারেন্স)" % (
             u["exam_versions"] + u["attempt_snapshots"] + u["stored_answers"]))
@@ -78,12 +79,49 @@ def discard_orphan(public_id, reason="database insert failed after upload"):
             conn.commit()
 
 
+def clean_category_name(raw):
+    return " ".join(str(raw or "").split())[:60]
+
+
+def find_category(conn, name):
+    """The category with this name (case-insensitive), or None. Never creates anything."""
+    name = clean_category_name(name)
+    if not name:
+        return None
+    return conn.execute("SELECT * FROM bank_categories WHERE name=? COLLATE NOCASE", (name,)).fetchone()
+
+
+def get_or_create_category(conn, name):
+    """One category per name (case-insensitive): re-uses the existing one, never makes a duplicate.
+    Does NOT commit - the caller commits it together with whatever needs the category."""
+    row = find_category(conn, name)
+    if row is not None:
+        return row
+    name = clean_category_name(name)
+    try:
+        conn.execute("INSERT INTO bank_categories (name, created_at) VALUES (?,?)", (name, _now()))
+    except sqlite3.IntegrityError:           # another request created it a moment ago
+        pass
+    return find_category(conn, name)
+
+
 def upload_and_register(filename, data, category):
-    """Validate -> Cloudinary -> bank_images row. Returns the stored info dict (+ id). Raises ImageError."""
+    """Validate -> Cloudinary -> bank_images row. Returns the stored info dict (+ id, category_id, category_name).
+
+    ``category`` is a dict-like with ``name`` and either an existing ``id`` or id=None ("create it by this name").
+    A category that does not exist yet is created only AFTER Cloudinary accepted the file, in the same
+    transaction as the image row - so a failed upload leaves no empty category and no orphan row, and a
+    failed database insert removes the file from Cloudinary again (or queues the retry). Raises ImageError."""
     info = store.upload(filename, data, category=category["name"])
     try:
         with get_db() as conn:
-            info["id"] = insert_image(conn, category["id"], info, filename)
+            cid = category["id"]
+            name = category["name"]
+            if not cid:
+                row = get_or_create_category(conn, name)
+                cid, name = row["id"], row["name"]
+            info["id"] = insert_image(conn, cid, info, filename)
+            info["category_id"], info["category_name"] = cid, name
             conn.commit()
     except Exception:
         log.exception("image row insert failed for %s", info.get("public_id"))

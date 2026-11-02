@@ -7,6 +7,9 @@ in the order their modules are imported.
 import logging
 import os
 
+from backend.config import validate_local_otp_mode
+validate_local_otp_mode()   # refuses to start if LOCAL_OTP_MODE=console is set anywhere but a local debug run
+
 from backend.core import app
 from backend.db import db_path, migrations
 from backend.db.schema import init_db

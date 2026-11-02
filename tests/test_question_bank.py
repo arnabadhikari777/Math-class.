@@ -113,7 +113,10 @@ class QBankTests(unittest.TestCase):
         self.post(t, "/teacher/bank/questions/new", {"question_text": "Again", "image_id": iid, "option_a": "1", "option_b": "2", "option_c": "3", "option_d": "4", "correct_option": "A"})
         # import into test (multi-select)
         ids = [x["id"] for x in self.q("SELECT id FROM bank_questions ORDER BY id")]
+        # importing is only allowed while the test is a draft (new rule); students sit it after it is published again
+        c = sqlite3.connect(self.db); c.execute("UPDATE tests SET status='draft' WHERE id=?", (self.tid,)); c.commit(); c.close()
         self.post(t, "/teacher/bank/import/%d" % self.tid, {"question_id": ids, "marks": "3"})
+        c = sqlite3.connect(self.db); c.execute("UPDATE tests SET status='published' WHERE id=?", (self.tid,)); c.commit(); c.close()
         rows = self.q("SELECT * FROM questions WHERE test_id=? ORDER BY id", self.tid)
         self.assertEqual(len(rows), 4)
         self.assertEqual(rows[0]["image_url"], None)

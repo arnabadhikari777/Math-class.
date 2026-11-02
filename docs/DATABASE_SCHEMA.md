@@ -22,3 +22,12 @@ students: is_archived, archived_at, archive_reason · tests: max_attempts, resul
 
 ## Relationship summary
 tests 1─* exam_versions 1─* exam_version_questions · tests 1─* exam_attempts *─1 students · exam_attempts *─1 exam_versions · exam_attempts 1─* attempt_questions · exam_attempts 1─* answers *─0..1 results. With `RESTRICT`, a raw `DELETE` of a student or test that has history fails instead of cascading; the app's permanent-delete routes delete in explicit order after confirmation.
+
+
+## Migration 014_workspace (additive)
+| Table | Change |
+|---|---|
+| `questions` | `sort_order INTEGER NULL` (NULL = old id order), `source_bank_id INTEGER NULL` |
+| `questions` | UNIQUE INDEX `uq_questions_test_source (test_id, source_bank_id) WHERE source_bank_id IS NOT NULL` |
+| `bank_questions` | `content_hash TEXT NULL` (+ index; filled for existing rows by the migration; not unique) |
+No row, id, image URL or Cloudinary public id is changed.

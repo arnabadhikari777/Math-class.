@@ -8,7 +8,7 @@ Flask + SQLite, no ORM. Installable as a PWA.
 - Notes (PDF), timed MCQ tests: draft/publish, one attempt, two-step start, one-question-at-a-time exam page with safe autosave, negative marking, teacher-controlled result release, answer review, leaderboards (see STAGE_3_4_REPORT.md and STAGE_5_6_REPORT.md)
 - Smart dashboards: average ring, score trend, subject strength, rank, streak, coach tips
 - Teacher panel: admit/verify/block/delete students, login-as, CSV export, tests and questions, results (+PDF), announcements, contact inbox, activity log, data cleanup
-- Question Studio: Cloudinary image library + question builder
+- My Questions (central question library) and Test Workspace (create / import / edit / order the questions of one selected test), Cloudinary image library whose upload category defaults to the test name
 - AI assistant for students (Gemini/Groq/...) with chat monitoring for Sir
 - JEE Main countdowns, Auto/Light/Dark theme, push notifications, JSON API `/api/v1`
 
@@ -18,7 +18,9 @@ pip install -r requirements.txt
 cp .env.example .env        # then fill SECRET_KEY, TEACHER_USERNAME, TEACHER_PASSWORD, email settings
 python app.py               # local: set FORCE_HTTPS=0 and FLASK_DEBUG=1 in .env
 python -m unittest discover -s tests -v
+python scripts/check_smtp.py   # finds out why Gmail OTP mail fails
 ```
+No Gmail yet? Set `LOCAL_OTP_MODE=console` (with `FLASK_DEBUG=1`, `FORCE_HTTPS=0`) and the OTP is printed in the terminal. Windows beginner guide: **[LOCAL_TESTING_GUIDE.md](LOCAL_TESTING_GUIDE.md)**.
 Teacher login stays disabled until `TEACHER_USERNAME` and `TEACHER_PASSWORD` are set in `.env`.
 
 ## Project structure
@@ -47,4 +49,4 @@ Where to put new code: see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - Use a strong random `SECRET_KEY` and a Gmail **App Password** for email.
 
 ## Docs
-[Architecture](docs/ARCHITECTURE.md) · [Database & migrations](docs/DATABASE.md) · [Deploy](docs/DEPLOY.md) · [JSON API](docs/API.md) · [AI assistant](docs/AI.md)
+[Local testing guide](LOCAL_TESTING_GUIDE.md) · [Implementation & test report](IMPLEMENTATION_AND_TEST_REPORT.md) · [Architecture](docs/ARCHITECTURE.md) · [Database & migrations](docs/DATABASE.md) · [Deploy](docs/DEPLOY.md) · [JSON API](docs/API.md) · [AI assistant](docs/AI.md)

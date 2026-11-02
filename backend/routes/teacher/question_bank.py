@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Teacher-only Question Bank + Category-wise Image Library (server-rendered pages).
+"""Teacher-only "My Questions" (the central question library; code name: qbank) + legacy image-library URLs.
 
-URL prefix: /teacher/bank
-    /images                      library: categories, upload, filter, delete
-    /questions                   bank: list, create, edit, delete
-    /import/<test_id>            copy selected bank questions into an existing test
+URL prefix: /teacher/bank   (kept so old bookmarks and forms keep working; only the visible names changed)
+    /images                      redirects to the Image Library (Test Workspace area)
+    /questions                   My Questions: list, create, edit, delete
+    /import/<test_id>            copy selected My Questions into the chosen test (draft tests only)
 
 Design rules (see the feature brief):
   * Images live on Cloudinary; the database only stores url / public_id / metadata.
@@ -22,6 +22,9 @@ from flask import (Blueprint, abort, flash, redirect, render_template, request,
 
 from backend.services import cloudinary_client as cdn
 from backend.services import image_service
+from backend.services import publish_service
+from backend.services import question_library as qlib
+from backend.utils.question_hash import content_hash
 from backend.db import escape_like, get_db
 
 from backend.utils.helpers import safe_back  # noqa: E402
@@ -96,7 +99,7 @@ def home():
 @bp.route("/images")
 @teacher_page
 def images():
-    """The Image Library has ONE screen now (Question Studio -> Image Library).
+    """The Image Library has ONE screen now (Test Workspace area -> Image Library).
     This old address stays so bookmarks and the upload/delete forms keep working."""
     cat = _int(request.args.get("category"))
     return redirect(url_for("studio.library", category=cat) if cat else url_for("studio.library"))
@@ -206,6 +209,11 @@ def _validate_question(conn, data):
     return None
 
 
+def _hash_of(data):
+    return content_hash(data["question_text"], data["option_a"], data["option_b"], data["option_c"],
+                        data["option_d"], data["correct_option"], data["image_id"])
+
+
 def _picker_images(conn):
     return conn.execute(
         """SELECT i.id, i.url, i.category_id, c.name AS category_name
@@ -252,14 +260,20 @@ def question_new():
                 flash(err, "error")
                 return render_template("teacher/bank/bank_question_form.html", item=data, images=_picker_images(conn),
                                        categories=_categories(conn), editing=False), 400
+            h = _hash_of(data)
+            dup = qlib.find_bank_duplicate(conn, h)
+            if dup:
+                flash("এই প্রশ্নটি আগে থেকেই My Questions-এ আছে (প্রশ্ন #%d)। আবার সেভ করা হয়নি।" % dup, "error")
+                return render_template("teacher/bank/bank_question_form.html", item=data, images=_picker_images(conn),
+                                       categories=_categories(conn), editing=False), 409
             now = _now()
             conn.execute(
                 """INSERT INTO bank_questions (question_text, image_id, option_a, option_b, option_c, option_d,
-                   correct_option, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)""",
+                   correct_option, created_at, updated_at, content_hash) VALUES (?,?,?,?,?,?,?,?,?,?)""",
                 (data["question_text"], data["image_id"], data["option_a"], data["option_b"], data["option_c"],
-                 data["option_d"], data["correct_option"], now, now))
+                 data["option_d"], data["correct_option"], now, now, h))
             conn.commit()
-            flash("প্রশ্ন Question Bank-এ যোগ হয়েছে।", "success")
+            flash("প্রশ্নটি My Questions-এ সংরক্ষিত হয়েছে (এটি এখনো কোনো Test-এ যোগ হয়নি)।", "success")
             if request.form.get("save_and_new"):
                 return redirect(url_for("qbank.question_new"))
             return redirect(url_for("qbank.questions"))
@@ -282,13 +296,20 @@ def question_edit(qid):
                 data["id"] = qid
                 return render_template("teacher/bank/bank_question_form.html", item=data, images=_picker_images(conn),
                                        categories=_categories(conn), editing=True), 400
+            h = _hash_of(data)
+            dup = qlib.find_bank_duplicate(conn, h, exclude_id=qid)
+            if dup:
+                flash("এই লেখা, Option ও ছবির আরেকটি প্রশ্ন My Questions-এ আগেই আছে (প্রশ্ন #%d)।" % dup, "error")
+                data["id"] = qid
+                return render_template("teacher/bank/bank_question_form.html", item=data, images=_picker_images(conn),
+                                       categories=_categories(conn), editing=True), 409
             conn.execute(
                 """UPDATE bank_questions SET question_text=?, image_id=?, option_a=?, option_b=?, option_c=?,
-                   option_d=?, correct_option=?, updated_at=? WHERE id=?""",
+                   option_d=?, correct_option=?, updated_at=?, content_hash=? WHERE id=?""",
                 (data["question_text"], data["image_id"], data["option_a"], data["option_b"], data["option_c"],
-                 data["option_d"], data["correct_option"], _now(), qid))
+                 data["option_d"], data["correct_option"], _now(), h, qid))
             conn.commit()
-            flash("প্রশ্ন আপডেট হয়েছে। (যেসব Test-এ আগেই নেওয়া হয়েছে সেগুলো বদলায়নি।)", "success")
+            flash("প্রশ্ন আপডেট হয়েছে। (যেসব Test-এ আগেই নেওয়া হয়েছে সেগুলোর কপি বদলায়নি।)", "success")
             return redirect(url_for("qbank.questions"))
         return render_template("teacher/bank/bank_question_form.html", item=dict(row), images=_picker_images(conn),
                                categories=_categories(conn), editing=True)
@@ -302,20 +323,26 @@ def question_delete(qid):
         cur = conn.execute("DELETE FROM bank_questions WHERE id=?", (qid,))
         conn.commit()
     if cur.rowcount:
-        flash("প্রশ্নটি Question Bank থেকে মুছে ফেলা হয়েছে। (Test-এ থাকা কপি ও Library-র ছবি অক্ষত আছে।)", "success")
+        flash("প্রশ্নটি My Questions থেকে মুছে ফেলা হয়েছে। (Test-এ থাকা কপি ও Library-র ছবি অক্ষত আছে।)", "success")
     else:
         flash("প্রশ্নটি পাওয়া যায়নি।", "error")
     return redirect(safe_back("qbank.questions"))
 
 
-# ------------------------------------------------- bank -> existing test
+# ------------------------------------------------- My Questions -> chosen test
 @bp.route("/import/<int:test_id>", methods=["GET", "POST"])
 @teacher_page
 def import_to_test(test_id):
+    """Import saved questions into ONE chosen test. Draft tests only - checked here in the backend
+    (the page also hides the form), duplicates are refused here too (not only in JavaScript)."""
+    workspace = url_for("studio.test_questions", test_id=test_id)
     with get_db() as conn:
         test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
         if test is None:
             abort(404)
+        if not publish_service.is_editable(test):
+            flash(qlib.PUBLISHED_MESSAGE, "error")
+            return redirect(workspace)
         if request.method == "POST":
             ids = []
             for raw in request.form.getlist("question_id"):
@@ -323,32 +350,30 @@ def import_to_test(test_id):
                 if v and v not in ids:
                     ids.append(v)
             if not ids:
-                flash("কোনো প্রশ্ন বাছা হয়নি।", "error")
+                flash("কোনো প্রশ্ন বাছা হয়নি। আগে তালিকা থেকে অন্তত একটি প্রশ্ন টিক দিন।", "error")
                 return redirect(url_for("qbank.import_to_test", test_id=test_id))
             if len(ids) > MAX_IMPORT_AT_ONCE:
                 flash("একবারে সর্বোচ্চ %d টি প্রশ্ন নেওয়া যাবে।" % MAX_IMPORT_AT_ONCE, "error")
                 return redirect(url_for("qbank.import_to_test", test_id=test_id))
             marks = max(1, min(100, _int(request.form.get("marks"), 1) or 1))
-            marks_by_id = {}
-            for i in ids:  # optional per-question marks (field marks_<id>), falls back to the common value
-                marks_by_id[i] = max(1, min(100, _int(request.form.get("marks_%d" % i), marks) or marks))
-            added = 0
-            for i in ids:  # keep the order the teacher saw them in
-                b = conn.execute(
-                    """SELECT b.*, im.url AS image_url FROM bank_questions b
-                       LEFT JOIN bank_images im ON im.id = b.image_id WHERE b.id=?""", (i,)).fetchone()
-                if b is None:
-                    continue
-                conn.execute(
-                    """INSERT INTO questions (test_id, question_text, option_a, option_b, option_c, option_d,
-                       correct_option, marks, image_url, bank_image_id) VALUES (?,?,?,?,?,?,?,?,?,?)""",
-                    (test_id, b["question_text"], b["option_a"], b["option_b"], b["option_c"], b["option_d"],
-                     b["correct_option"], marks_by_id[i], b["image_url"], b["image_id"]))
-                added += 1
-            conn.commit()
-            flash("%d টি প্রশ্ন Test-এ যোগ হয়েছে।" % added if added else "কোনো প্রশ্ন যোগ করা যায়নি।",
-                  "success" if added else "error")
-            return redirect(url_for("add_questions", test_id=test_id))
+            marks_by_id = {i: max(1, min(100, _int(request.form.get("marks_%d" % i), marks) or marks)) for i in ids}
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                res = qlib.import_into_test(conn, test, ids, marks, marks_by_id)
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            if res["added"]:
+                flash("%d টি প্রশ্ন \"%s\" Test-এ যোগ হয়েছে।" % (res["added"], test["title"]), "success")
+            if res["skipped"]:
+                reasons = {}
+                for sk in res["skipped"]:
+                    reasons.setdefault(sk["reason"], 0)
+                    reasons[sk["reason"]] += 1
+                for reason, n in reasons.items():
+                    flash("%d টি প্রশ্ন যোগ হয়নি: %s" % (n, reason), "error")
+            return redirect(workspace)
         q = request.args.get("q", "").strip()[:100]
         cat = _int(request.args.get("category"))
         where, args = [], []
@@ -363,10 +388,7 @@ def import_to_test(test_id):
         if where:
             sql += " WHERE " + " AND ".join(where)
         rows = conn.execute(sql + " ORDER BY b.id DESC LIMIT ?", (*args, LIST_LIMIT)).fetchall()
-        taken = {r[0] for r in conn.execute(
-            "SELECT question_text || char(31) || option_a || char(31) || option_b FROM questions WHERE test_id=?",
-            (test_id,))}
+        taken_ids = qlib.ids_already_in_test(conn, test_id, rows)
         cats = _categories(conn)
-    taken_ids = {r["id"] for r in rows if (r["question_text"] + "\x1f" + r["option_a"] + "\x1f" + r["option_b"]) in taken}
     return render_template("teacher/bank/bank_import.html", test=test, rows=rows, categories=cats, q=q, selected=cat,
                            taken_ids=taken_ids, limit=MAX_IMPORT_AT_ONCE)

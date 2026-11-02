@@ -1,15 +1,19 @@
 # -*- coding: utf-8 -*-
-"""Image Library + ছবিসহ প্রশ্ন তৈরি (Question Studio) - নতুন করে লেখা।
+"""Test Workspace (code name: studio) + Image Library.
 
 URL prefix: /teacher/studio
-    /library                        ছবির Library (Category, আপলোড, মোছা)
-    /api/images, /api/upload        picker ও drag-drop আপলোডের JSON API
-    /tests/<id>/questions           Test-এ প্রশ্ন যোগ (ছবি বেছে / আপলোড করে)
-    /questions/<id>/image           আগের কোনো প্রশ্নে ছবি বসানো / সরানো
+    /workspace                      choose a test -> open its Test Workspace
+    /tests/<id>/questions           THE Test Workspace of one test (create / import / edit / reorder / preview)
+    /tests/<id>/questions/<q>/edit  edit one question of that test (draft only)
+    /tests/<id>/questions/<q>/move  move a question up / down (draft only)
+    /questions/<id>/save-to-library copy a test question into My Questions (duplicate-proof)
+    /questions/<id>/image           set / remove the picture of a test question (draft only)
+    /library                        Image Library (categories, upload, delete)
+    /api/images, /api/upload        JSON API of the image picker
 
-পুরনো ডাটাবেস টেবিলই ব্যবহার হয় (bank_categories, bank_images, questions.image_url,
-questions.bank_image_id), তাই আগের সব ছবি ও প্রশ্ন যেমন ছিল তেমনই থাকে।
-Question Bank আর লাগে না - প্রশ্ন সরাসরি Test-এ যায়।
+Old URLs keep working: /teacher/tests/<id>/questions and /teacher/bank/... redirect or render here.
+Database tables are the same as before (bank_categories, bank_images, questions.image_url / bank_image_id),
+so every existing image and question is untouched.
 """
 from datetime import datetime
 from functools import wraps
@@ -19,6 +23,9 @@ from flask import (Blueprint, abort, flash, jsonify, redirect, render_template, 
 
 from backend.services import image_service
 from backend.services import image_store as store
+from backend.services import publish_service
+from backend.services import question_library as qlib
+from backend.utils.question_hash import content_hash
 from backend.db import get_db
 
 bp = Blueprint("studio", __name__, url_prefix="/teacher/studio")
@@ -59,7 +66,7 @@ def _now():
 
 
 def _clean_name(raw):
-    return " ".join(str(raw or "").split())[:60]
+    return image_service.clean_category_name(raw)
 
 
 # ----------------------------------------------------------------- queries
@@ -97,20 +104,33 @@ def _list_images(conn, category=None, q=None, limit=PICKER_LIMIT):
     return [_image_dict(r) for r in conn.execute(sql + " ORDER BY i.id DESC LIMIT ?", (*args, limit)).fetchall()]
 
 
-def _get_or_create_category(conn, category_id=None, new_name=None):
-    """category_id থাকলে সেটি, নইলে new_name দিয়ে (আগে থাকলে সেটাই) Category। None মানে অবৈধ।"""
-    cid = _int(category_id)
+def _resolve_upload_category(conn, form):
+    """-> (category, error). category = {"id": int | None, "name": str}; id None = "does not exist yet".
+
+    Order of rules (the teacher's own choice always wins):
+      1. category_id            -> that existing category
+      2. new_category (typed)   -> the category with that name, or a new one
+      3. test_id (Test Workspace) -> the category named like the test, or a new one
+    A category that does not exist yet is NOT created here; it is created after the first successful
+    Cloudinary upload (image_service.upload_and_register), so a failed upload leaves nothing behind."""
+    cid = _int(form.get("category_id"))
     if cid:
-        return conn.execute("SELECT * FROM bank_categories WHERE id=?", (cid,)).fetchone()
-    name = _clean_name(new_name)
+        row = conn.execute("SELECT id, name FROM bank_categories WHERE id=?", (cid,)).fetchone()
+        if row is None:
+            return None, "বাছাই করা Category পাওয়া যায়নি।"
+        return {"id": row["id"], "name": row["name"]}, None
+    name = _clean_name(form.get("new_category"))
     if not name:
-        return None
-    row = conn.execute("SELECT * FROM bank_categories WHERE name=? COLLATE NOCASE", (name,)).fetchone()
-    if row:
-        return row
-    new_id = conn.execute("INSERT INTO bank_categories (name, created_at) VALUES (?,?)", (name, _now())).lastrowid
-    conn.commit()
-    return conn.execute("SELECT * FROM bank_categories WHERE id=?", (new_id,)).fetchone()
+        tid = _int(form.get("test_id"))
+        if tid:
+            t = conn.execute("SELECT title FROM tests WHERE id=?", (tid,)).fetchone()
+            if t is None:
+                return None, "Test পাওয়া যায়নি।"
+            name = _clean_name(t["title"])
+    if not name:
+        return None, "Category বেছে নিন বা নতুন নাম দিন।"
+    row = image_service.find_category(conn, name)
+    return ({"id": row["id"], "name": row["name"]} if row else {"id": None, "name": name}), None
 
 
 def _save_uploads(files, cat):
@@ -119,6 +139,7 @@ def _save_uploads(files, cat):
     problem = store.config_problem()
     if problem:
         return uploaded, [problem]
+    cat = dict(cat)
     for f in files:
         data = f.read(store.max_bytes() + 1)
         try:
@@ -126,6 +147,7 @@ def _save_uploads(files, cat):
         except image_service.ImageError as exc:
             errors.append(str(exc))
             continue
+        cat["id"], cat["name"] = info["category_id"], info["category_name"]   # later files reuse the same category
         uploaded.append({"id": info["id"], "url": info["url"], "thumb": store.thumb(info["url"], 320),
                          "name": (f.filename or "")[:150], "category_id": cat["id"], "category": cat["name"]})
     return uploaded, errors
@@ -196,8 +218,9 @@ def category_delete(cid):
 @teacher_only
 def library_upload():
     """সাধারণ form আপলোড (JS বন্ধ থাকলেও কাজ করে)।"""
-    with get_db() as conn:
-        cat = _get_or_create_category(conn, request.form.get("category_id"), request.form.get("new_category"))
+    with get_db() as conn:     # no test_id here: the general library asks the teacher to choose, as before
+        cat, err = _resolve_upload_category(conn, {"category_id": request.form.get("category_id"),
+                                                   "new_category": request.form.get("new_category")})
     if cat is None:
         flash("আগে একটি Category বেছে নিন বা নতুন নাম দিন।", "error")
         return redirect(url_for("studio.library"))
@@ -210,9 +233,10 @@ def library_upload():
         done, errors = _save_uploads(files, cat)
         if done:
             flash("%d টি ছবি আপলোড হয়েছে।" % len(done), "success")
+            cat = {"id": done[0]["category_id"], "name": done[0]["category"]}
         for e in errors:
             flash(e, "error")
-    return redirect(url_for("studio.library", category=cat["id"]))
+    return redirect(url_for("studio.library", category=cat["id"]) if cat["id"] else url_for("studio.library"))
 
 
 @bp.route("/library/images/<int:image_id>/delete", methods=["POST"])
@@ -231,42 +255,86 @@ def image_delete(image_id):
 @bp.route("/api/images")
 @teacher_only
 def api_images():
+    """Picker data. With ?test_id= it also says which category is the DEFAULT for a new upload
+    (the one named like that test, even if it does not exist yet)."""
+    test_id = _int(request.args.get("test_id"))
+    default = None
     with get_db() as conn:
         images = _list_images(conn, _int(request.args.get("category")), request.args.get("q", "").strip()[:60])
         cats = [{"id": c["id"], "name": c["name"], "count": c["image_count"]} for c in _categories(conn)]
-    return jsonify({"ok": True, "images": images, "categories": cats})
+        if test_id:
+            t = conn.execute("SELECT title FROM tests WHERE id=?", (test_id,)).fetchone()
+            if t is not None:
+                name = _clean_name(t["title"])
+                row = image_service.find_category(conn, name) if name else None
+                if name:
+                    default = {"id": row["id"] if row else None, "name": row["name"] if row else name,
+                               "exists": row is not None}
+    return jsonify({"ok": True, "images": images, "categories": cats, "default_category": default})
 
 
 @bp.route("/api/upload", methods=["POST"])
 @teacher_only
 def api_upload():
-    """Picker-এর ভেতর থেকে সরাসরি আপলোড: category_id অথবা new_category + images[]।"""
+    """Picker upload: images[] + (category_id | new_category | test_id). See _resolve_upload_category."""
     files = [f for f in request.files.getlist("images") if f and f.filename]
     if not files:
         return jsonify({"ok": False, "error": "কোনো ছবি বাছা হয়নি।"}), 400
     if len(files) > MAX_FILES_PER_UPLOAD:
         return jsonify({"ok": False, "error": "একবারে সর্বোচ্চ %d টি ছবি।" % MAX_FILES_PER_UPLOAD}), 400
     with get_db() as conn:
-        cat = _get_or_create_category(conn, request.form.get("category_id"), request.form.get("new_category"))
+        cat, err = _resolve_upload_category(conn, request.form)
     if cat is None:
-        return jsonify({"ok": False, "error": "Category বেছে নিন বা নতুন নাম দিন।"}), 400
+        return jsonify({"ok": False, "error": err}), 400
     done, errors = _save_uploads(files, cat)
+    if done:
+        cat = {"id": done[0]["category_id"], "name": done[0]["category"]}
     return jsonify({"ok": bool(done), "images": done, "errors": errors,
                     "category": {"id": cat["id"], "name": cat["name"]}}), (200 if done else 400)
 
 
-# ====================================================== Test-এ প্রশ্ন (ছবিসহ)
+# ============================================================ Test Workspace
+def _get_test(conn, test_id):
+    test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
+    if test is None:
+        abort(404)
+    return test
+
+
+def _blocked_json(message="This test is published. Unpublish it to add or change questions."):
+    return jsonify({"ok": False, "errors": [{"index": 0, "message": message}]}), 409
+
+
+@bp.route("/workspace")
+@teacher_only
+def workspace_home():
+    """Pick the test first: nothing can be created or imported without a selected test."""
+    with get_db() as conn:
+        tests = conn.execute(
+            """SELECT t.*, (SELECT COUNT(*) FROM questions q WHERE q.test_id=t.id) AS q_count,
+                      (SELECT COALESCE(SUM(q.marks),0) FROM questions q WHERE q.test_id=t.id) AS total_marks
+               FROM tests t WHERE COALESCE(t.is_archived,0)=0 ORDER BY t.id DESC""").fetchall()
+    return render_template("teacher/studio/workspace_home.html", tests=tests)
+
+
 @bp.route("/tests/<int:test_id>/questions")
 @teacher_only
 def test_questions(test_id):
     with get_db() as conn:
-        test = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
-        if test is None:
-            abort(404)
-        questions = conn.execute("SELECT * FROM questions WHERE test_id=? ORDER BY id", (test_id,)).fetchall()
+        test = _get_test(conn, test_id)
+        questions = qlib.ordered_questions(conn, test_id)
+        total_marks = sum((q["marks"] or 0) for q in questions)
+        hashes = {q["id"]: qlib.test_question_hash(q) for q in questions}
+        saved = set()
+        if hashes:
+            marks = ",".join("?" * len(set(hashes.values())))
+            saved = {r[0] for r in conn.execute(
+                "SELECT content_hash FROM bank_questions WHERE content_hash IN (%s)" % marks, tuple(set(hashes.values())))}
+    in_library = {qid for qid, h in hashes.items() if h in saved}
     return render_template("teacher/studio/studio_questions.html", test=test, questions=questions,
-                           problem=store.config_problem(), max_files=MAX_FILES_PER_UPLOAD,
-                           max_mb=store.max_bytes() // (1024 * 1024))
+                           total_marks=total_marks, editable=publish_service.is_editable(test),
+                           in_library=in_library, problem=store.config_problem(),
+                           max_files=MAX_FILES_PER_UPLOAD, max_mb=store.max_bytes() // (1024 * 1024))
 
 
 def _validate_item(conn, item, n):
@@ -297,7 +365,8 @@ def _validate_item(conn, item, n):
 @bp.route("/tests/<int:test_id>/questions/save", methods=["POST"])
 @teacher_only
 def test_questions_save(test_id):
-    """সব প্রশ্ন একসাথে যাচাই; একটিও ভুল থাকলে কিছুই সেভ হয় না (ডেটা হারায় না, ফর্ম খোলা থাকে)।"""
+    """সব প্রশ্ন একসাথে যাচাই; একটিও ভুল থাকলে কিছুই সেভ হয় না (ডেটা হারায় না, ফর্ম খোলা থাকে)।
+    এই প্রশ্নগুলো সরাসরি এই Test-এ যায় (My Questions-এ নয়)।"""
     payload = request.get_json(silent=True) or {}
     items = payload.get("questions")
     if not isinstance(items, list) or not items:
@@ -305,12 +374,11 @@ def test_questions_save(test_id):
     if len(items) > MAX_QUESTIONS_PER_SAVE:
         return jsonify({"ok": False, "errors": [{"index": 0, "message": "একবারে সর্বোচ্চ %d টি প্রশ্ন।" % MAX_QUESTIONS_PER_SAVE}]}), 400
     with get_db() as conn:
-        trow = conn.execute("SELECT status FROM tests WHERE id=?", (test_id,)).fetchone()
+        trow = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
         if trow is None:
             return jsonify({"ok": False, "errors": [{"index": 0, "message": "Test পাওয়া যায়নি।"}]}), 404
-        if (trow["status"] or "draft") != "draft":
-            return jsonify({"ok": False, "errors": [{"index": 0, "message":
-                            "This test is published. Unpublish it to add or change questions."}]}), 409
+        if not publish_service.is_editable(trow):
+            return _blocked_json()
         clean, errors = [], []
         for i, item in enumerate(items):
             c, err = _validate_item(conn, item, i + 1)
@@ -320,38 +388,136 @@ def test_questions_save(test_id):
                 clean.append(c)
         if errors:
             return jsonify({"ok": False, "errors": errors}), 400
+        order = qlib.next_sort_order(conn, test_id)
         for c in clean:
             conn.execute(
                 """INSERT INTO questions (test_id, question_text, option_a, option_b, option_c, option_d,
-                   correct_option, marks, image_url, bank_image_id) VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                   correct_option, marks, image_url, bank_image_id, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                 (test_id, c["text"], c["opts"]["a"], c["opts"]["b"], c["opts"]["c"], c["opts"]["d"],
-                 c["correct"], c["marks"], c["image_url"], c["image_id"]))
+                 c["correct"], c["marks"], c["image_url"], c["image_id"], order))
+            order += 1
         conn.commit()
-    flash("%d টি প্রশ্ন যোগ হয়েছে।" % len(clean), "success")
+    flash("%d টি প্রশ্ন \"%s\" Test-এ যোগ হয়েছে (My Questions-এ নয়; রাখতে চাইলে প্রশ্নের পাশে \"Save to My Questions\" চাপুন)।"
+          % (len(clean), trow["title"]), "success")
     return jsonify({"ok": True, "added": len(clean)})
+
+
+@bp.route("/tests/<int:test_id>/questions/<int:qid>/edit", methods=["GET", "POST"])
+@teacher_only
+def question_edit(test_id, qid):
+    """Edit ONE question of this test (a copy: the My Questions original is never touched)."""
+    with get_db() as conn:
+        test = _get_test(conn, test_id)
+        q = conn.execute("SELECT * FROM questions WHERE id=? AND test_id=?", (qid, test_id)).fetchone()
+        if q is None:
+            abort(404)
+        if not publish_service.is_editable(test):
+            flash(qlib.PUBLISHED_MESSAGE, "error")
+            return redirect(url_for("studio.test_questions", test_id=test_id))
+        if request.method == "POST":
+            f = request.form
+            item = {"text": f.get("question_text"), "a": f.get("option_a"), "b": f.get("option_b"),
+                    "c": f.get("option_c"), "d": f.get("option_d"), "correct": f.get("correct_option"),
+                    "marks": f.get("marks"), "image_id": f.get("image_id")}
+            clean, err = _validate_item(conn, item, 1)
+            if err:
+                flash(err.split(": ", 1)[-1], "error")
+                keep = dict(q)
+                keep.update(question_text=item["text"], option_a=item["a"], option_b=item["b"], option_c=item["c"],
+                            option_d=item["d"], correct_option=(item["correct"] or "A"), marks=item["marks"])
+                return render_template("teacher/studio/studio_question_edit.html", test=test, q=keep,
+                                       image_url=None, problem=store.config_problem(),
+                                       max_files=MAX_FILES_PER_UPLOAD, max_mb=store.max_bytes() // (1024 * 1024)), 400
+            conn.execute(
+                """UPDATE questions SET question_text=?, option_a=?, option_b=?, option_c=?, option_d=?,
+                   correct_option=?, marks=?, image_url=?, bank_image_id=? WHERE id=? AND test_id=?""",
+                (clean["text"], clean["opts"]["a"], clean["opts"]["b"], clean["opts"]["c"], clean["opts"]["d"],
+                 clean["correct"], clean["marks"], clean["image_url"], clean["image_id"], qid, test_id))
+            conn.commit()
+            flash("প্রশ্ন আপডেট হয়েছে। (My Questions-এর মূল প্রশ্ন বদলায়নি।)", "success")
+            return redirect(url_for("studio.test_questions", test_id=test_id))
+    return render_template("teacher/studio/studio_question_edit.html", test=test, q=q, image_url=q["image_url"],
+                           problem=store.config_problem(), max_files=MAX_FILES_PER_UPLOAD,
+                           max_mb=store.max_bytes() // (1024 * 1024))
+
+
+@bp.route("/tests/<int:test_id>/questions/<int:qid>/move", methods=["POST"])
+@teacher_only
+def question_move(test_id, qid):
+    """Move one question up or down. Draft tests only; order is stored in questions.sort_order."""
+    direction = request.form.get("dir")
+    if direction not in ("up", "down"):
+        abort(400)
+    with get_db() as conn:
+        test = _get_test(conn, test_id)
+        if not publish_service.is_editable(test):
+            flash(qlib.PUBLISHED_MESSAGE, "error")
+            return redirect(url_for("studio.test_questions", test_id=test_id))
+        ids = [r["id"] for r in qlib.ordered_questions(conn, test_id)]
+        if qid not in ids:
+            abort(404)
+        i = ids.index(qid)
+        j = i - 1 if direction == "up" else i + 1
+        if 0 <= j < len(ids):
+            ids[i], ids[j] = ids[j], ids[i]
+            for pos, question_id in enumerate(ids, 1):
+                conn.execute("UPDATE questions SET sort_order=? WHERE id=? AND test_id=?", (pos, question_id, test_id))
+            conn.commit()
+    return redirect(url_for("studio.test_questions", test_id=test_id) + "#q%d" % qid)
+
+
+@bp.route("/questions/<int:qid>/save-to-library", methods=["POST"])
+@teacher_only
+def question_save_to_library(qid):
+    """Test question -> My Questions (a separate copy). Saving the same question twice is refused."""
+    with get_db() as conn:
+        q = conn.execute("SELECT test_id FROM questions WHERE id=?", (qid,)).fetchone()
+        if q is None:
+            abort(404)
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            state, bank_id = qlib.save_to_my_questions(conn, qid)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+    if state == "saved":
+        flash("প্রশ্নটি My Questions-এ সংরক্ষিত হয়েছে (প্রশ্ন #%d)। Test-এর প্রশ্ন আগের মতোই আছে।" % bank_id, "success")
+    elif state == "exists":
+        flash("এই প্রশ্ন আগে থেকেই My Questions-এ আছে (প্রশ্ন #%d), তাই আবার সেভ করা হয়নি।" % bank_id, "error")
+    elif state == "no_image":
+        flash("শুধু-ছবির এই প্রশ্নের ছবিটি Image Library-তে নেই, তাই My Questions-এ রাখা যায়নি।", "error")
+    else:
+        flash("প্রশ্নটি পাওয়া যায়নি।", "error")
+    return redirect(url_for("studio.test_questions", test_id=q["test_id"]) + "#q%d" % qid)
 
 
 @bp.route("/questions/<int:qid>/image", methods=["POST"])
 @teacher_only
 def question_set_image(qid):
-    """আগের কোনো প্রশ্নে ছবি বসায় বা (image_id খালি হলে) সরায়। Test-এর বাকি কিছু বদলায় না।"""
+    """আগের কোনো প্রশ্নে ছবি বসায় বা (image_id খালি হলে) সরায়। Draft test only; বাকি কিছু বদলায় না।"""
     with get_db() as conn:
         q = conn.execute("SELECT id, test_id, question_text FROM questions WHERE id=?", (qid,)).fetchone()
         if q is None:
             abort(404)
+        test = conn.execute("SELECT * FROM tests WHERE id=?", (q["test_id"],)).fetchone()
+        back = redirect(url_for("studio.test_questions", test_id=q["test_id"]))
+        if test is None or not publish_service.is_editable(test):
+            flash(qlib.PUBLISHED_MESSAGE, "error")
+            return back
         image_id = _int(request.form.get("image_id"))
         if image_id:
             img = conn.execute("SELECT url FROM bank_images WHERE id=?", (image_id,)).fetchone()
             if img is None:
                 flash("বাছাই করা ছবিটি Library-তে পাওয়া যায়নি।", "error")
-                return redirect(url_for("studio.test_questions", test_id=q["test_id"]))
+                return back
             conn.execute("UPDATE questions SET image_url=?, bank_image_id=? WHERE id=?", (img["url"], image_id, qid))
             flash("প্রশ্নে ছবি বসানো হয়েছে।", "success")
         else:
             if not (q["question_text"] or "").strip():
                 flash("এই প্রশ্নে লেখা নেই, তাই ছবি সরানো যাবে না (প্রশ্ন ফাঁকা হয়ে যাবে)।", "error")
-                return redirect(url_for("studio.test_questions", test_id=q["test_id"]))
+                return back
             conn.execute("UPDATE questions SET image_url=NULL, bank_image_id=NULL WHERE id=?", (qid,))
             flash("প্রশ্ন থেকে ছবি সরানো হয়েছে (Library-তে ছবি আছে)।", "success")
         conn.commit()
-    return redirect(url_for("studio.test_questions", test_id=q["test_id"]))
+    return back

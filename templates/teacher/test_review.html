@@ -21,7 +21,7 @@
 
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
     {% if editable %}
-      <a class="btn btn-outline" href="{{ url_for('add_questions', test_id=test.id) }}">Add / edit questions</a>
+      <a class="btn btn-outline" href="{{ url_for('add_questions', test_id=test.id) }}">Open Test Workspace</a>
       <a class="btn btn-outline" href="{{ url_for('test_settings', test_id=test.id) }}">Change rules</a>
       <form method="POST" action="{{ url_for('publish_test', test_id=test.id) }}" data-confirm="Publish this test? Students of class {{ test.class_name }} will be notified.">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -48,6 +48,6 @@
   {% endfor %}
 </div>
 {% else %}
-<div class="empty-state">No questions yet. Add some in the Question Studio.</div>
+<div class="empty-state">No questions yet. Add some in the Test Workspace.</div>
 {% endfor %}
 {% endblock %}

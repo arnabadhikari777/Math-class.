@@ -239,7 +239,7 @@ def _down_question_bank(conn):
     conn.execute("DROP TABLE IF EXISTS bank_categories")
 
 
-from backend.db import m008_exam_system, m010_support_tables, m011_publish_marking, m012_autosave, m013_sessions  # noqa: E402
+from backend.db import m008_exam_system, m010_support_tables, m011_publish_marking, m012_autosave, m013_sessions, m014_workspace  # noqa: E402
 
 
 def _up_drop_legacy_attempts(conn):
@@ -293,6 +293,8 @@ MIGRATIONS = [
      m012_autosave.up, m012_autosave.down),
     ("013_sessions", "Real logout: revoked_sessions table (additive)",
      m013_sessions.up, m013_sessions.down),
+    ("014_workspace", "My Questions / Test Workspace: question order, import source link, duplicate-proof indexes (additive)",
+     m014_workspace.up, m014_workspace.down),
 ]
 
 

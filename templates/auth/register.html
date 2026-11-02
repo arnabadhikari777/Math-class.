@@ -1,9 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Register{% endblock %}
 {% block content %}
-<div class="card" style="max-width:480px;margin:0 auto">
-  <h2>Student Registration</h2>
-  <p class="text-muted mb-1">OTP is sent only to your <strong>email</strong>. Mobile is mandatory for display/contact but never receives OTP.</p>
+<div class="auth-wrap"><div class="auth-card wide">
+  <div class="auth-head">
+    <div class="auth-badge"><i class="fa-solid fa-user-plus" aria-hidden="true"></i></div>
+    <h1>Create your account</h1>
+    <p>OTP is sent only to your <strong>email</strong>. Mobile is mandatory for display/contact but never receives OTP.</p>
+  </div>
   <form method="POST"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Full Name *</label>
     <input type="text" name="name" required>
@@ -26,8 +29,8 @@
     <p class="text-muted" style="font-size:.8rem;margin-top:4px">Minimum 8 characters, with letters and numbers.</p>
     <label>Confirm Password *</label>
     <input type="password" name="confirm_password" required>
-    <button type="submit" class="btn btn-primary mt-2" style="width:100%">Register</button>
+    <button type="submit" class="btn btn-primary mt-2" style="width:100%"><i class="fa-solid fa-user-check" aria-hidden="true"></i> Register</button>
   </form>
-  <p class="mt-2 text-center text-muted">Already have an account? <a href="{{ url_for('login') }}">Login</a></p>
-</div>
+  <p class="auth-foot">Already have an account? <a href="{{ url_for('login') }}">Login</a></p>
+</div></div>
 {% endblock %}

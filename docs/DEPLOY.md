@@ -18,3 +18,10 @@ python -m unittest discover -s tests -v    # নিরাপদ: temp কপি�
 
 ## Git
 `.gitignore` এ আছে: `.env`, `database.db`, `backups/`, `uploads/notes/*`, `.secret_key`। এগুলো কখনো commit করবে না।
+
+
+## Upgrade notes (v3: My Questions, Test Workspace, OTP diagnostics)
+1. Back up `database.db` (`python -m backend.db.migrations backup`), upload the new files, Reload the web app. Migration 014 runs by itself.
+2. **Do NOT set `LOCAL_OTP_MODE`, `FLASK_DEBUG=1` on the server.** If `LOCAL_OTP_MODE=console` is found there the app refuses to start (by design).
+3. Email problems: in a PythonAnywhere Bash console run `python scripts/check_smtp.py`; the error log shows `[SMTP] stage=… status=…` lines (never the OTP or password). Free PythonAnywhere accounts can only reach Gmail via the allow-listed SMTP hosts; check their current network policy.
+4. Rollback: restore the previous code; the database needs no change (see MIGRATION_GUIDE).

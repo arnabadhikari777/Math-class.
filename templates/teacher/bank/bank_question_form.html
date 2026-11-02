@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Edit' if editing else 'New' }} Bank Question{% endblock %}
+{% block title %}{{ 'Edit' if editing else 'New' }} · My Questions{% endblock %}
 {% block content %}
 {% include "partials/_studio_nav.html" %}
 <div class="card">
-  <h2>{{ 'প্রশ্ন Edit' if editing else 'নতুন প্রশ্ন' }}</h2>
+  <h2>{{ 'My Questions: প্রশ্ন Edit' if editing else 'My Questions: নতুন প্রশ্ন' }}</h2>
   <p class="helper-text">লেখা আর ছবি আলাদা — যেকোনো একটি দিলেই চলবে, দুটোও দেওয়া যায়। একটি প্রশ্নে সর্বোচ্চ একটি ছবি।</p>
 </div>
 <div class="card">

@@ -1,23 +1,28 @@
 {% extends "base.html" %}
 {% block title %}Verify OTP - Arnab Math Class{% endblock %}
 {% block content %}
-<div class="card center" style="max-width:420px; margin:0 auto;">
-  <h2><i class="fa-solid fa-envelope" aria-hidden="true"></i> Verify Your Email</h2>
-  <p class="helper-text" style="margin-bottom:16px;">
-    A 6-digit OTP code has been sent to your email address:<br><strong>{{ email }}</strong>
-  </p>
+<div class="auth-wrap">
+  <div class="auth-card text-center">
+    <div class="auth-head">
+      <div class="auth-badge"><i class="fa-solid fa-envelope-circle-check" aria-hidden="true"></i></div>
+      <h1>Verify your email</h1>
+      <p>A 6-digit OTP code has been sent to<br><strong>{{ email }}</strong></p>
+    </div>
 
-  <form method="POST" action="{{ url_for('verify_otp') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="text" name="otp_code" maxlength="6" required
-           placeholder="Enter 6-digit code"
-           style="text-align:center; font-size:1.4rem; letter-spacing:6px;">
-    <button class="btn btn-full" type="submit">Verify Now</button>
-  </form>
+    <form method="POST" action="{{ url_for('verify_otp') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="text" name="otp_code" maxlength="6" required inputmode="numeric" autocomplete="one-time-code" autofocus
+             placeholder="------" aria-label="6-digit code"
+             style="text-align:center; font-size:1.6rem; letter-spacing:10px; font-weight:700;">
+      <button class="btn btn-primary btn-full mt-2" type="submit"><i class="fa-solid fa-shield-check" aria-hidden="true"></i> Verify now</button>
+    </form>
 
-  <p class="helper-text" style="margin-top:18px;">
-    Didn't receive the code? <span id="resendWrap"><form method="POST" action="{{ url_for('resend_otp') }}" style="display:inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" id="resendLink" style="background:none;border:0;padding:0;color:var(--primary);font:inherit;cursor:pointer;text-decoration:underline">Resend OTP</button></form></span>
-    <span id="timerText" style="display:none;">(You can request a new code in <span id="countdown">60</span> seconds)</span>
-  </p>
+    <form method="POST" action="{{ url_for('resend_otp') }}" class="auth-foot" data-no-busy="1">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      Didn't receive the code?
+      <button type="submit" id="resendLink" style="background:none;border:0;padding:0;color:var(--primary);font:inherit;font-weight:600;cursor:pointer;text-decoration:underline">Resend OTP</button>
+      <span id="timerText" style="display:none;">(you can request a new code in <span id="countdown">60</span> seconds)</span>
+    </form>
+  </div>
 </div>
 
 <script nonce="{{ csp_nonce() }}">

@@ -13,10 +13,10 @@
 </div>
 
 <div class="stats">
-  <div class="stat"><div class="label">Students</div><div class="num"><a href="{{ url_for('students_list') }}">{{ total_students }}</a></div></div>
-  <div class="stat"><div class="label">Pending approval</div><div class="num">{{ pending }}</div></div>
-  <div class="stat"><div class="label">Tests</div><div class="num"><a href="{{ url_for('manage_tests') }}">{{ total_tests }}</a></div></div>
-  <div class="stat"><div class="label">New messages</div><div class="num"><a href="{{ url_for('teacher_contacts') }}">{{ new_contacts }}</a></div></div>
+  <div class="stat"><span class="stat-ic"><i class="fa-solid fa-users" aria-hidden="true"></i></span><div class="label">Students</div><div class="num"><a href="{{ url_for('students_list') }}">{{ total_students }}</a></div></div>
+  <div class="stat"><span class="stat-ic amber"><i class="fa-solid fa-user-clock" aria-hidden="true"></i></span><div class="label">Pending approval</div><div class="num">{{ pending }}</div></div>
+  <div class="stat"><span class="stat-ic green"><i class="fa-solid fa-file-pen" aria-hidden="true"></i></span><div class="label">Tests</div><div class="num"><a href="{{ url_for('manage_tests') }}">{{ total_tests }}</a></div></div>
+  <div class="stat"><span class="stat-ic rose"><i class="fa-solid fa-envelope" aria-hidden="true"></i></span><div class="label">New messages</div><div class="num"><a href="{{ url_for('teacher_contacts') }}">{{ new_contacts }}</a></div></div>
 </div>
 
 {% if pending or new_contacts %}
@@ -82,7 +82,8 @@
   <div class="card-head"><h2>Quick actions</h2></div>
   <div class="quick-actions">
     <a href="{{ url_for('create_test') }}"><i class="fa-solid fa-file-circle-plus" aria-hidden="true"></i> Create test</a>
-    <a href="{{ url_for('qbank.questions') }}"><i class="fa-solid fa-circle-question" aria-hidden="true"></i> Question Studio</a>
+    <a href="{{ url_for('qbank.questions') }}"><i class="fa-solid fa-circle-question" aria-hidden="true"></i> My Questions</a>
+    <a href="{{ url_for('studio.workspace_home') }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Test Workspace</a>
     <a href="{{ url_for('upload_note') }}"><i class="fa-solid fa-upload" aria-hidden="true"></i> Upload note</a>
     <a href="{{ url_for('manage_announcements') }}"><i class="fa-solid fa-bullhorn" aria-hidden="true"></i> Post notice</a>
     <a href="{{ url_for('admit_student') }}"><i class="fa-solid fa-user-plus" aria-hidden="true"></i> Admit student</a>

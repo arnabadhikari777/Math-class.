@@ -16,9 +16,9 @@
 </div>
 
 <div class="stats">
-  <div class="stat"><div class="num">{{ total_students }}+</div><div class="label">Registered Students</div></div>
-  <div class="stat"><div class="num">{{ total_tests }}+</div><div class="label">Live Tests</div></div>
-  <div class="stat"><div class="num">{{ total_notes }}+</div><div class="label">Notes Available</div></div>
+  <div class="stat"><span class="stat-ic"><i class="fa-solid fa-users" aria-hidden="true"></i></span><div class="num">{{ total_students }}+</div><div class="label">Registered Students</div></div>
+  <div class="stat"><span class="stat-ic green"><i class="fa-solid fa-file-pen" aria-hidden="true"></i></span><div class="num">{{ total_tests }}+</div><div class="label">Live Tests</div></div>
+  <div class="stat"><span class="stat-ic cyan"><i class="fa-solid fa-book-open" aria-hidden="true"></i></span><div class="num">{{ total_notes }}+</div><div class="label">Notes Available</div></div>
 </div>
 
 {% if announcements %}
@@ -59,7 +59,7 @@
   <div class="card hoverable">
     <div class="feature-ic"><i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i></div>
     <h3>Light &amp; Dark Mode</h3>
-    <p class="text-muted">Switch between Auto, Light and Dark from the top bar. Easy on the eyes at night.</p>
+    <p class="text-muted">Switch between light and dark with the moon / sun button in the top bar. Easy on the eyes at night.</p>
   </div>
   <div class="card hoverable">
     <div class="feature-ic"><i class="fa-solid fa-robot" aria-hidden="true"></i></div>
@@ -71,6 +71,6 @@
 <div class="card text-center">
   <h2>Take Math Class With You</h2>
   <p class="text-muted mb-1">Install the app on your phone for one-tap access to notes, tests and alerts.</p>
-  <a href="{{ url_for('download_app') }}" class="btn btn-primary mt-1">Download / Install App</a>
+  <a href="{{ url_for('download_app') }}" class="btn btn-primary mt-1"><i class="fa-solid fa-download" aria-hidden="true"></i> Download / Install App</a>
 </div>
 {% endblock %}

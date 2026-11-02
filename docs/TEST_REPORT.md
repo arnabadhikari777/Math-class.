@@ -19,3 +19,6 @@ Image library (tests/test_question_bank.py updated): used image blocked incl. ex
 
 ## Existing 115 tests — all PASS after being updated for intentional changes
 (GET logout → POST, test_attempts → exam_attempts, impersonation is a student session, timer now default-on, numeric Cloudinary key in test env, `/resend-otp` POST in route baseline, rollback needs force flag).
+
+## v3 (My Questions / Test Workspace / OTP) — 2 Nov 2026
+`python -m unittest discover -s tests` → 275 run, 275 passed, 0 failed, 0 skipped (56 new). Browser smoke test: 15/15. Real Gmail / Cloudinary / AI / Web Push were NOT exercised. Details: IMPLEMENTATION_AND_TEST_REPORT.md.

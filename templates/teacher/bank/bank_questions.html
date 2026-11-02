@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Question Bank{% endblock %}
+{% block title %}My Questions{% endblock %}
 {% block content %}
 {% include "partials/_studio_nav.html" %}
 <div class="card">
-  <h2>Saved questions</h2>
-  <p class="helper-text">মোট প্রশ্ন: {{ total }}</p>
+  <h2>My Questions</h2>
+  <p class="helper-text">মোট সংরক্ষিত প্রশ্ন: {{ total }}। এখানে সেভ করা প্রশ্ন কোনো Test-এ নিজে থেকে যোগ হয় না; Test Workspace থেকে Import করলে তবেই যোগ হয়।</p>
   <div class="flex gap-1 flex-wrap mt-1">
     <a class="btn btn-primary" href="{{ url_for('qbank.question_new') }}">+ নতুন প্রশ্ন</a>
   </div>
@@ -34,13 +34,13 @@
     </div>
     <div class="flex gap-1 flex-wrap mt-1">
       <a class="btn btn-sm btn-outline" href="{{ url_for('qbank.question_edit', qid=r.id) }}">Edit</a>
-      <form method="POST" action="{{ url_for('qbank.question_delete', qid=r.id) }}" data-confirm="প্রশ্নটি Question Bank থেকে মুছবেন? (Test-এ থাকা কপি অক্ষত থাকবে)">
+      <form method="POST" action="{{ url_for('qbank.question_delete', qid=r.id) }}" data-confirm="প্রশ্নটি My Questions থেকে মুছবেন? (Test-এ থাকা কপি অক্ষত থাকবে)">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-sm btn-danger" type="submit">Delete</button>
       </form>
     </div>
   </div>
   {% endfor %}
-  {% else %}<div class="empty-state">কোনো প্রশ্ন পাওয়া যায়নি।</div>{% endif %}
+  {% else %}<div class="empty-state">এখনো কোনো প্রশ্ন সংরক্ষিত নেই। "+ নতুন প্রশ্ন" চাপুন, অথবা Test Workspace-এ প্রশ্নের পাশে "Save to My Questions" চাপুন।</div>{% endif %}
 </div>
 {% endblock %}

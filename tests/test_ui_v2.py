@@ -124,7 +124,7 @@ class UiV2(AppCase):
         html = self.student().get("/dashboard").get_data(as_text=True)
         for gone in ("XP", "streak", "Smart coach", "Score trend", "Subject strength", "JEE Main Session"):
             self.assertNotIn(gone, html)
-        for there in ("Available tests", "Study notes", "Quadratics", "Recent results", "Dash exam"):
+        for there in ("Available tests", "Study notes", "Quadratics", "Recent Activity log", "Dash exam"):
             self.assertIn(there, html)
 
     def test_teacher_dashboard_sections(self):
@@ -136,7 +136,7 @@ class UiV2(AppCase):
 
     def test_teacher_sidebar_groups_and_links(self):
         html = self.teacher().get("/teacher/dashboard").get_data(as_text=True)
-        for text in ("Main", "Communication", "Advanced", "Question Studio", "Image Library", "Notices", "Inbox",
+        for text in ("Main", "Communication", "Advanced", "My Questions", "Test Workspace", "Image Library", "Notices", "Inbox",
                      "Activity Log", "Data Cleanup", "Export students"):
             self.assertIn(text, html)
 
@@ -156,7 +156,7 @@ class UiV2(AppCase):
     def test_studio_pages_share_the_same_tabs(self):
         for url in ("/teacher/bank/questions", "/teacher/studio/library"):
             html = self.teacher().get(url).get_data(as_text=True)
-            for tab in ("Saved questions", "Test questions", "Image Library"):
+            for tab in ("My Questions", "Test Workspace", "Image Library"):
                 self.assertIn(tab, html, url)
 
     # ------------------------------------------------------------ exam + math

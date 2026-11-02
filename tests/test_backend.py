@@ -218,7 +218,7 @@ class BackendTests(unittest.TestCase):
                                    "003_unique_results", "004_unique_attendance",
                                    "005_normalize_class_names", "006_ai_chat", "007_question_bank",
                                    "008_exam_system", "009_drop_legacy_attempts", "010_support_tables",
-                                   "011_publish_marking", "012_autosave", "013_sessions"})
+                                   "011_publish_marking", "012_autosave", "013_sessions", "014_workspace"})
 
     def test_12_backup_created_before_migrating(self):
         folder = os.path.join(self.proj, "backups")
@@ -497,7 +497,7 @@ class BackendTests(unittest.TestCase):
         r = self.app.test_client().get("/sw.js")
         self.assertEqual(r.headers["Cache-Control"], "no-cache")
         js = r.get_data(as_text=True)
-        self.assertIn("math-class-v9", js)
+        self.assertIn("math-class-v10", js)
         self.assertIn("startsWith('/static/')", js)
         self.assertNotIn("caches.match(event.request))\n  );\n});", js.split("addEventListener('fetch'")[1][-60:])
         fetch_part = js.split("addEventListener('fetch'")[1]

@@ -34,7 +34,7 @@ def problems(conn, test):
         out.append("Duration is not a valid number.")
     if float(test["negative_marks"] or 0) < 0:
         out.append("Negative marks cannot be below 0.")
-    qs = conn.execute("SELECT * FROM questions WHERE test_id=? ORDER BY id", (test["id"],)).fetchall()
+    qs = conn.execute("SELECT * FROM questions WHERE test_id=? ORDER BY COALESCE(sort_order, id), id", (test["id"],)).fetchall()
     if not qs:
         out.append("Add at least one question before publishing.")
     for n, q in enumerate(qs, 1):
