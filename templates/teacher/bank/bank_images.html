@@ -50,7 +50,7 @@
   </div>
   {% if selected %}
   {% for c in categories if c.id == selected and c.image_count == 0 %}
-  <form method="POST" action="{{ url_for('qbank.category_delete', cid=c.id) }}" class="mt-1" onsubmit="return confirm('এই খালি Category মুছবেন?');">
+  <form method="POST" action="{{ url_for('qbank.category_delete', cid=c.id) }}" class="mt-1" data-confirm="এই খালি Category মুছবেন?">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button class="btn btn-sm btn-danger" type="submit">এই খালি Category মুছুন</button>
   </form>
@@ -70,7 +70,7 @@
         ব্যবহার: প্রশ্ন {{ im.used_bank }}, Test {{ im.used_tests }}
       </div>
       <form method="POST" action="{{ url_for('qbank.image_delete', image_id=im.id) }}" style="margin-top:6px"
-            onsubmit="return confirm('{{ 'এই ছবিটি প্রশ্নে ব্যবহৃত হচ্ছে, তাই মোছা যাবে না। চেষ্টা করবেন?' if (im.used_bank or im.used_tests) else 'ছবিটি Cloudinary ও Library থেকে চিরতরে মুছবেন?' }}');">
+            data-confirm="{{ 'এই ছবিটি প্রশ্নে ব্যবহৃত হচ্ছে, তাই মোছা যাবে না। চেষ্টা করবেন?' if (im.used_bank or im.used_tests) else 'ছবিটি Cloudinary ও Library থেকে চিরতরে মুছবেন?' }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-sm btn-danger" type="submit">Delete</button>
       </form>

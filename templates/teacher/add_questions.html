@@ -10,7 +10,7 @@
   <h3>Question Bank</h3>
   <p class="helper-text">Question Bank থেকে এক বা একাধিক প্রশ্ন একসঙ্গে এই Test-এ যোগ করুন।</p>
   <div class="flex gap-1 flex-wrap">
-    <a class="btn btn-primary" href="{{ url_for('qbank.import_to_test', test_id=test.id) }}">📚 Question Bank থেকে যোগ করুন</a>
+    <a class="btn btn-primary" href="{{ url_for('qbank.import_to_test', test_id=test.id) }}"><i class="fa-solid fa-layer-group" aria-hidden="true"></i> Question Bank থেকে যোগ করুন</a>
     <a class="btn btn-outline" href="{{ url_for('qbank.images') }}">🖼️ Image Library পরিচালনা করুন</a>
   </div>
 </div>
@@ -43,7 +43,7 @@
           Correct Answer: <span class="badge badge-green">{{ q.correct_option }}</span> | Marks: {{ q.marks }}
         </div>
         <form method="POST" action="{{ url_for('delete_question', question_id=q.id, test_id=test.id) }}"
-              onsubmit="return confirm('Delete this question?');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              data-confirm="Delete this question?"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="btn btn-sm btn-danger" type="submit">Delete</button>
         </form>
       </div>
