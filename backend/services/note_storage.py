@@ -26,7 +26,7 @@ def validate_pdf(original_name, data):
     if not data:
         raise PdfError("The file is empty.")
     if len(data) > MAX_PDF_BYTES:
-        raise PdfError("PDF ফাইলের সাইজ সর্বোচ্চ 15 MB হতে পারবে।")
+        raise PdfError("PDF file size must not exceed 15 MB.")
     if b"%PDF-" not in data[:1024]:
         raise PdfError("This file is not a real PDF (missing PDF signature).")
     return name

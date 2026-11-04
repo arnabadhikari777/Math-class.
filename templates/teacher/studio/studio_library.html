@@ -4,7 +4,7 @@
 {% include "partials/_studio_nav.html" %}
 <div class="card">
   <h2>Image Library</h2>
-  <p class="helper-text">Category অনুযায়ী ছবি জমিয়ে রাখুন। Test Workspace-এ প্রশ্ন তৈরির সময় এখান থেকেই ছবি বেছে নেওয়া যায়। এখান থেকে সরাসরি আপলোডে Category আপনি নিজে বাছবেন।</p>
+  <p class="helper-text">Organize images by category. You can pick images from here while creating questions in the Test Workspace. When uploading directly from here, you choose the category yourself.</p>
 </div>
 
 {% if problem %}
@@ -12,41 +12,41 @@
 {% endif %}
 
 <div class="card">
-  <h3>ছবি আপলোড</h3>
+  <h3>Upload Images</h3>
   <form method="POST" action="{{ url_for('studio.library_upload') }}" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="flex gap-1 flex-wrap">
       <div style="flex:1;min-width:180px">
         <label>Category</label>
         <select name="category_id">
-          <option value="">— নতুন Category (পাশে লিখুন) —</option>
+          <option value="">— New category (enter name beside) —</option>
           {% for c in categories %}<option value="{{ c.id }}" {{ 'selected' if selected == c.id }}>{{ c.name }} ({{ c.image_count }})</option>{% endfor %}
         </select>
       </div>
       <div style="flex:1;min-width:180px">
-        <label>নতুন Category</label>
-        <input type="text" name="new_category" maxlength="60" placeholder="যেমন: Calculus, Geometry">
+        <label>New Category</label>
+        <input type="text" name="new_category" maxlength="60" placeholder="e.g. Calculus, Geometry">
       </div>
     </div>
-    <label>ছবি (JPG, PNG, WEBP, GIF — প্রতিটি সর্বোচ্চ {{ max_mb }} MB, একবারে {{ max_files }} টি পর্যন্ত)</label>
+    <label>Images (JPG, PNG, WEBP, GIF — max {{ max_mb }} MB each, up to {{ max_files }} at a time)</label>
     <input type="file" name="images" accept="image/jpeg,image/png,image/webp,image/gif" multiple required>
-    <div class="mt-1"><button class="btn btn-primary" type="submit" data-busy-text="আপলোড হচ্ছে…">আপলোড করুন</button></div>
+    <div class="mt-1"><button class="btn btn-primary" type="submit" data-busy-text="Uploading…">Upload</button></div>
   </form>
 </div>
 
 <div class="card">
-  <h3>Category অনুযায়ী ছবি</h3>
+  <h3>Images by Category</h3>
   <div class="flex gap-1 flex-wrap mt-1">
-    <a class="btn btn-sm {{ 'btn-primary' if not selected else 'btn-outline' }}" href="{{ url_for('studio.library') }}">সব</a>
+    <a class="btn btn-sm {{ 'btn-primary' if not selected else 'btn-outline' }}" href="{{ url_for('studio.library') }}">All</a>
     {% for c in categories %}
     <a class="btn btn-sm {{ 'btn-primary' if selected == c.id else 'btn-outline' }}" href="{{ url_for('studio.library', category=c.id) }}">{{ c.name }} ({{ c.image_count }})</a>
     {% endfor %}
   </div>
   {% if selected %}
   {% for c in categories if c.id == selected and c.image_count == 0 %}
-  <form method="POST" action="{{ url_for('studio.category_delete', cid=c.id) }}" class="mt-1" data-confirm="এই খালি Category মুছবেন?">
+  <form method="POST" action="{{ url_for('studio.category_delete', cid=c.id) }}" class="mt-1" data-confirm="Delete this empty category?">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button class="btn btn-sm btn-danger" type="submit">এই খালি Category মুছুন</button>
+    <button class="btn btn-sm btn-danger" type="submit">Delete This Empty Category</button>
   </form>
   {% endfor %}
   {% endif %}
@@ -61,15 +61,15 @@
         <b>{{ im.category_name }}</b><br>
         {{ im.original_name or '' }}<br>
         {% if im.width %}{{ im.width }}×{{ im.height }}px{% endif %}{% if im.bytes %} · {{ (im.bytes / 1024)|round|int }} KB{% endif %}<br>
-        ব্যবহার: {{ used }} টি প্রশ্নে
+        Used in {{ used }} question(s)
       </div>
-      <form method="POST" action="{{ url_for('studio.image_delete', image_id=im.id) }}" style="margin-top:6px" data-confirm="{{ 'এই ছবিটি প্রশ্নে ব্যবহৃত হচ্ছে, তাই মোছা যাবে না।' if used else 'ছবিটি Cloudinary ও Library থেকে চিরতরে মুছবেন?' }}">
+      <form method="POST" action="{{ url_for('studio.image_delete', image_id=im.id) }}" style="margin-top:6px" data-confirm="{{ 'This image is used in questions, so it cannot be deleted.' if used else 'Permanently delete this image from Cloudinary and the library?' }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-sm btn-danger" type="submit" {{ 'disabled' if used }}>Delete</button>
       </form>
     </div>
     {% endfor %}
   </div>
-  {% else %}<div class="empty-state mt-1">এই Category-তে এখনো কোনো ছবি নেই।</div>{% endif %}
+  {% else %}<div class="empty-state mt-1">There are no images in this category yet.</div>{% endif %}
 </div>
 {% endblock %}

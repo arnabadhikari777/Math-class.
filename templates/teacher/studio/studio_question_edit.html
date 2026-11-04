@@ -10,13 +10,13 @@
   <form method="POST" accept-charset="UTF-8" id="qeForm">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="image_id" id="qeImageId" value="{{ q.bank_image_id or '' }}">
-    <label>প্রশ্নের লেখা (ছবি থাকলে ঐচ্ছিক)</label>
+    <label>Question Text (optional if an image is attached)</label>
     <textarea name="question_text" rows="3" style="font-family:'Noto Sans Bengali',Inter,sans-serif">{{ q.question_text }}</textarea>
-    <label>প্রশ্নের ছবি (ঐচ্ছিক)</label>
+    <label>Question Image (optional)</label>
     <div class="flex gap-1 flex-wrap items-center" style="margin:6px 0 12px">
       <img id="qePrev" src="{{ image_url or '' }}" alt="" style="max-width:200px;max-height:140px;object-fit:contain;background:#fff;border-radius:8px;border:1px solid var(--border);{{ '' if image_url else 'display:none' }}">
-      <button type="button" class="btn btn-sm btn-outline" id="qePick">🖼️ ছবি বাছুন / আপলোড করুন</button>
-      <button type="button" class="btn btn-sm btn-outline" id="qeClear" {{ '' if image_url else 'style=display:none' }}>ছবি সরান</button>
+      <button type="button" class="btn btn-sm btn-outline" id="qePick"><i class="fa-regular fa-image" aria-hidden="true"></i> Choose / Upload Image</button>
+      <button type="button" class="btn btn-sm btn-outline" id="qeClear" {{ '' if image_url else 'style=display:none' }}>Remove Image</button>
     </div>
     {% for k in ['a','b','c','d'] %}
     <label>Option {{ k|upper }}</label>

@@ -50,13 +50,13 @@ def usage(conn, image_id, url=None):
 def usage_message(u):
     parts = []
     if u["test_questions"]:
-        parts.append("Test-এর %d টি প্রশ্নে" % u["test_questions"])
+        parts.append("%d test question(s)" % u["test_questions"])
     if u["bank_questions"]:
-        parts.append("My Questions-এর %d টি প্রশ্নে" % u["bank_questions"])
+        parts.append("%d question(s) in My Questions" % u["bank_questions"])
     if u["exam_versions"] or u["attempt_snapshots"] or u["stored_answers"]:
-        parts.append("পুরনো পরীক্ষার Snapshot/Result-এ (%d টি রেফারেন্স)" % (
+        parts.append("past exam snapshots/results (%d reference(s))" % (
             u["exam_versions"] + u["attempt_snapshots"] + u["stored_answers"]))
-    return "ছবিটি " + " ও ".join(parts) + " ব্যবহৃত হচ্ছে, তাই মোছা হয়নি।"
+    return "This image is used in " + " and ".join(parts) + ", so it was not deleted."
 
 
 # ------------------------------------------------------------------ upload
@@ -126,7 +126,7 @@ def upload_and_register(filename, data, category):
     except Exception:
         log.exception("image row insert failed for %s", info.get("public_id"))
         discard_orphan(info["public_id"])
-        raise ImageError("'%s': ডাটাবেসে সংরক্ষণ করা যায়নি।" % filename)
+        raise ImageError("'%s': could not be saved to the database." % filename)
     return info
 
 
@@ -136,7 +136,7 @@ def safe_delete(image_id):
     with get_db() as conn:
         img = conn.execute("SELECT * FROM bank_images WHERE id=?", (image_id,)).fetchone()
         if img is None:
-            return "missing", "ছবিটি পাওয়া যায়নি।"
+            return "missing", "Image not found."
         u = usage(conn, image_id, img["url"])
         if u["total"]:
             return "blocked", usage_message(u)
@@ -150,7 +150,7 @@ def safe_delete(image_id):
         with get_db() as conn:
             deletion_queue.enqueue(conn, "cloudinary", img["public_id"], str(exc))
             conn.commit()
-        return "queued", "Cloudinary থেকে এখনই মোছা যায়নি; ছবিটি লুকানো হয়েছে এবং পরে স্বয়ংক্রিয়ভাবে আবার চেষ্টা হবে।"
+        return "queued", "Could not delete from Cloudinary right now; the image has been hidden and deletion will be retried automatically."
     with get_db() as conn:
         u = usage(conn, image_id, img["url"])           # re-check: someone may have picked it meanwhile
         if u["total"]:
@@ -159,7 +159,7 @@ def safe_delete(image_id):
             return "blocked", usage_message(u)
         conn.execute("DELETE FROM bank_images WHERE id=?", (image_id,))
         conn.commit()
-    return "deleted", "ছবি মুছে ফেলা হয়েছে।"
+    return "deleted", "Image deleted."
 
 
 # ---------------------------------------------------------- reconciliation

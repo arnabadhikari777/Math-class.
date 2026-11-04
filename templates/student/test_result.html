@@ -55,7 +55,7 @@
 
 <div class="card">
   <h3><i class="fa-solid fa-lightbulb" aria-hidden="true"></i> What this means</h3>
-  <div class="tip {{ I.kind if I.kind != 'info' else '' }}"><span class="ic">{{ '🌟' if I.kind == 'good' else '⚠️' if I.kind == 'warn' else '💡' }}</span><div><b>{{ I.message }}</b>
+  <div class="tip {{ I.kind if I.kind != 'info' else '' }}"><span class="ic">{% if I.kind == 'good' %}<i class="fa-solid fa-star" aria-hidden="true"></i>{% elif I.kind == 'warn' %}<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>{% else %}<i class="fa-solid fa-lightbulb" aria-hidden="true"></i>{% endif %}</span><div><b>{{ I.message }}</b>
     {% if I.vs_avg is not none %}<p>You are {{ '%.0f'|format(I.vs_avg|abs) }} points {{ 'above' if I.vs_avg >= 0 else 'below' }} the class average on this test.</p>{% endif %}
   </div></div>
   {% if I.wrong_numbers %}

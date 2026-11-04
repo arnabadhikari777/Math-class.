@@ -62,56 +62,56 @@ def config_problem(address=None, password=None):
     password = clean_app_password(EMAIL_APP_PASSWORD if password is None else password)
     if not (address or "").strip():
         return ("CONFIG_NO_ADDRESS", "EMAIL_ADDRESS is empty. Put your Gmail address in .env and restart Flask.",
-                "ইমেইল পাঠানোর সেটিং এখনো করা হয়নি। অনুগ্রহ করে Sir-কে জানান।")
+                "Email settings have not been configured yet. Please inform your teacher.")
     if not EMAIL_RE.match(address.strip()):
         return ("CONFIG_BAD_ADDRESS", "EMAIL_ADDRESS is not a valid email address.",
-                "ইমেইল পাঠানোর সেটিং ভুল আছে। অনুগ্রহ করে Sir-কে জানান।")
+                "Email settings are incorrect. Please inform your teacher.")
     if not password:
         return ("CONFIG_NO_PASSWORD", "EMAIL_APP_PASSWORD is empty. Create a Google App Password and put it in .env.",
-                "ইমেইল পাঠানোর সেটিং এখনো করা হয়নি। অনুগ্রহ করে Sir-কে জানান।")
+                "Email settings have not been configured yet. Please inform your teacher.")
     try:
         password.encode("ascii")
     except UnicodeEncodeError:
         return ("CONFIG_PASSWORD_NOT_ASCII",
                 "EMAIL_APP_PASSWORD contains a non-English character (copy/paste problem). Retype the 16 letters.",
-                "ইমেইল পাঠানোর সেটিং ভুল আছে। অনুগ্রহ করে Sir-কে জানান।")
+                "Email settings are incorrect. Please inform your teacher.")
     return None
 
 
 def classify(exc):
     """Map an exception to (code, plain Bengali message for the user, hint for the developer)."""
     if isinstance(exc, smtplib.SMTPAuthenticationError):
-        return ("AUTH_FAILED", "ইমেইল সার্ভারে লগইন করা যায়নি। অনুগ্রহ করে Sir-কে জানান।",
+        return ("AUTH_FAILED", "Could not sign in to the email server. Please inform your teacher.",
                 "Gmail refused the login. Use a 16-letter Google App Password (not the normal password), "
                 "2-Step Verification must be ON, and EMAIL_ADDRESS must be the same account.")
     if isinstance(exc, ssl.SSLCertVerificationError):
-        return ("TLS_CERT_FAILED", "নিরাপদ সংযোগ তৈরি করা যায়নি। কিছুক্ষণ পরে আবার চেষ্টা করুন।",
+        return ("TLS_CERT_FAILED", "Could not establish a secure connection. Please try again in a few minutes.",
                 "TLS certificate check failed. Antivirus/VPN/proxy 'HTTPS scanning' or an old Windows "
                 "certificate store is the usual cause.")
     if isinstance(exc, ssl.SSLError):
-        return ("TLS_FAILED", "নিরাপদ সংযোগ তৈরি করা যায়নি। কিছুক্ষণ পরে আবার চেষ্টা করুন।",
+        return ("TLS_FAILED", "Could not establish a secure connection. Please try again in a few minutes.",
                 "TLS handshake failed (antivirus/VPN/proxy or wrong port).")
     if isinstance(exc, socket.gaierror):
-        return ("DNS_FAILED", "ইন্টারনেট সংযোগ বা DNS-এ সমস্যা আছে। সংযোগ দেখে আবার চেষ্টা করুন।",
+        return ("DNS_FAILED", "There is a problem with the internet connection or DNS. Check your connection and try again.",
                 "smtp.gmail.com could not be resolved: no internet or DNS problem.")
     if isinstance(exc, (socket.timeout, TimeoutError)):
-        return ("CONNECT_TIMEOUT", "ইমেইল সার্ভারের সঙ্গে সংযোগ হচ্ছে না। কিছুক্ষণ পরে আবার চেষ্টা করুন।",
+        return ("CONNECT_TIMEOUT", "Could not connect to the email server. Please try again in a few minutes.",
                 "Connection timed out: firewall/ISP/hosting blocks outbound SMTP (ports 587/465).")
     if isinstance(exc, (ConnectionRefusedError, ConnectionResetError, OSError)) and not isinstance(exc, smtplib.SMTPException):
-        return ("CONNECT_FAILED", "ইমেইল সার্ভারের সঙ্গে সংযোগ হচ্ছে না। কিছুক্ষণ পরে আবার চেষ্টা করুন।",
+        return ("CONNECT_FAILED", "Could not connect to the email server. Please try again in a few minutes.",
                 "Could not open the connection: firewall/antivirus/network blocks outbound SMTP.")
     if isinstance(exc, smtplib.SMTPRecipientsRefused):
-        return ("RECIPIENT_REFUSED", "এই ইমেইল ঠিকানায় মেইল পাঠানো যায়নি। ঠিকানাটি আবার দেখুন।",
+        return ("RECIPIENT_REFUSED", "The email could not be delivered to this address. Please check the address.",
                 "The server refused the recipient address.")
     if isinstance(exc, smtplib.SMTPSenderRefused):
-        return ("SENDER_REFUSED", "ইমেইল পাঠানো যায়নি। অনুগ্রহ করে Sir-কে জানান।",
+        return ("SENDER_REFUSED", "The email could not be sent. Please inform your teacher.",
                 "The server refused the sender address (EMAIL_ADDRESS must match the logged-in account).")
     if isinstance(exc, smtplib.SMTPServerDisconnected):
-        return ("SERVER_DISCONNECTED", "ইমেইল সার্ভারের সঙ্গে সংযোগ কেটে গেছে। আবার চেষ্টা করুন।",
+        return ("SERVER_DISCONNECTED", "The connection to the email server was lost. Please try again.",
                 "The server closed the connection (often a daily Gmail limit or a blocked network).")
     if isinstance(exc, smtplib.SMTPException):
-        return ("SMTP_ERROR", "ইমেইল পাঠানো যায়নি। কিছুক্ষণ পরে আবার চেষ্টা করুন।", "SMTP error from the server.")
-    return ("UNKNOWN", "ইমেইল পাঠানো যায়নি। কিছুক্ষণ পরে আবার চেষ্টা করুন।", "Unexpected error.")
+        return ("SMTP_ERROR", "The email could not be sent. Please try again in a few minutes.", "SMTP error from the server.")
+    return ("UNKNOWN", "The email could not be sent. Please try again in a few minutes.", "Unexpected error.")
 
 
 _PRIORITY = ["AUTH_FAILED", "TLS_CERT_FAILED", "RECIPIENT_REFUSED", "SENDER_REFUSED", "TLS_FAILED", "CONNECT_TIMEOUT",
@@ -154,7 +154,7 @@ def send_message(to_email, subject, body):
     to_email = (to_email or "").strip()
     if not EMAIL_RE.match(to_email):  # also blocks header-injection (\r\n)
         return SendResult(False, "config", "INVALID_RECIPIENT", "invalid recipient",
-                          "ইমেইল ঠিকানাটি সঠিক নয়।")
+                          "The email address is not valid.")
     problem = config_problem()
     if problem:
         code, dev, user = problem
@@ -250,7 +250,7 @@ def send_otp_result(to_email, otp_code, purpose="registration"):
         if not local_console_allowed():
             log.error("[OTP] LOCAL_OTP_MODE=console refused: request host is not localhost")
             return SendResult(False, "config", "LOCAL_MODE_NOT_LOCAL", "console OTP refused: not a localhost request",
-                              "Local OTP mode শুধু localhost-এ চলে। http://127.0.0.1:5000 দিয়ে খুলুন।")
+                              "Local OTP mode works only on localhost. Open the site at http://127.0.0.1:5000.")
         _print_local_otp(to_email, otp_code, purpose)
         log.info("[OTP] local console delivery for %s (code not logged)", mask_email(to_email))
         return SendResult(True, "local_console")

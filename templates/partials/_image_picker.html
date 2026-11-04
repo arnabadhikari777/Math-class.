@@ -31,31 +31,31 @@
   .ip-card .ip-badge{display:inline-block;background:var(--success);color:#fff;border-radius:999px;font-size:.66rem;padding:1px 8px;margin-top:3px}
   .ip-box.busy .ip-drop{opacity:.55;pointer-events:none}
 </style>
-<div class="ip-back" id="ipBack" role="dialog" aria-modal="true" aria-label="ছবি বাছুন">
+<div class="ip-back" id="ipBack" role="dialog" aria-modal="true" aria-label="Select image">
   <div class="ip-box" id="ipBox">
-    <div class="ip-head"><h3>🖼️ ছবি বাছুন</h3><button type="button" class="btn btn-sm btn-outline" id="ipClose"><i class="fa-solid fa-xmark" aria-hidden="true"></i> বন্ধ</button></div>
+    <div class="ip-head"><h3><i class="fa-regular fa-image" aria-hidden="true"></i> Select Image</h3><button type="button" class="btn btn-sm btn-outline" id="ipClose"><i class="fa-solid fa-xmark" aria-hidden="true"></i> Close</button></div>
     <div class="ip-tabs">
-      <button type="button" class="ip-tab active" data-tab="lib">Library থেকে বাছুন</button>
-      <button type="button" class="ip-tab" data-tab="up">⬆️ নতুন ছবি আপলোড</button>
+      <button type="button" class="ip-tab active" data-tab="lib">Choose from Library</button>
+      <button type="button" class="ip-tab" data-tab="up"><i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i> Upload New Image</button>
     </div>
     <div class="ip-body">
       <div id="ipLib">
         <div class="ip-chips" id="ipChips"></div>
-        <input type="text" id="ipSearch" placeholder="ফাইলের নাম দিয়ে খুঁজুন…" style="margin-bottom:10px">
+        <input type="text" id="ipSearch" placeholder="Search by file name…" style="margin-bottom:10px">
         <div class="ip-grid" id="ipGrid"></div>
-        <div class="ip-msg" id="ipEmpty" style="display:none;color:var(--text-muted)">এখানে কোনো ছবি নেই। "নতুন ছবি আপলোড" ট্যাব থেকে যোগ করুন।</div>
+        <div class="ip-msg" id="ipEmpty" style="display:none;color:var(--text-muted)">No images here yet. Add some from the "Upload New Image" tab.</div>
       </div>
       <div id="ipUp" style="display:none">
         {% if problem %}<p class="ip-msg err"><strong>{{ problem }}</strong></p>{% endif %}
-        {% if picker_test_id %}<div class="ip-ctx" id="ipCtx">এই Test: <strong>{{ picker_test_name }}</strong><br>নতুন ছবি ডিফল্টভাবে এই নামের Category-তে সংরক্ষণ হবে। চাইলে নিচে অন্য Category বেছে নিন বা নতুন Category লিখুন।</div>{% endif %}
+        {% if picker_test_id %}<div class="ip-ctx" id="ipCtx">This test: <strong>{{ picker_test_name }}</strong><br>New images are saved to the category with this name by default. You can choose another category below or enter a new one.</div>{% endif %}
         <div class="ip-row">
           <div><label for="ipCatSel" style="font-size:.82rem">Category</label><select id="ipCatSel"></select></div>
-          <div><label for="ipNewCat" style="font-size:.82rem">অথবা নতুন Category</label><input type="text" id="ipNewCat" maxlength="60" placeholder="যেমন: Calculus"></div>
+          <div><label for="ipNewCat" style="font-size:.82rem">Or new category</label><input type="text" id="ipNewCat" maxlength="60" placeholder="e.g. Calculus"></div>
         </div>
         <div class="ip-drop" id="ipDrop">
           <div style="font-size:1.6rem"><i class="fa-solid fa-folder-open" aria-hidden="true"></i></div>
-          <div>ছবি এখানে টেনে আনুন, অথবা ক্লিক করে বাছুন (একসঙ্গে একাধিক)</div>
-          <small style="color:var(--text-muted)">JPG, PNG, WEBP, GIF · প্রতিটি সর্বোচ্চ {{ max_mb }} MB · একবারে {{ max_files }} টি পর্যন্ত</small>
+          <div>Drag images here, or click to select (multiple allowed)</div>
+          <small style="color:var(--text-muted)">JPG, PNG, WEBP, GIF · Max {{ max_mb }} MB each · Up to {{ max_files }} at a time</small>
           <input type="file" id="ipFile" accept="image/jpeg,image/png,image/webp,image/gif" multiple hidden>
         </div>
         <div class="ip-bar" id="ipBar"><i id="ipBarFill"></i></div>
@@ -81,15 +81,15 @@ window.ImagePicker = (function () {
     $('ipUp').style.display = name === 'up' ? '' : 'none';
   }
   function renderCats() {
-    var html = '<button type="button" class="ip-chip ' + (!state.cat ? 'active' : '') + '" data-c="0">সব</button>';
+    var html = '<button type="button" class="ip-chip ' + (!state.cat ? 'active' : '') + '" data-c="0">All</button>';
     state.cats.forEach(function (c) {
       html += '<button type="button" class="ip-chip ' + (state.cat === c.id ? 'active' : '') + '" data-c="' + c.id + '">' + esc(c.name) + ' (' + c.count + ')</button>';
     });
     chips.innerHTML = html;
     var sel = $('ipCatSel'), keep = sel.value, opts = '';
-    if (state.def && !state.def.exists) opts += '<option value="__default__">' + esc(state.def.name) + ' (নতুন - আপলোডের সময় তৈরি হবে)</option>';
+    if (state.def && !state.def.exists) opts += '<option value="__default__">' + esc(state.def.name) + ' (new – will be created on upload)</option>';
     opts += state.cats.map(function (c) { return '<option value="' + c.id + '">' + esc(c.name) + '</option>'; }).join('');
-    sel.innerHTML = opts || '<option value="">(কোনো Category নেই — নতুন নাম লিখুন)</option>';
+    sel.innerHTML = opts || '<option value="">(No categories — enter a new name)</option>';
     if (state.chosen && keep && sel.querySelector('option[value="' + keep + '"]')) sel.value = keep;      // the teacher changed it: keep that
     else if (state.def) sel.value = state.def.exists ? String(state.def.id) : '__default__';              // otherwise the current test's category
     else if (state.cat) sel.value = String(state.cat);
@@ -97,7 +97,7 @@ window.ImagePicker = (function () {
   function renderGrid() {
     grid.innerHTML = state.images.map(function (im, i) {
       var fresh = state.fresh[im.id];
-      return '<div class="ip-card ' + (fresh ? 'ip-new' : '') + '" data-i="' + i + '"><img loading="lazy" src="' + esc(im.thumb) + '" alt=""><small>' + esc(im.category) + ' · ' + esc(im.name) + '</small>' + (fresh ? '<span class="ip-badge">নতুন</span>' : '') + '</div>';
+      return '<div class="ip-card ' + (fresh ? 'ip-new' : '') + '" data-i="' + i + '"><img loading="lazy" src="' + esc(im.thumb) + '" alt=""><small>' + esc(im.category) + ' · ' + esc(im.name) + '</small>' + (fresh ? '<span class="ip-badge">New</span>' : '') + '</div>';
     }).join('');
     $('ipEmpty').style.display = state.images.length ? 'none' : '';
   }
@@ -106,7 +106,7 @@ window.ImagePicker = (function () {
     return fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
       .then(function (r) { return r.json(); })
       .then(function (d) { state.images = d.images || []; state.cats = d.categories || []; state.def = d.default_category || null; renderCats(); renderGrid(); })
-      .catch(function () { $('ipEmpty').style.display = ''; $('ipEmpty').textContent = 'ছবির তালিকা আনা যায়নি। পেজ রিলোড করে দেখুন।'; });
+      .catch(function () { $('ipEmpty').style.display = ''; $('ipEmpty').textContent = 'Could not load the image list. Please reload the page.'; });
   }
   function close() { if (state.busy) return; back.classList.remove('open'); state.cb = null; }
   function pick(im) { var cb = state.cb; back.classList.remove('open'); state.cb = null; if (cb) cb(im); }
@@ -132,26 +132,26 @@ window.ImagePicker = (function () {
 
   function upload(files) {
     if (state.busy || !files || !files.length) return;
-    if (files.length > MAX_FILES) { say('err', 'একবারে সর্বোচ্চ ' + MAX_FILES + ' টি ছবি আপলোড করা যাবে।'); return; }
-    for (var k = 0; k < files.length; k++) if (files[k].size > MAX_BYTES) { say('err', '"' + files[k].name + '" অনেক বড়। প্রতিটি ছবি সর্বোচ্চ ' + (MAX_BYTES / 1048576) + ' MB।'); return; }
+    if (files.length > MAX_FILES) { say('err', 'You can upload up to ' + MAX_FILES + ' images at a time.'); return; }
+    for (var k = 0; k < files.length; k++) if (files[k].size > MAX_BYTES) { say('err', '"' + files[k].name + '" is too large. Each image must be at most ' + (MAX_BYTES / 1048576) + ' MB.'); return; }
     var fd = new FormData();
     var cat = $('ipCatSel').value, nc = $('ipNewCat').value.trim();
     if (nc) fd.append('new_category', nc);                                   // typed name wins
     else if (cat && cat !== '__default__') fd.append('category_id', cat);    // an existing category (default or chosen)
     else if (TEST_ID) fd.append('test_id', TEST_ID);                         // default: category named like the current test
     for (var i = 0; i < files.length; i++) fd.append('images', files[i]);
-    busy(true); say('', 'আপলোড শুরু হচ্ছে… (' + files.length + ' টি ছবি)');
+    busy(true); say('', 'Starting upload… (' + files.length + ' image(s))');
     var xhr = new XMLHttpRequest();
     xhr.open('POST', UP); xhr.withCredentials = true;
     xhr.setRequestHeader('X-CSRFToken', CSRF); xhr.setRequestHeader('Accept', 'application/json');
     xhr.upload.onprogress = function (e) {
       if (!e.lengthComputable) return;
       var pct = Math.round(e.loaded * 100 / e.total); fill.style.width = pct + '%';
-      say('', pct < 100 ? 'আপলোড হচ্ছে… ' + pct + '%' : 'Cloudinary-তে সংরক্ষণ হচ্ছে… একটু অপেক্ষা করুন');
+      say('', pct < 100 ? 'Uploading… ' + pct + '%' : 'Saving to Cloudinary… please wait');
     };
-    xhr.onerror = function () { busy(false); say('err', 'নেটওয়ার্ক সমস্যা। আবার চেষ্টা করুন।'); };
+    xhr.onerror = function () { busy(false); say('err', 'Network error. Please try again.'); };
     xhr.onload = function () {
-      var d; try { d = JSON.parse(xhr.responseText); } catch (e) { d = { ok: false, errors: ['সার্ভার থেকে ভুল উত্তর এসেছে।'] }; }
+      var d; try { d = JSON.parse(xhr.responseText); } catch (e) { d = { ok: false, errors: ['The server returned an invalid response.'] }; }
       busy(false);
       var errs = (d.errors || []).concat(d.error ? [d.error] : []);
       if (d.ok && d.images && d.images.length) {
@@ -162,12 +162,12 @@ window.ImagePicker = (function () {
         load().then(function () {
           tab('lib');
           var m = document.createElement('div'); m.className = 'ip-msg ok';
-          m.textContent = d.images.length + ' টি ছবি "' + (d.category ? d.category.name : '') + '" Category-তে আপলোড হয়েছে। নিচের তালিকা থেকে ছবিটি বেছে নিন।' + (errs.length ? ' (কিছু ব্যর্থ: ' + errs.join(' | ') + ')' : '');
+          m.textContent = d.images.length + ' image(s) uploaded to category "' + (d.category ? d.category.name : '') + '". Select the image from the list below.' + (errs.length ? ' (some failed: ' + errs.join(' | ') + ')' : '');
           var old = document.getElementById('ipLibMsg'); if (old) old.remove();
           m.id = 'ipLibMsg'; $('ipLib').insertBefore(m, $('ipLib').firstChild);
         });
-        say('ok', d.images.length + ' টি ছবি আপলোড হয়েছে।');
-      } else { say('err', errs.join(' | ') || 'আপলোড হয়নি।'); }
+        say('ok', d.images.length + ' image(s) uploaded.');
+      } else { say('err', errs.join(' | ') || 'Upload failed.'); }
     };
     xhr.send(fd);
   }

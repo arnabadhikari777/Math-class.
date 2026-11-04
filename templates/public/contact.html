@@ -125,10 +125,7 @@ extra_head %} {% if not logged_in %}
         display: grid;
         place-items: center;
         background: var(--grad);
-        color: #fff;
-        font-size: 2.3rem;
-        font-weight: 700;
-        line-height: 1;
+        object-fit: cover;
         box-shadow: 0 12px 24px rgba(51, 88, 232, 0.38);
         animation: es-float 4.2s ease-in-out infinite;
     }
@@ -609,7 +606,7 @@ users keep the original in-app contact form (unchanged). #}
     >
         <div class="es-head">
             <div class="es-collab" aria-hidden="true">
-                <div class="es-mc">∑</div>
+                <img class="es-mc" src="{{ url_for('static', filename='icons/icon-512.png') }}" alt="Arnab" width="78" height="78">
                 <div class="es-plus"><i class="fa-solid fa-plus"></i></div>
                 <img
                     class="es-logo"

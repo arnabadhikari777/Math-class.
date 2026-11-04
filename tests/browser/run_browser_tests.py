@@ -113,7 +113,7 @@ try:
         # import page + unpublished navigation
         t.click("#importBtn"); t.wait_for_url("**/teacher/bank/import/*")
         check("import page keeps the same selected-test header", "Mathematics Chapter 1" in t.inner_text("#wsHead"))
-        t.click("text=Test Workspace-এ ফিরুন"); t.wait_for_url("**/teacher/studio/tests/*/questions")
+        t.click("text=Back to Test Workspace"); t.wait_for_url("**/teacher/studio/tests/*/questions")
         t.set_viewport_size({"width": 390, "height": 800}); t.screenshot(path=os.path.join(shots, "test_workspace_mobile.png"))
         check("mobile layout has no horizontal scroll", t.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
         b.close()

@@ -44,7 +44,7 @@
   {% if q.image_url %}<img src="{{ q.image_url }}" alt="Question image" loading="lazy" style="max-width:100%;height:auto;margin:.5rem 0;background:#fff">{% endif %}
   {% for letter, opt in [('A', q.option_a), ('B', q.option_b), ('C', q.option_c), ('D', q.option_d)] %}
   <div style="padding:2px 0;{% if letter == q.correct_option %}font-weight:700;color:#15803d{% endif %}">
-    {{ letter }}. {{ opt }}{% if letter == q.correct_option %} &#10003; correct{% endif %}</div>
+    {{ letter }}. {{ opt }}{% if letter == q.correct_option %} <i class="fa-solid fa-check" aria-hidden="true"></i> correct{% endif %}</div>
   {% endfor %}
 </div>
 {% else %}

@@ -2,8 +2,8 @@
 {% block title %}Image Library{% endblock %}
 {% block content %}
 <div class="card">
-  <h2>🖼️ Image Library</h2>
-  <p class="helper-text">Category অনুযায়ী ছবি জমিয়ে রাখুন, তারপর Question Bank-এর প্রশ্নে ব্যবহার করুন।</p>
+  <h2><i class="fa-regular fa-image" aria-hidden="true"></i> Image Library</h2>
+  <p class="helper-text">Organize images by category, then use them in Question Bank questions.</p>
   <div class="flex gap-1 flex-wrap mt-1">
     <a class="btn btn-primary" href="{{ url_for('qbank.images') }}">Image Library</a>
     <a class="btn btn-outline" href="{{ url_for('qbank.questions') }}">Question Bank</a>
@@ -12,20 +12,20 @@
 </div>
 
 {% if not configured %}
-<div class="card"><p style="color:var(--danger)"><strong>Cloudinary সেট করা নেই।</strong> .env ফাইলে CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET দিয়ে সার্ভার রিস্টার্ট করুন। তার আগে ছবি আপলোড/ডিলিট হবে না।</p></div>
+<div class="card"><p style="color:var(--danger)"><strong>Cloudinary is not configured.</strong> Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET in the .env file and restart the server. Until then, images cannot be uploaded or deleted.</p></div>
 {% endif %}
 
 <div class="card">
-  <h3>নতুন Category</h3>
+  <h3>New Category</h3>
   <form method="POST" action="{{ url_for('qbank.category_create') }}" class="flex gap-1 flex-wrap items-center">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="text" name="name" maxlength="60" required placeholder="যেমন: Calculus, Geometry, Matrix" style="flex:1;min-width:200px">
-    <button class="btn btn-primary" type="submit">Category তৈরি করুন</button>
+    <input type="text" name="name" maxlength="60" required placeholder="e.g. Calculus, Geometry, Matrix" style="flex:1;min-width:200px">
+    <button class="btn btn-primary" type="submit">Create Category</button>
   </form>
 </div>
 
 <div class="card">
-  <h3>ছবি আপলোড</h3>
+  <h3>Upload Images</h3>
   {% if categories %}
   <form method="POST" action="{{ url_for('qbank.image_upload') }}" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -33,26 +33,26 @@
     <select name="category_id" required>
       {% for c in categories %}<option value="{{ c.id }}" {{ 'selected' if selected == c.id }}>{{ c.name }} ({{ c.image_count }})</option>{% endfor %}
     </select>
-    <label>ছবি (JPG, PNG, WEBP, GIF — প্রতিটি সর্বোচ্চ {{ max_mb }} MB, একবারে {{ max_files }} টি পর্যন্ত)</label>
+    <label>Images (JPG, PNG, WEBP, GIF — max {{ max_mb }} MB each, up to {{ max_files }} at a time)</label>
     <input type="file" name="images" accept="image/jpeg,image/png,image/webp,image/gif" multiple required>
-    <div class="mt-1"><button class="btn btn-primary" type="submit" onclick="this.disabled=true;this.textContent='আপলোড হচ্ছে…';this.form.submit();">আপলোড করুন</button></div>
+    <div class="mt-1"><button class="btn btn-primary" type="submit" onclick="this.disabled=true;this.textContent='Uploading…';this.form.submit();">Upload</button></div>
   </form>
-  {% else %}<p class="text-muted">আগে একটি Category তৈরি করুন।</p>{% endif %}
+  {% else %}<p class="text-muted">Create a category first.</p>{% endif %}
 </div>
 
 <div class="card">
-  <h3>Category অনুযায়ী ছবি</h3>
+  <h3>Images by Category</h3>
   <div class="flex gap-1 flex-wrap mt-1">
-    <a class="btn btn-sm {{ 'btn-primary' if not selected else 'btn-outline' }}" href="{{ url_for('qbank.images') }}">সব</a>
+    <a class="btn btn-sm {{ 'btn-primary' if not selected else 'btn-outline' }}" href="{{ url_for('qbank.images') }}">All</a>
     {% for c in categories %}
     <a class="btn btn-sm {{ 'btn-primary' if selected == c.id else 'btn-outline' }}" href="{{ url_for('qbank.images', category=c.id) }}">{{ c.name }} ({{ c.image_count }})</a>
     {% endfor %}
   </div>
   {% if selected %}
   {% for c in categories if c.id == selected and c.image_count == 0 %}
-  <form method="POST" action="{{ url_for('qbank.category_delete', cid=c.id) }}" class="mt-1" data-confirm="এই খালি Category মুছবেন?">
+  <form method="POST" action="{{ url_for('qbank.category_delete', cid=c.id) }}" class="mt-1" data-confirm="Delete this empty category?">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button class="btn btn-sm btn-danger" type="submit">এই খালি Category মুছুন</button>
+    <button class="btn btn-sm btn-danger" type="submit">Delete This Empty Category</button>
   </form>
   {% endfor %}
   {% endif %}
@@ -67,16 +67,16 @@
         {{ im.original_name or '' }}<br>
         {% if im.width %}{{ im.width }}×{{ im.height }}px{% endif %}{% if im.bytes %} · {{ (im.bytes / 1024)|round|int }} KB{% endif %}<br>
         {{ im.created_at[:10] }}<br>
-        ব্যবহার: প্রশ্ন {{ im.used_bank }}, Test {{ im.used_tests }}
+        Usage: {{ im.used_bank }} question(s), {{ im.used_tests }} test(s)
       </div>
       <form method="POST" action="{{ url_for('qbank.image_delete', image_id=im.id) }}" style="margin-top:6px"
-            data-confirm="{{ 'এই ছবিটি প্রশ্নে ব্যবহৃত হচ্ছে, তাই মোছা যাবে না। চেষ্টা করবেন?' if (im.used_bank or im.used_tests) else 'ছবিটি Cloudinary ও Library থেকে চিরতরে মুছবেন?' }}">
+            data-confirm="{{ 'This image is used in questions, so it cannot be deleted. Try anyway?' if (im.used_bank or im.used_tests) else 'Permanently delete this image from Cloudinary and the library?' }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-sm btn-danger" type="submit">Delete</button>
       </form>
     </div>
     {% endfor %}
   </div>
-  {% else %}<div class="empty-state mt-1">এই Category-তে এখনো কোনো ছবি নেই।</div>{% endif %}
+  {% else %}<div class="empty-state mt-1">There are no images in this category yet.</div>{% endif %}
 </div>
 {% endblock %}

@@ -8,10 +8,10 @@
 
 <div class="card">
   <h3>Question Bank</h3>
-  <p class="helper-text">Question Bank থেকে এক বা একাধিক প্রশ্ন একসঙ্গে এই Test-এ যোগ করুন।</p>
+  <p class="helper-text">Add one or more questions from the Question Bank to this test at once.</p>
   <div class="flex gap-1 flex-wrap">
-    <a class="btn btn-primary" href="{{ url_for('qbank.import_to_test', test_id=test.id) }}"><i class="fa-solid fa-layer-group" aria-hidden="true"></i> Question Bank থেকে যোগ করুন</a>
-    <a class="btn btn-outline" href="{{ url_for('qbank.images') }}">🖼️ Image Library পরিচালনা করুন</a>
+    <a class="btn btn-primary" href="{{ url_for('qbank.import_to_test', test_id=test.id) }}"><i class="fa-solid fa-layer-group" aria-hidden="true"></i> Add from Question Bank</a>
+    <a class="btn btn-outline" href="{{ url_for('qbank.images') }}"><i class="fa-regular fa-image" aria-hidden="true"></i> Manage Image Library</a>
   </div>
 </div>
 
@@ -76,9 +76,9 @@
       </div>
       <label>Question Text</label>
       <textarea name="question_text[]" required rows="2" placeholder="Type your question here..." style="font-family:'Noto Sans Bengali',Inter,sans-serif;"></textarea>
-      <label>Question Image (ঐচ্ছিক — Image Library থেকে)</label>
+      <label>Question Image (optional — from Image Library)</label>
       <select name="image_id[]" class="question-image-select">
-        <option value="">কোনো ছবি নয়</option>
+        <option value="">No image</option>
       </select>
       <div class="question-image-preview" style="margin:6px 0 12px;"></div>
       <label>Option A</label>

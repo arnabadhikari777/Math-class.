@@ -150,7 +150,7 @@ class V3(AppCase):
         n = len(self.bank_ids())
         r = self.bank_q(t, "  Dup   lib ", a="same")               # same after trimming spaces
         self.assertEqual(r.status_code, 409)
-        self.assertIn("আগে থেকেই My Questions-এ আছে", r.get_data(as_text=True))
+        self.assertIn("already exists in My Questions", r.get_data(as_text=True))
         self.assertEqual(len(self.bank_ids()), n)
         self.assertEqual(self.bank_q(t, "Dup lib", a="different").status_code, 302)   # different option = different question
 
@@ -171,7 +171,7 @@ class V3(AppCase):
         ids = self.bank_ids()[-3:]
         r = t.post("/teacher/bank/import/%d" % tid, data={"csrf_token": CSRF, "question_id": ids, "marks": "2"}, follow_redirects=True)
         html = r.get_data(as_text=True)
-        self.assertIn("3 টি প্রশ্ন", html)
+        self.assertIn("3 question(s) added to the test", html)
         self.assertIn("Import multi", html)
         rows = self.q("SELECT * FROM questions WHERE test_id=? ORDER BY COALESCE(sort_order,id)", tid)
         self.assertEqual([x["question_text"] for x in rows], ["IM0", "IM1", "IM2"])
@@ -186,7 +186,7 @@ class V3(AppCase):
         t.post("/teacher/bank/import/%d" % tid, data={"csrf_token": CSRF, "question_id": bid})
         r = t.post("/teacher/bank/import/%d" % tid, data={"csrf_token": CSRF, "question_id": [bid, bid]}, follow_redirects=True)
         self.assertEqual(self.count("SELECT COUNT(*) FROM questions WHERE test_id=?", tid), 1)
-        self.assertIn("আগেই আছে", r.get_data(as_text=True))
+        self.assertIn("already in this test", r.get_data(as_text=True))
 
     def test_32_database_itself_refuses_a_duplicate_link(self):
         t, tid = self.new_test("DB unique")
@@ -208,14 +208,14 @@ class V3(AppCase):
         t.post("/teacher/bank/import/%d" % tid, data={"csrf_token": CSRF, "question_id": bid})
         self.assertEqual(self.count("SELECT COUNT(*) FROM questions WHERE test_id=?", tid), 1)
         html = t.get("/teacher/bank/import/%d" % tid).get_data(as_text=True)
-        self.assertIn("এই Test-এ আছে", html)
+        self.assertIn("In this test", html)
 
     def test_34_import_nothing_selected_and_unknown_ids(self):
         t, tid = self.new_test("Import none")
         r = t.post("/teacher/bank/import/%d" % tid, data={"csrf_token": CSRF}, follow_redirects=True)
-        self.assertIn("কোনো প্রশ্ন বাছা হয়নি", r.get_data(as_text=True))
+        self.assertIn("No questions selected", r.get_data(as_text=True))
         r = t.post("/teacher/bank/import/%d" % tid, data={"csrf_token": CSRF, "question_id": "987654"}, follow_redirects=True)
-        self.assertIn("পাওয়া যায়নি", r.get_data(as_text=True))
+        self.assertIn("not found", r.get_data(as_text=True))
         self.assertEqual(self.count("SELECT COUNT(*) FROM questions WHERE test_id=?", tid), 0)
 
     def test_35_import_keeps_image_relation_and_copies_are_independent(self):
@@ -324,15 +324,15 @@ class V3(AppCase):
         qid = self.q("SELECT id FROM questions WHERE test_id=?", tid)[0][0]
         n = len(self.bank_ids())
         r = t.post("/teacher/studio/questions/%d/save-to-library" % qid, data={"csrf_token": CSRF}, follow_redirects=True)
-        self.assertIn("My Questions-এ সংরক্ষিত হয়েছে", r.get_data(as_text=True))
+        self.assertIn("saved to My Questions", r.get_data(as_text=True))
         self.assertEqual(len(self.bank_ids()), n + 1)
         row = self.q("SELECT * FROM bank_questions ORDER BY id DESC LIMIT 1")[0]
         self.assertEqual((row["question_text"], row["correct_option"]), ("Keep me", "D"))
         r = t.post("/teacher/studio/questions/%d/save-to-library" % qid, data={"csrf_token": CSRF}, follow_redirects=True)
-        self.assertIn("আগে থেকেই My Questions-এ আছে", r.get_data(as_text=True))
+        self.assertIn("already exists in My Questions", r.get_data(as_text=True))
         self.assertEqual(len(self.bank_ids()), n + 1)
         self.assertEqual(self.count("SELECT COUNT(*) FROM questions WHERE test_id=?", tid), 1)   # the test is unchanged
-        self.assertIn("My Questions-এ আছে", t.get("/teacher/studio/tests/%d/questions" % tid).get_data(as_text=True))
+        self.assertIn("In My Questions", t.get("/teacher/studio/tests/%d/questions" % tid).get_data(as_text=True))
 
     def test_54_save_to_my_questions_also_works_from_a_published_test(self):
         t, tid = self.published_test("Pub save", n=1)
@@ -400,7 +400,7 @@ class V3(AppCase):
             r = t.post("/teacher/studio/library/upload", data={"csrf_token": CSRF, "images": (io.BytesIO(PNG), "a.png")},
                        content_type="multipart/form-data", follow_redirects=True)
             self.assertEqual(rp.call_count, 0)
-        self.assertIn("Category বেছে নিন", r.get_data(as_text=True))
+        self.assertIn("Select a category", r.get_data(as_text=True))
         r = t.post("/teacher/studio/api/upload", data={"images": (io.BytesIO(PNG), "a.png")}, headers={"X-CSRFToken": CSRF},
                    content_type="multipart/form-data")
         self.assertEqual(r.status_code, 400)                              # no test, no category: nothing is guessed
@@ -472,7 +472,7 @@ class V3(AppCase):
         html = t.get("/teacher/studio/tests/%d/questions" % tid).get_data(as_text=True)
         self.assertIn("var TEST_ID = %d;" % tid, html)
         self.assertIn("Mathematics Chapter 1", html)
-        self.assertIn("ডিফল্টভাবে এই নামের Category", html)
+        self.assertIn("saved to the category with this name by default", html)
         self.assertIn("ipCatSel", html); self.assertIn("ipNewCat", html); self.assertIn("ipBar", html)
         # the general Image Library page has no test context
         self.assertNotIn("var TEST_ID", t.get("/teacher/studio/library").get_data(as_text=True))

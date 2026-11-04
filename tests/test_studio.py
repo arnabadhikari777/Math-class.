@@ -25,7 +25,7 @@ class StoreConfigTests(unittest.TestCase):
         self.env.stop(); sys.path.remove(ROOT)
 
     def test_missing(self):
-        self.assertIn("সেট করা নেই", self.store.config_problem())
+        self.assertIn("not configured", self.store.config_problem())
 
     def test_key_name_as_cloud_name_is_caught(self):
         os.environ.update({"CLOUDINARY_CLOUD_NAME": "Arnab Math Class", "CLOUDINARY_API_KEY": "123456789012345", "CLOUDINARY_API_SECRET": "s"})

@@ -40,7 +40,7 @@ def teacher_only(f):
     def wrapper(*args, **kwargs):
         if not session.get("is_teacher"):
             if request.path.startswith("/teacher/studio/api/") or request.is_json:
-                return jsonify({"ok": False, "error": "Teacher login দরকার।"}), 401
+                return jsonify({"ok": False, "error": "Teacher login required."}), 401
             flash("Teacher login is required.", "error")
             return redirect(url_for("teacher_login"))
         if session.get("impersonating"):
@@ -117,7 +117,7 @@ def _resolve_upload_category(conn, form):
     if cid:
         row = conn.execute("SELECT id, name FROM bank_categories WHERE id=?", (cid,)).fetchone()
         if row is None:
-            return None, "বাছাই করা Category পাওয়া যায়নি।"
+            return None, "The selected category was not found."
         return {"id": row["id"], "name": row["name"]}, None
     name = _clean_name(form.get("new_category"))
     if not name:
@@ -125,10 +125,10 @@ def _resolve_upload_category(conn, form):
         if tid:
             t = conn.execute("SELECT title FROM tests WHERE id=?", (tid,)).fetchone()
             if t is None:
-                return None, "Test পাওয়া যায়নি।"
+                return None, "Test not found."
             name = _clean_name(t["title"])
     if not name:
-        return None, "Category বেছে নিন বা নতুন নাম দিন।"
+        return None, "Select a category or enter a new name."
     row = image_service.find_category(conn, name)
     return ({"id": row["id"], "name": row["name"]} if row else {"id": None, "name": name}), None
 
@@ -185,16 +185,16 @@ def library():
 def category_create():
     name = _clean_name(request.form.get("name"))
     if not name:
-        flash("Category-র নাম দিন।", "error")
+        flash("Enter a category name.", "error")
         return redirect(url_for("studio.library"))
     with get_db() as conn:
         exists = conn.execute("SELECT id FROM bank_categories WHERE name=? COLLATE NOCASE", (name,)).fetchone()
         if exists:
-            flash("এই নামে Category আগে থেকেই আছে।", "error")
+            flash("A category with this name already exists.", "error")
             return redirect(url_for("studio.library", category=exists["id"]))
         cid = conn.execute("INSERT INTO bank_categories (name, created_at) VALUES (?,?)", (name, _now())).lastrowid
         conn.commit()
-    flash("Category তৈরি হয়েছে: %s" % name, "success")
+    flash("Category created: %s" % name, "success")
     return redirect(url_for("studio.library", category=cid))
 
 
@@ -206,11 +206,11 @@ def category_delete(cid):
             abort(404)
         n = conn.execute("SELECT COUNT(*) FROM bank_images WHERE category_id=?", (cid,)).fetchone()[0]
         if n:
-            flash("Category-তে %d টি ছবি আছে, তাই মোছা হয়নি। আগে ছবিগুলো মুছুন।" % n, "error")
+            flash("This category contains %d image(s), so it was not deleted. Delete the images first." % n, "error")
             return redirect(url_for("studio.library", category=cid))
         conn.execute("DELETE FROM bank_categories WHERE id=?", (cid,))
         conn.commit()
-    flash("Category মুছে ফেলা হয়েছে।", "success")
+    flash("Category deleted.", "success")
     return redirect(url_for("studio.library"))
 
 
@@ -222,17 +222,17 @@ def library_upload():
         cat, err = _resolve_upload_category(conn, {"category_id": request.form.get("category_id"),
                                                    "new_category": request.form.get("new_category")})
     if cat is None:
-        flash("আগে একটি Category বেছে নিন বা নতুন নাম দিন।", "error")
+        flash("Select a category or enter a new name first.", "error")
         return redirect(url_for("studio.library"))
     files = [f for f in request.files.getlist("images") if f and f.filename]
     if not files:
-        flash("কোনো ছবি বাছা হয়নি।", "error")
+        flash("No images selected.", "error")
     elif len(files) > MAX_FILES_PER_UPLOAD:
-        flash("একবারে সর্বোচ্চ %d টি ছবি আপলোড করা যাবে।" % MAX_FILES_PER_UPLOAD, "error")
+        flash("You can upload up to %d images at a time." % MAX_FILES_PER_UPLOAD, "error")
     else:
         done, errors = _save_uploads(files, cat)
         if done:
-            flash("%d টি ছবি আপলোড হয়েছে।" % len(done), "success")
+            flash("%d image(s) uploaded." % len(done), "success")
             cat = {"id": done[0]["category_id"], "name": done[0]["category"]}
         for e in errors:
             flash(e, "error")
@@ -279,9 +279,9 @@ def api_upload():
     """Picker upload: images[] + (category_id | new_category | test_id). See _resolve_upload_category."""
     files = [f for f in request.files.getlist("images") if f and f.filename]
     if not files:
-        return jsonify({"ok": False, "error": "কোনো ছবি বাছা হয়নি।"}), 400
+        return jsonify({"ok": False, "error": "No images selected."}), 400
     if len(files) > MAX_FILES_PER_UPLOAD:
-        return jsonify({"ok": False, "error": "একবারে সর্বোচ্চ %d টি ছবি।" % MAX_FILES_PER_UPLOAD}), 400
+        return jsonify({"ok": False, "error": "A maximum of %d images at a time." % MAX_FILES_PER_UPLOAD}), 400
     with get_db() as conn:
         cat, err = _resolve_upload_category(conn, request.form)
     if cat is None:
@@ -340,7 +340,7 @@ def test_questions(test_id):
 def _validate_item(conn, item, n):
     """একটি প্রশ্নের JSON যাচাই। Return (clean_dict, error_or_None)।"""
     if not isinstance(item, dict):
-        return None, "প্রশ্ন %d: ডেটা ভুল।" % n
+        return None, "Question %d: invalid data." % n
     text = str(item.get("text") or "").strip()
     opts = {k: str(item.get(k) or "").strip() for k in ("a", "b", "c", "d")}
     correct = str(item.get("correct") or "").strip().upper()
@@ -350,14 +350,14 @@ def _validate_item(conn, item, n):
     if image_id:
         row = conn.execute("SELECT url FROM bank_images WHERE id=?", (image_id,)).fetchone()
         if row is None:
-            return None, "প্রশ্ন %d: বাছাই করা ছবিটি Library-তে নেই।" % n
+            return None, "Question %d: the selected image is not in the library." % n
         image_url = row["url"]
     if not text and not image_url:
-        return None, "প্রশ্ন %d: প্রশ্নের লেখা অথবা ছবি অন্তত একটি দিন।" % n
+        return None, "Question %d: provide the question text or an image (at least one)." % n
     if not all(opts.values()):
-        return None, "প্রশ্ন %d: চারটি Option-ই পূরণ করুন।" % n
+        return None, "Question %d: fill in all four options." % n
     if correct not in ("A", "B", "C", "D"):
-        return None, "প্রশ্ন %d: সঠিক উত্তর (A/B/C/D) বাছুন।" % n
+        return None, "Question %d: select the correct answer (A/B/C/D)." % n
     return {"text": text, "opts": opts, "correct": correct, "marks": marks,
             "image_id": image_id, "image_url": image_url}, None
 
@@ -370,13 +370,13 @@ def test_questions_save(test_id):
     payload = request.get_json(silent=True) or {}
     items = payload.get("questions")
     if not isinstance(items, list) or not items:
-        return jsonify({"ok": False, "errors": [{"index": 0, "message": "কোনো প্রশ্ন পাঠানো হয়নি।"}]}), 400
+        return jsonify({"ok": False, "errors": [{"index": 0, "message": "No questions were submitted."}]}), 400
     if len(items) > MAX_QUESTIONS_PER_SAVE:
-        return jsonify({"ok": False, "errors": [{"index": 0, "message": "একবারে সর্বোচ্চ %d টি প্রশ্ন।" % MAX_QUESTIONS_PER_SAVE}]}), 400
+        return jsonify({"ok": False, "errors": [{"index": 0, "message": "A maximum of %d questions at a time." % MAX_QUESTIONS_PER_SAVE}]}), 400
     with get_db() as conn:
         trow = conn.execute("SELECT * FROM tests WHERE id=?", (test_id,)).fetchone()
         if trow is None:
-            return jsonify({"ok": False, "errors": [{"index": 0, "message": "Test পাওয়া যায়নি।"}]}), 404
+            return jsonify({"ok": False, "errors": [{"index": 0, "message": "Test not found."}]}), 404
         if not publish_service.is_editable(trow):
             return _blocked_json()
         clean, errors = [], []
@@ -397,7 +397,7 @@ def test_questions_save(test_id):
                  c["correct"], c["marks"], c["image_url"], c["image_id"], order))
             order += 1
         conn.commit()
-    flash("%d টি প্রশ্ন \"%s\" Test-এ যোগ হয়েছে (My Questions-এ নয়; রাখতে চাইলে প্রশ্নের পাশে \"Save to My Questions\" চাপুন)।"
+    flash("%d question(s) added to the test \"%s\" (not to My Questions; click \"Save to My Questions\" next to a question to keep it)."
           % (len(clean), trow["title"]), "success")
     return jsonify({"ok": True, "added": len(clean)})
 
@@ -434,7 +434,7 @@ def question_edit(test_id, qid):
                 (clean["text"], clean["opts"]["a"], clean["opts"]["b"], clean["opts"]["c"], clean["opts"]["d"],
                  clean["correct"], clean["marks"], clean["image_url"], clean["image_id"], qid, test_id))
             conn.commit()
-            flash("প্রশ্ন আপডেট হয়েছে। (My Questions-এর মূল প্রশ্ন বদলায়নি।)", "success")
+            flash("Question updated. (The original in My Questions is unchanged.)", "success")
             return redirect(url_for("studio.test_questions", test_id=test_id))
     return render_template("teacher/studio/studio_question_edit.html", test=test, q=q, image_url=q["image_url"],
                            problem=store.config_problem(), max_files=MAX_FILES_PER_UPLOAD,
@@ -482,13 +482,13 @@ def question_save_to_library(qid):
             conn.rollback()
             raise
     if state == "saved":
-        flash("প্রশ্নটি My Questions-এ সংরক্ষিত হয়েছে (প্রশ্ন #%d)। Test-এর প্রশ্ন আগের মতোই আছে।" % bank_id, "success")
+        flash("The question was saved to My Questions (question #%d). The test question is unchanged." % bank_id, "success")
     elif state == "exists":
-        flash("এই প্রশ্ন আগে থেকেই My Questions-এ আছে (প্রশ্ন #%d), তাই আবার সেভ করা হয়নি।" % bank_id, "error")
+        flash("This question already exists in My Questions (question #%d), so it was not saved again." % bank_id, "error")
     elif state == "no_image":
-        flash("শুধু-ছবির এই প্রশ্নের ছবিটি Image Library-তে নেই, তাই My Questions-এ রাখা যায়নি।", "error")
+        flash("The image of this image-only question is not in the Image Library, so it could not be saved to My Questions.", "error")
     else:
-        flash("প্রশ্নটি পাওয়া যায়নি।", "error")
+        flash("Question not found.", "error")
     return redirect(url_for("studio.test_questions", test_id=q["test_id"]) + "#q%d" % qid)
 
 
@@ -509,15 +509,15 @@ def question_set_image(qid):
         if image_id:
             img = conn.execute("SELECT url FROM bank_images WHERE id=?", (image_id,)).fetchone()
             if img is None:
-                flash("বাছাই করা ছবিটি Library-তে পাওয়া যায়নি।", "error")
+                flash("The selected image was not found in the library.", "error")
                 return back
             conn.execute("UPDATE questions SET image_url=?, bank_image_id=? WHERE id=?", (img["url"], image_id, qid))
-            flash("প্রশ্নে ছবি বসানো হয়েছে।", "success")
+            flash("Image attached to the question.", "success")
         else:
             if not (q["question_text"] or "").strip():
-                flash("এই প্রশ্নে লেখা নেই, তাই ছবি সরানো যাবে না (প্রশ্ন ফাঁকা হয়ে যাবে)।", "error")
+                flash("This question has no text, so its image cannot be removed (the question would become empty).", "error")
                 return back
             conn.execute("UPDATE questions SET image_url=NULL, bank_image_id=NULL WHERE id=?", (qid,))
-            flash("প্রশ্ন থেকে ছবি সরানো হয়েছে (Library-তে ছবি আছে)।", "success")
+            flash("Image removed from the question (it remains in the library).", "success")
         conn.commit()
     return back

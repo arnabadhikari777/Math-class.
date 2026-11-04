@@ -258,7 +258,7 @@ class SmtpPath(Base):
             self.assertFalse(r.ok)
             self.assertEqual(r.code, code, kw)
             self.assertEqual(r.stage, stage, kw)
-            self.assertTrue(re.search(r"[\u0980-\u09FF]", r.user_message))   # plain Bengali for the user
+            self.assertTrue(r.user_message and r.user_message.isascii())   # plain English for the user
             self.assertIn("port 587", r.technical); self.assertIn("port 465", r.technical)   # the 587 error is no longer hidden
 
     def test_auth_error_of_587_is_not_overwritten_by_465_connect_error(self):
@@ -299,7 +299,7 @@ class SmtpPath(Base):
                 self.assertLogs("backend.email", "ERROR"):
             r = self.register(c, email="fail@t.local")
         html = r.get_data(as_text=True)
-        self.assertIn("লগইন করা যায়নি", html)
+        self.assertIn("Could not sign in", html)
         self.assertNotIn("535", html); self.assertNotIn("smtp", html.lower().replace("smtp.", "x"))
         self.assertEqual(self.otp_rows("fail@t.local"), [])              # useless code removed; resend is possible at once
 

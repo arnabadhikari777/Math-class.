@@ -21,8 +21,7 @@ class PublishedTestError(Exception):
     """Raised when something tries to change the questions of a test that is not a draft."""
 
 
-PUBLISHED_MESSAGE = ("এই Test এখন Published। প্রশ্ন যোগ বা পরিবর্তন করতে আগে Test-টি Unpublish করুন "
-                     "(This test is published. Unpublish it to add or change questions.)")
+PUBLISHED_MESSAGE = ("This test is published. Unpublish it before adding or changing questions.")
 
 
 def _now():
@@ -79,11 +78,11 @@ def import_into_test(conn, test, ids, default_marks=1, marks_by_id=None):
         b = conn.execute("""SELECT b.*, im.url AS image_url FROM bank_questions b
                             LEFT JOIN bank_images im ON im.id = b.image_id WHERE b.id=?""", (qid,)).fetchone()
         if b is None:
-            result["skipped"].append({"id": qid, "reason": "প্রশ্নটি My Questions-এ পাওয়া যায়নি।"})
+            result["skipped"].append({"id": qid, "reason": "The question was not found in My Questions."})
             continue
         h = bank_row_hash(b)
         if qid in existing_links or h in existing_hashes:
-            result["skipped"].append({"id": qid, "reason": "এই প্রশ্ন এই Test-এ আগেই আছে (duplicate)।"})
+            result["skipped"].append({"id": qid, "reason": "This question is already in this test (duplicate)."})
             continue
         try:
             conn.execute(
@@ -93,7 +92,7 @@ def import_into_test(conn, test, ids, default_marks=1, marks_by_id=None):
                 (test["id"], b["question_text"], b["option_a"], b["option_b"], b["option_c"], b["option_d"],
                  b["correct_option"], marks_by_id.get(qid, default_marks), b["image_url"], b["image_id"], qid, order))
         except sqlite3.IntegrityError:  # the unique index caught a parallel import of the same question
-            result["skipped"].append({"id": qid, "reason": "এই প্রশ্ন এই Test-এ আগেই আছে (duplicate)।"})
+            result["skipped"].append({"id": qid, "reason": "This question is already in this test (duplicate)."})
             continue
         existing_links.add(qid)
         existing_hashes.add(h)
