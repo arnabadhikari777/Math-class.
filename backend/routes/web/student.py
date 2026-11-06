@@ -2,6 +2,11 @@
 """Student pages: dashboard, notes, profile, taking tests, results, leaderboard."""
 
 import json
+import os
+import base64
+import hashlib
+import hmac
+import time
 from datetime import datetime
 from werkzeug.utils import secure_filename
 
@@ -382,3 +387,67 @@ def test_leaderboard(test_id):
             (test_id,)
         ).fetchall()
     return render_template("student/leaderboard.html", test=test, rows=rows)
+
+
+# ============================================================
+# Chat SSO — separate page that sends the student to Goppo chat
+# ============================================================
+
+def _make_sso_token(student):
+    """Short-lived signed token so Chat app can log the student in without password."""
+    from backend.config import SSO_SHARED_SECRET, SSO_TOKEN_TTL_SECONDS
+    if not SSO_SHARED_SECRET:
+        return None
+    payload = {
+        "sub": str(student["id"]),
+        "email": student["email"],
+        "name": student.get("name") or "",
+        "class_name": student.get("class_name") or "",
+        "iat": int(time.time()),
+        "exp": int(time.time()) + int(SSO_TOKEN_TTL_SECONDS),
+    }
+    payload_b64 = base64.urlsafe_b64encode(
+        json.dumps(payload, separators=(",", ":")).encode()
+    ).decode().rstrip("=")
+    sig = hmac.new(
+        SSO_SHARED_SECRET.encode(),
+        payload_b64.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{payload_b64}.{sig}"
+
+
+@app.route("/student/chat")
+@student_login_required
+def go_to_chat():
+    """
+    Completely separate page on Math Class.
+    Builds a short SSO token and redirects the logged-in student to the Chat app.
+    Chat DB and media stay on the other PythonAnywhere — Math Class only opens the door.
+    """
+    from backend.config import CHAT_APP_URL, CHAT_SSO_PATH, SSO_SHARED_SECRET
+
+    if not CHAT_APP_URL or not SSO_SHARED_SECRET:
+        flash(
+            "Chat is not configured yet. Teacher needs to set CHAT_APP_URL and SSO_SHARED_SECRET in .env",
+            "error",
+        )
+        return redirect(url_for("student_dashboard"))
+
+    with get_db() as conn:
+        student = conn.execute(
+            "SELECT id, email, name, class_name FROM students WHERE id=?",
+            (session["student_id"],),
+        ).fetchone()
+
+    if not student:
+        abort(403)
+
+    token = _make_sso_token(dict(student))
+    if not token:
+        flash("Could not create chat login token. Check SSO_SHARED_SECRET.", "error")
+        return redirect(url_for("student_dashboard"))
+
+    target = f"{CHAT_APP_URL}{CHAT_SSO_PATH}?token={token}"
+    return redirect(target)
+

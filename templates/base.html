@@ -35,6 +35,7 @@
   <nav class="top-links" aria-label="Main">
     <a href="{{ url_for('student_dashboard') }}" class="{{ 'active' if ep == 'student_dashboard' }}">Dashboard</a>
     <a href="{{ url_for('notes_list') }}" class="{{ 'active' if ep == 'notes_list' }}">Notes</a>
+    <a href="{{ url_for('go_to_chat') }}">Chat</a>
     <a href="{{ url_for('student_profile') }}" class="{{ 'active' if ep == 'student_profile' }}">Profile</a>
     <a href="{{ url_for('contact') }}" class="{{ 'active' if ep == 'contact' }}">Contact</a>
   </nav>
@@ -139,6 +140,7 @@
   <a href="{{ url_for('student_dashboard') }}" class="{{ 'active' if ep == 'student_dashboard' }}"><span class="bi"><i class="fa-solid fa-house" aria-hidden="true"></i></span>Home</a>
   <a href="{{ url_for('student_dashboard') }}#tests"><span class="bi"><i class="fa-solid fa-file-pen" aria-hidden="true"></i></span>Tests</a>
   <a href="{{ url_for('notes_list') }}" class="{{ 'active' if ep == 'notes_list' }}"><span class="bi"><i class="fa-solid fa-book-open" aria-hidden="true"></i></span>Notes</a>
+  <a href="{{ url_for('go_to_chat') }}"><span class="bi"><i class="fa-solid fa-comments" aria-hidden="true"></i></span>Chat</a>
   <a href="{{ url_for('student_profile') }}" class="{{ 'active' if ep == 'student_profile' }}"><span class="bi"><i class="fa-solid fa-user" aria-hidden="true"></i></span>Profile</a>
 </nav>
 {% elif is_teacher %}
