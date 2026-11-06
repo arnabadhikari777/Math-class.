@@ -28,6 +28,7 @@ import backend.routes.web.public        # noqa: E402,F401
 import backend.routes.web.auth          # noqa: E402,F401
 import backend.routes.web.student       # noqa: E402,F401
 import backend.routes.web.notifications # noqa: E402,F401
+import backend.routes.web.chat          # noqa: E402,F401
 import backend.routes.web.pwa           # noqa: E402,F401
 
 # 3) Teacher panel pages

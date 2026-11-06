@@ -36,12 +36,12 @@ def inject_notifications():
             class_name = student["class_name"] if student else ""
             rows = conn.execute(
                 """SELECT n.* FROM notifications n
-                   WHERE (n.class_name='' OR n.class_name IS NULL OR n.class_name=?)
+                   WHERE ((n.student_id IS NULL AND (n.class_name='' OR n.class_name IS NULL OR n.class_name=?)) OR n.student_id=?)
                    AND n.id NOT IN (
                      SELECT notification_id FROM notification_reads WHERE student_id=?
                    )
                    ORDER BY n.created_at DESC LIMIT 20""",
-                (class_name, sid)
+                (class_name, sid, sid)
             ).fetchall()
             data["student_notifications"] = rows
             data["unread_notif_count"] = len(rows)

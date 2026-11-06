@@ -22,10 +22,11 @@ except ImportError:
     WEBPUSH_OK = False
 
 
-def send_push_to_class(title, message, link="", class_name=""):
+def send_push_to_class(title, message, link="", class_name="", student_id=None):
     """
     Actually push a phone/browser notification to every student who has
-    allowed notifications (subscribed), optionally filtered to one class.
+    allowed notifications (subscribed), optionally filtered to one class, or - with
+    ``student_id`` - sent only to that one student's devices (used for chat messages).
     Runs quietly in the background of a request — a failed/expired
     subscription is deleted so the list stays clean, but never blocks or
     breaks the calling request.
@@ -38,7 +39,10 @@ def send_push_to_class(title, message, link="", class_name=""):
         return
     try:
         with get_db() as conn:
-            if class_name:
+            if student_id:
+                rows = conn.execute("SELECT * FROM push_subscriptions WHERE student_id=?",
+                                    (int(student_id),)).fetchall()
+            elif class_name:
                 rows = conn.execute(
                     "SELECT * FROM push_subscriptions WHERE class_name=? OR class_name=''",
                     (class_name,)

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Chat{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}?v=1">{% endblock %}
+{% block content %}
+<div id="chatApp" class="chat-app" data-conv="{{ conv_id or '' }}" data-tab="{{ tab }}" data-readonly="{{ 1 if readonly else 0 }}">
+  <section class="chat-side" id="chatSide">
+    <div class="chat-tabs" role="tablist">
+      <button type="button" role="tab" data-tab="chats" class="on">Chats <span class="cbadge" id="tabBadgeChats" hidden></span></button>
+      <button type="button" role="tab" data-tab="people">People</button>
+      <button type="button" role="tab" data-tab="requests">Requests <span class="cbadge" id="tabBadgeReq" hidden></span></button>
+    </div>
+    <div class="chat-search" id="chatSearch" hidden>
+      <input type="search" id="chatSearchInput" placeholder="Search students by name" autocomplete="off" maxlength="40">
+    </div>
+    <div class="chat-list" id="chatList" aria-live="polite"></div>
+    <div class="chat-more" id="chatMore" hidden><button type="button" class="btn btn-outline btn-sm" id="chatMoreBtn">Load more</button></div>
+  </section>
+
+  <section class="chat-room" id="chatRoom" hidden>
+    <header class="room-head">
+      <button type="button" class="icon-btn room-back" id="roomBack" aria-label="Back to chats"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i></button>
+      <div class="avatar" id="roomAvatar" aria-hidden="true"></div>
+      <div class="room-who"><strong id="roomName"></strong><span id="roomStatus" class="room-status"></span></div>
+    </header>
+    <div class="room-msgs" id="roomMsgs" aria-live="polite">
+      <div class="room-older" id="roomOlder" hidden><button type="button" class="btn btn-outline btn-sm" id="roomOlderBtn">Older messages</button></div>
+      <div id="roomItems"></div>
+    </div>
+    <div class="room-typing" id="roomTyping" hidden>typing…</div>
+    <form class="room-input" id="roomForm" autocomplete="off">
+      <textarea id="roomText" rows="1" maxlength="2000" placeholder="Write a message" aria-label="Message"></textarea>
+      <button type="submit" class="btn btn-primary" id="roomSend" aria-label="Send"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i></button>
+    </form>
+  </section>
+
+  <section class="chat-empty" id="chatEmpty"><i class="fa-regular fa-comments" aria-hidden="true"></i><p>Select a chat or find a student in People.</p></section>
+</div>
+{% endblock %}

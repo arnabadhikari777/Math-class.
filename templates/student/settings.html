@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Settings</h1>
+    <p>Choose how other students can reach you.</p>
+  </div>
+  <a href="{{ url_for('student_dashboard') }}" class="btn btn-outline"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Dashboard</a>
+</div>
+
+<div class="card">
+  <div class="card-head"><h2><i class="fa-solid fa-comments" aria-hidden="true" style="color:var(--primary);margin-right:.35rem"></i>Chat account</h2></div>
+  <form method="post" action="{{ url_for('student_settings_chat_privacy') }}" class="chat-privacy">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="chat-opt {{ 'on' if chat_public }}">
+      <input type="radio" name="privacy" value="public" {{ 'checked' if chat_public }}>
+      <span><strong><i class="fa-solid fa-globe" aria-hidden="true"></i> Public</strong>
+        <small>Any student can open a chat with you straight away. (Default)</small></span>
+    </label>
+    <label class="chat-opt {{ 'on' if not chat_public }}">
+      <input type="radio" name="privacy" value="private" {{ 'checked' if not chat_public }}>
+      <span><strong><i class="fa-solid fa-lock" aria-hidden="true"></i> Private</strong>
+        <small>Other students must send you a request first. Chats you already have stay open.</small></span>
+    </label>
+    <button class="btn btn-primary" type="submit" {{ 'disabled' if readonly }}>Save</button>
+  </form>
+</div>
+{% endblock %}

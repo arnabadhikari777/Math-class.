@@ -100,14 +100,3 @@ def validate_local_otp_mode(mode=None, debug=None, force_https=None, environ=Non
             ". Remove LOCAL_OTP_MODE from the environment/.env of this server.")
 
 
-# --- Chat SSO (Goppo / arnabchatweb) ---
-# Students click Chat in Math Class → short-lived token → Chat app logs them in.
-# See CHAT_INTEGRATION_GUIDE.md / চ্যাট_যোগ_করার_সহজ_গাইড.md
-CHAT_APP_URL = os.environ.get("CHAT_APP_URL", "").rstrip("/")
-CHAT_SSO_PATH = os.environ.get("CHAT_SSO_PATH", "/auth/sso")
-SSO_SHARED_SECRET = os.environ.get("SSO_SHARED_SECRET", "").strip()
-try:
-    SSO_TOKEN_TTL_SECONDS = int(os.environ.get("SSO_TOKEN_TTL_SECONDS", "90"))
-except ValueError:
-    SSO_TOKEN_TTL_SECONDS = 90
-

@@ -126,9 +126,10 @@ def list_announcements(conn, student, per_page, offset):
 def unread_notifications(conn, student):
     return conn.execute(
         """SELECT COUNT(*) FROM notifications n
-           WHERE (n.class_name='' OR n.class_name IS NULL OR n.class_name=?)
+           WHERE ((n.student_id IS NULL AND (n.class_name='' OR n.class_name IS NULL OR n.class_name=?))
+                  OR n.student_id=?)
              AND n.id NOT IN (SELECT notification_id FROM notification_reads WHERE student_id=?)""",
-        (student["class_name"], student["id"])).fetchone()[0]
+        (student["class_name"], student["id"], student["id"])).fetchone()[0]
 
 
 def summary(conn, student):

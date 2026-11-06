@@ -25,9 +25,10 @@ def api_notifications():
                FROM notifications n
                LEFT JOIN notification_reads r
                  ON r.notification_id = n.id AND r.student_id = ?
-               WHERE (n.class_name='' OR n.class_name IS NULL OR n.class_name=?)
+               WHERE (n.student_id IS NULL AND (n.class_name='' OR n.class_name IS NULL OR n.class_name=?))
+                  OR n.student_id=?
                ORDER BY n.created_at DESC LIMIT 30""",
-            (sid, class_name)
+            (sid, class_name, sid)
         ).fetchall()
     items = []
     for r in rows:
@@ -53,13 +54,20 @@ def api_mark_notifications_read():
         student = conn.execute("SELECT class_name FROM students WHERE id=?", (sid,)).fetchone()
         class_name = student["class_name"] if student else ""
         if ids:
-            target_ids = [int(i) for i in ids]
+            wanted = [int(i) for i in ids if str(i).isdigit()]
+            marks = ",".join("?" * len(wanted)) or "NULL"
+            target_ids = [
+                r["id"] for r in conn.execute(
+                    f"""SELECT id FROM notifications WHERE id IN ({marks})
+                        AND (student_id IS NULL OR student_id=?)""", wanted + [sid]).fetchall()
+            ]
         else:
             target_ids = [
                 r["id"] for r in conn.execute(
                     """SELECT id FROM notifications
-                       WHERE class_name='' OR class_name IS NULL OR class_name=?""",
-                    (class_name,)
+                       WHERE (student_id IS NULL AND (class_name='' OR class_name IS NULL OR class_name=?))
+                          OR student_id=?""",
+                    (class_name, sid)
                 ).fetchall()
             ]
         now = datetime.now().isoformat()
