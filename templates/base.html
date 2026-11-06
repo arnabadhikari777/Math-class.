@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=3">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=4">
 {% block extra_head %}{% endblock %}
 </head>
 {% set ep = request.endpoint or '' %}
@@ -28,7 +28,7 @@
 <header class="topbar">
   <div class="flex items-center gap-1">
     {% if is_teacher %}<button type="button" class="icon-btn menu-btn" id="menuBtn" aria-label="Open menu" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg></button>{% endif %}
-    <a href="{{ url_for('teacher_dashboard' if is_teacher else ('student_dashboard' if is_student else 'index')) }}" class="brand"><span class="brand-logo">∑</span><span class="nm">Arnab Math Class</span></a>
+    <a href="{{ url_for('teacher_dashboard' if is_teacher else ('student_dashboard' if is_student else 'index')) }}" class="brand"><img class="brand-logo" src="{{ url_for('static', filename='icons/icon-192.png') }}" alt="Arnab" width="34" height="34"><span class="nm">Arnab Math Class</span></a>
   </div>
 
   {% if is_student %}

@@ -59,13 +59,13 @@ def config_problem():
     """None যদি সব ঠিক থাকে, নইলে বাংলায় কী ভুল তার বার্তা (আপলোডের আগেই ধরা পড়ে)।"""
     c = config()
     if not (c["cloud"] and c["key"] and c["secret"]):
-        return ("Cloudinary সেট করা নেই। .env-এ CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, "
-                "CLOUDINARY_API_SECRET দিন, তারপর Web app Reload করুন।")
+        return ("Cloudinary is not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, "
+                "CLOUDINARY_API_SECRET in .env, then reload the web app.")
     if not _CLOUD_RE.match(c["cloud"]):
-        return ("CLOUDINARY_CLOUD_NAME ভুল ('%s')। এখানে Cloudinary Dashboard-এর 'Cloud name' বসাতে হবে "
-                "(স্পেস থাকে না, যেমন k1hfcl8v); API key-র নাম নয়।" % c["cloud"])
+        return ("CLOUDINARY_CLOUD_NAME is invalid ('%s'). Use the 'Cloud name' shown in the Cloudinary dashboard "
+                "(it contains no spaces, e.g. k1hfcl8v); it is not the API key name." % c["cloud"])
     if not c["key"].isdigit():
-        return "CLOUDINARY_API_KEY শুধু সংখ্যা হয়। Dashboard থেকে API Key আবার কপি করুন।"
+        return "CLOUDINARY_API_KEY must contain digits only. Copy the API key from the dashboard again."
     return None
 
 
@@ -99,14 +99,14 @@ def validate(filename, data):
     name = filename or ""
     ext = name.rsplit(".", 1)[1].lower() if "." in name else ""
     if ext not in ALLOWED_EXTENSIONS:
-        raise ImageStoreError("'%s': শুধু JPG, PNG, WEBP বা GIF ছবি চলবে।" % name)
+        raise ImageStoreError("'%s': only JPG, PNG, WEBP or GIF images are allowed." % name)
     if not data:
-        raise ImageStoreError("'%s': ফাইলটি খালি।" % name)
+        raise ImageStoreError("'%s': the file is empty." % name)
     if len(data) > max_bytes():
-        raise ImageStoreError("'%s': ছবির সাইজ সর্বোচ্চ %d MB হতে পারবে।" % (name, max_bytes() // (1024 * 1024)))
+        raise ImageStoreError("'%s': image size must not exceed %d MB." % (name, max_bytes() // (1024 * 1024)))
     kind = detect_type(data[:16])
     if kind is None:
-        raise ImageStoreError("'%s': এটি আসল ছবি ফাইল নয়।" % name)
+        raise ImageStoreError("'%s': this is not a valid image file." % name)
     return kind
 
 
@@ -120,13 +120,13 @@ def _friendly(msg):
     """Cloudinary-র ইংরেজি error-কে বোঝার মতো বাংলায় আনে।"""
     m = (msg or "").lower()
     if "cloud_name" in m:
-        return "Cloud name ভুল। .env-এ CLOUDINARY_CLOUD_NAME-এ Dashboard-এর 'Cloud name' দিন।"
+        return "Invalid cloud name. Set CLOUDINARY_CLOUD_NAME in .env to the 'Cloud name' from the dashboard."
     if "signature" in m:
-        return "API Secret ভুল। .env-এর CLOUDINARY_API_SECRET আবার কপি করে বসান।"
+        return "Invalid API Secret. Copy CLOUDINARY_API_SECRET into .env again."
     if "api_key" in m or "api key" in m:
-        return "API Key ভুল বা বন্ধ। .env-এর CLOUDINARY_API_KEY দেখুন।"
+        return "Invalid or disabled API key. Check CLOUDINARY_API_KEY in .env."
     if "disabled" in m or "blocked" in m:
-        return "Cloudinary অ্যাকাউন্ট/কী বন্ধ আছে।"
+        return "The Cloudinary account or key is disabled."
     return msg or ""
 
 
@@ -141,7 +141,7 @@ def _post(path, data, files=None):
         except (requests.ConnectionError, requests.Timeout) as exc:
             last = exc
     else:
-        raise ImageStoreError("Cloudinary-র সঙ্গে সংযোগ হয়নি। ইন্টারনেট/সার্ভারের আউটবাউন্ড অ্যাক্সেস দেখে আবার চেষ্টা করুন।")
+        raise ImageStoreError("Could not connect to Cloudinary. Check the internet connection or the server's outbound access and try again.")
     try:
         body = resp.json()
     except ValueError:
@@ -171,7 +171,7 @@ def upload(filename, data, category=None):
     if status != 200 or "secure_url" not in body:
         err = body.get("error") if isinstance(body.get("error"), dict) else {}
         msg = _friendly(err.get("message"))
-        raise ImageStoreError("Cloudinary আপলোড ব্যর্থ%s" % (": " + msg if msg else "।"))
+        raise ImageStoreError("Cloudinary upload failed%s" % (": " + msg if msg else "."))
     return {"url": body["secure_url"], "public_id": body["public_id"], "width": body.get("width"),
             "height": body.get("height"), "bytes": body.get("bytes"), "format": body.get("format")}
 
@@ -180,13 +180,13 @@ def destroy(public_id):
     """Cloudinary থেকে মোছে। 'not found' মানেও সফল (আগেই নেই)।"""
     problem = config_problem()
     if problem:
-        raise ImageStoreError("Cloudinary ঠিকমতো সেট করা নেই, তাই ছবি মোছা যায়নি।")
+        raise ImageStoreError("Cloudinary is not configured correctly, so the image could not be deleted.")
     c = config()
     params = {"public_id": public_id, "timestamp": str(int(time.time()))}
     payload = dict(params, api_key=c["key"], signature=_sign(params, c["secret"]))
     status, body = _post("image/destroy", payload)
     if status != 200 or body.get("result") not in ("ok", "not found"):
-        raise ImageStoreError("Cloudinary থেকে ছবি মোছা যায়নি। পরে আবার চেষ্টা করুন।")
+        raise ImageStoreError("The image could not be deleted from Cloudinary. Please try again later.")
     return True
 
 

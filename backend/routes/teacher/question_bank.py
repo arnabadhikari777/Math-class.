@@ -110,15 +110,15 @@ def images():
 def category_create():
     name = " ".join(request.form.get("name", "").split())[:60]
     if not name:
-        flash("Category-র নাম দিন।", "error")
+        flash("Enter a category name.", "error")
         return redirect(url_for("qbank.images"))
     with get_db() as conn:
         if conn.execute("SELECT 1 FROM bank_categories WHERE name=? COLLATE NOCASE", (name,)).fetchone():
-            flash("এই নামে Category আগে থেকেই আছে।", "error")
+            flash("A category with this name already exists.", "error")
             return redirect(url_for("qbank.images"))
         cid = conn.execute("INSERT INTO bank_categories (name, created_at) VALUES (?,?)", (name, _now())).lastrowid
         conn.commit()
-    flash("Category তৈরি হয়েছে: %s" % name, "success")
+    flash("Category created: %s" % name, "success")
     return redirect(url_for("qbank.images", category=cid))
 
 
@@ -131,11 +131,11 @@ def category_delete(cid):
             abort(404)
         n = conn.execute("SELECT COUNT(*) FROM bank_images WHERE category_id=?", (cid,)).fetchone()[0]
         if n:
-            flash("Category-তে %d টি ছবি আছে। আগে ছবিগুলো মুছুন বা অন্য Category-তে রাখুন; তাই এটি মোছা হয়নি।" % n, "error")
+            flash("This category contains %d image(s). Delete the images or move them to another category first; the category was not deleted." % n, "error")
             return redirect(url_for("qbank.images", category=cid))
         conn.execute("DELETE FROM bank_categories WHERE id=?", (cid,))
         conn.commit()
-    flash("Category মুছে ফেলা হয়েছে।", "success")
+    flash("Category deleted.", "success")
     return redirect(url_for("qbank.images"))
 
 
@@ -146,14 +146,14 @@ def image_upload():
     with get_db() as conn:
         cat = conn.execute("SELECT * FROM bank_categories WHERE id=?", (cid,)).fetchone() if cid else None
     if cat is None:
-        flash("আগে একটি Category বেছে নিন (না থাকলে নতুন Category তৈরি করুন)।", "error")
+        flash("Select a category first (or create a new one if none exists).", "error")
         return redirect(url_for("qbank.images"))
     files = [f for f in request.files.getlist("images") if f and f.filename]
     if not files:
-        flash("কোনো ছবি বাছা হয়নি।", "error")
+        flash("No images selected.", "error")
         return redirect(url_for("qbank.images", category=cid))
     if len(files) > MAX_FILES_PER_UPLOAD:
-        flash("একবারে সর্বোচ্চ %d টি ছবি আপলোড করা যাবে।" % MAX_FILES_PER_UPLOAD, "error")
+        flash("You can upload up to %d images at a time." % MAX_FILES_PER_UPLOAD, "error")
         return redirect(url_for("qbank.images", category=cid))
     done, errors = 0, []
     for f in files:
@@ -166,7 +166,7 @@ def image_upload():
             if not cdn.is_configured():
                 break
     if done:
-        flash("%d টি ছবি আপলোড হয়েছে।" % done, "success")
+        flash("%d image(s) uploaded." % done, "success")
     for e in errors:
         flash(e, "error")
     return redirect(url_for("qbank.images", category=cid))
@@ -199,13 +199,13 @@ def _read_question_form():
 
 def _validate_question(conn, data):
     if not data["question_text"] and not data["image_id"]:
-        return "প্রশ্নের লেখা অথবা ছবি অন্তত একটি দিতে হবে।"
+        return "Provide the question text or an image (at least one)."
     if not all(data[k] for k in ("option_a", "option_b", "option_c", "option_d")):
-        return "চারটি Option-ই পূরণ করুন।"
+        return "Fill in all four options."
     if data["correct_option"] not in ("A", "B", "C", "D"):
-        return "সঠিক উত্তর (A/B/C/D) বাছুন।"
+        return "Select the correct answer (A/B/C/D)."
     if data["image_id"] and conn.execute("SELECT 1 FROM bank_images WHERE id=?", (data["image_id"],)).fetchone() is None:
-        return "বাছাই করা ছবিটি Library-তে পাওয়া যায়নি।"
+        return "The selected image was not found in the library."
     return None
 
 
@@ -263,7 +263,7 @@ def question_new():
             h = _hash_of(data)
             dup = qlib.find_bank_duplicate(conn, h)
             if dup:
-                flash("এই প্রশ্নটি আগে থেকেই My Questions-এ আছে (প্রশ্ন #%d)। আবার সেভ করা হয়নি।" % dup, "error")
+                flash("This question already exists in My Questions (question #%d). It was not saved again." % dup, "error")
                 return render_template("teacher/bank/bank_question_form.html", item=data, images=_picker_images(conn),
                                        categories=_categories(conn), editing=False), 409
             now = _now()
@@ -273,7 +273,7 @@ def question_new():
                 (data["question_text"], data["image_id"], data["option_a"], data["option_b"], data["option_c"],
                  data["option_d"], data["correct_option"], now, now, h))
             conn.commit()
-            flash("প্রশ্নটি My Questions-এ সংরক্ষিত হয়েছে (এটি এখনো কোনো Test-এ যোগ হয়নি)।", "success")
+            flash("The question was saved to My Questions (it has not been added to any test yet).", "success")
             if request.form.get("save_and_new"):
                 return redirect(url_for("qbank.question_new"))
             return redirect(url_for("qbank.questions"))
@@ -299,7 +299,7 @@ def question_edit(qid):
             h = _hash_of(data)
             dup = qlib.find_bank_duplicate(conn, h, exclude_id=qid)
             if dup:
-                flash("এই লেখা, Option ও ছবির আরেকটি প্রশ্ন My Questions-এ আগেই আছে (প্রশ্ন #%d)।" % dup, "error")
+                flash("Another question with the same text, options and image already exists in My Questions (question #%d)." % dup, "error")
                 data["id"] = qid
                 return render_template("teacher/bank/bank_question_form.html", item=data, images=_picker_images(conn),
                                        categories=_categories(conn), editing=True), 409
@@ -309,7 +309,7 @@ def question_edit(qid):
                 (data["question_text"], data["image_id"], data["option_a"], data["option_b"], data["option_c"],
                  data["option_d"], data["correct_option"], _now(), h, qid))
             conn.commit()
-            flash("প্রশ্ন আপডেট হয়েছে। (যেসব Test-এ আগেই নেওয়া হয়েছে সেগুলোর কপি বদলায়নি।)", "success")
+            flash("Question updated. (Copies already added to tests were not changed.)", "success")
             return redirect(url_for("qbank.questions"))
         return render_template("teacher/bank/bank_question_form.html", item=dict(row), images=_picker_images(conn),
                                categories=_categories(conn), editing=True)
@@ -323,9 +323,9 @@ def question_delete(qid):
         cur = conn.execute("DELETE FROM bank_questions WHERE id=?", (qid,))
         conn.commit()
     if cur.rowcount:
-        flash("প্রশ্নটি My Questions থেকে মুছে ফেলা হয়েছে। (Test-এ থাকা কপি ও Library-র ছবি অক্ষত আছে।)", "success")
+        flash("The question was deleted from My Questions. (Copies in tests and library images are unaffected.)", "success")
     else:
-        flash("প্রশ্নটি পাওয়া যায়নি।", "error")
+        flash("Question not found.", "error")
     return redirect(safe_back("qbank.questions"))
 
 
@@ -350,10 +350,10 @@ def import_to_test(test_id):
                 if v and v not in ids:
                     ids.append(v)
             if not ids:
-                flash("কোনো প্রশ্ন বাছা হয়নি। আগে তালিকা থেকে অন্তত একটি প্রশ্ন টিক দিন।", "error")
+                flash("No questions selected. Tick at least one question from the list first.", "error")
                 return redirect(url_for("qbank.import_to_test", test_id=test_id))
             if len(ids) > MAX_IMPORT_AT_ONCE:
-                flash("একবারে সর্বোচ্চ %d টি প্রশ্ন নেওয়া যাবে।" % MAX_IMPORT_AT_ONCE, "error")
+                flash("You can import up to %d questions at a time." % MAX_IMPORT_AT_ONCE, "error")
                 return redirect(url_for("qbank.import_to_test", test_id=test_id))
             marks = max(1, min(100, _int(request.form.get("marks"), 1) or 1))
             marks_by_id = {i: max(1, min(100, _int(request.form.get("marks_%d" % i), marks) or marks)) for i in ids}
@@ -365,14 +365,14 @@ def import_to_test(test_id):
                 conn.rollback()
                 raise
             if res["added"]:
-                flash("%d টি প্রশ্ন \"%s\" Test-এ যোগ হয়েছে।" % (res["added"], test["title"]), "success")
+                flash("%d question(s) added to the test \"%s\"." % (res["added"], test["title"]), "success")
             if res["skipped"]:
                 reasons = {}
                 for sk in res["skipped"]:
                     reasons.setdefault(sk["reason"], 0)
                     reasons[sk["reason"]] += 1
                 for reason, n in reasons.items():
-                    flash("%d টি প্রশ্ন যোগ হয়নি: %s" % (n, reason), "error")
+                    flash("%d question(s) were not added: %s" % (n, reason), "error")
             return redirect(workspace)
         q = request.args.get("q", "").strip()[:100]
         cat = _int(request.args.get("category"))

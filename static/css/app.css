@@ -202,12 +202,9 @@ body.amc-lock {
     width: 34px;
     height: 34px;
     border-radius: 10px;
-    background: var(--grad);
-    color: #fff;
-    display: grid;
-    place-items: center;
-    font-size: 1.05rem;
-    font-weight: 700;
+    object-fit: cover;
+    display: block;
+    flex-shrink: 0;
     box-shadow: 0 4px 12px rgba(51, 88, 232, 0.35);
 }
 .top-links {

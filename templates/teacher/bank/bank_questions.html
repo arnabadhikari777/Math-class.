@@ -4,20 +4,20 @@
 {% include "partials/_studio_nav.html" %}
 <div class="card">
   <h2>My Questions</h2>
-  <p class="helper-text">মোট সংরক্ষিত প্রশ্ন: {{ total }}। এখানে সেভ করা প্রশ্ন কোনো Test-এ নিজে থেকে যোগ হয় না; Test Workspace থেকে Import করলে তবেই যোগ হয়।</p>
+  <p class="helper-text">Total questions in your library: {{ total }}. Questions kept here are not added to any test automatically; they are added only when imported from the Test Workspace.</p>
   <div class="flex gap-1 flex-wrap mt-1">
-    <a class="btn btn-primary" href="{{ url_for('qbank.question_new') }}">+ নতুন প্রশ্ন</a>
+    <a class="btn btn-primary" href="{{ url_for('qbank.question_new') }}">+ New Question</a>
   </div>
 </div>
 
 <div class="card">
   <form method="GET" class="flex gap-1 flex-wrap items-center">
-    <input type="text" name="q" value="{{ q }}" placeholder="প্রশ্নের লেখায় খুঁজুন" style="flex:1;min-width:180px">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search question text" style="flex:1;min-width:180px">
     <select name="category" style="min-width:160px">
-      <option value="">ছবির Category: সব</option>
+      <option value="">Image category: All</option>
       {% for c in categories %}<option value="{{ c.id }}" {{ 'selected' if selected == c.id }}>{{ c.name }}</option>{% endfor %}
     </select>
-    <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="with_image" value="1" {{ 'checked' if with_image }}> শুধু ছবিসহ</label>
+    <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="with_image" value="1" {{ 'checked' if with_image }}> With image only</label>
     <button class="btn btn-primary" type="submit">Filter</button>
   </form>
 </div>
@@ -34,13 +34,13 @@
     </div>
     <div class="flex gap-1 flex-wrap mt-1">
       <a class="btn btn-sm btn-outline" href="{{ url_for('qbank.question_edit', qid=r.id) }}">Edit</a>
-      <form method="POST" action="{{ url_for('qbank.question_delete', qid=r.id) }}" data-confirm="প্রশ্নটি My Questions থেকে মুছবেন? (Test-এ থাকা কপি অক্ষত থাকবে)">
+      <form method="POST" action="{{ url_for('qbank.question_delete', qid=r.id) }}" data-confirm="Delete this question from My Questions? (Copies in tests will remain.)">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-sm btn-danger" type="submit">Delete</button>
       </form>
     </div>
   </div>
   {% endfor %}
-  {% else %}<div class="empty-state">এখনো কোনো প্রশ্ন সংরক্ষিত নেই। "+ নতুন প্রশ্ন" চাপুন, অথবা Test Workspace-এ প্রশ্নের পাশে "Save to My Questions" চাপুন।</div>{% endif %}
+  {% else %}<div class="empty-state">No questions saved yet. Click "+ New Question", or click "Save to My Questions" next to a question in the Test Workspace.</div>{% endif %}
 </div>
 {% endblock %}

@@ -19,7 +19,11 @@ from backend.utils.helpers import safe_back
 # * Styles still allow inline style="" attributes (the templates use them for small layout tweaks);
 #   that is a much smaller risk than inline scripts. Move them to CSS classes to remove it later.
 # * Everything else is locked down: no plugins, no foreign <base>/forms/framing, only the hosts the
-#   site really uses (Cloudinary images, cdnjs Font Awesome, Google Fonts).
+#   site really uses (Cloudinary images, cdnjs Font Awesome, Google Fonts, and the Email Sender API
+#   that powers the public Contact form).
+EMAIL_SENDER_ORIGIN = "https://email-sender-wy5o.onrender.com"
+
+
 def build_csp(nonce):
     return "; ".join([
         "default-src 'self'",
@@ -28,12 +32,12 @@ def build_csp(nonce):
         "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
         "font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com",
         "img-src 'self' data: blob: https://res.cloudinary.com",
-        "connect-src 'self'",
+        "connect-src 'self' %s" % EMAIL_SENDER_ORIGIN,
         "manifest-src 'self'",
         "worker-src 'self'",
         "object-src 'none'",
         "base-uri 'self'",
-        "form-action 'self'",
+        "form-action 'self' %s" % EMAIL_SENDER_ORIGIN,
         "frame-ancestors 'self'",
     ])
 

@@ -76,7 +76,7 @@ def create_and_send_otp(email, purpose="registration", background=False, cooldow
     result = email_service.send_otp_result(email, otp_code, purpose)   # (console mode runs here, inside the request)
     if result.ok:
         if result.stage == "local_console":
-            return True, "Local test mode: OTP ইমেইলে যায়নি - Flask চলছে যে Terminal-এ সেখানে OTP দেখুন।", None
+            return True, "Local test mode: the OTP was not emailed. Check the Terminal where Flask is running.", None
         return True, "OTP sent to your email. Check inbox and spam folder.", None
     # The mail did not leave: this code is useless, so remove it (the cooldown must not punish a failed send).
     with get_db() as conn:
@@ -84,7 +84,7 @@ def create_and_send_otp(email, purpose="registration", background=False, cooldow
                      (email, purpose, _otp_hash(email, purpose, otp_code)))
         conn.commit()
     # The technical reason is in the server log (see email_service); the student gets a simple Bengali message.
-    return False, result.user_message or "ইমেইল পাঠানো যায়নি। কিছুক্ষণ পরে আবার চেষ্টা করুন।", None
+    return False, result.user_message or "The email could not be sent. Please try again in a few minutes.", None
 
 
 def verify_otp_code(email, entered_code, purpose="registration", generic=False):

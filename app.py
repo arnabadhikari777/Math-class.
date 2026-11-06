@@ -11,4 +11,4 @@ from backend.bootstrap import app
 from backend.config import DEBUG_MODE
 
 if __name__ == "__main__":
-    app.run(debug=DEBUG_MODE, host="0.0.0.0", port=5000)
+    app.run(debug=DEBUG_MODE, port=5000)
