@@ -103,24 +103,8 @@
 
     /* ── bell (top bar) stays in sync with what was acknowledged ── */
     function syncBell(ids) {
-        var list = document.getElementById("notifList");
-        ids.forEach(function (id) {
-            var n =
-                list && list.querySelector('.notif-item[data-id="' + id + '"]');
-            if (n) n.parentNode.removeChild(n);
-        });
-        var left = list ? list.querySelectorAll(".notif-item").length : 0;
-        var badge = document.getElementById("notifBadge");
-        if (badge) {
-            if (left) badge.textContent = String(left);
-            else badge.parentNode.removeChild(badge);
-        }
-        if (list && !left && !list.querySelector(".notif-empty")) {
-            var e = h("div", "notif-empty");
-            e.appendChild(icon("fa-bell-slash"));
-            e.appendChild(document.createTextNode("No new notifications"));
-            list.appendChild(e);
-        }
+        // the bell panel (static/js/shell.js) owns the list and the badge
+        if (window.AMC && window.AMC.bell && window.AMC.bell.acknowledged) window.AMC.bell.acknowledged(ids);
     }
 
     var seen = lsGet(KEY_SEEN) || [];

@@ -305,16 +305,26 @@ def _blocked_json(message="This test is published. Unpublish it to add or change
     return jsonify({"ok": False, "errors": [{"index": 0, "message": message}]}), 409
 
 
+def render_workspace():
+    """THE test-management page. /teacher/studio/workspace and the old /teacher/tests (All Tests) both render it,
+    so there is only one management interface. Counts come from sub-queries: one query, no per-row lookups."""
+    with get_db() as conn:
+        tests = conn.execute(
+            """SELECT t.*,
+                      (SELECT COUNT(*) FROM questions q WHERE q.test_id=t.id) AS q_count,
+                      (SELECT COALESCE(SUM(q.marks),0) FROM questions q WHERE q.test_id=t.id) AS total_marks,
+                      (SELECT COUNT(*) FROM results r WHERE r.test_id=t.id) AS r_count
+               FROM tests t WHERE COALESCE(t.is_archived,0)=0 ORDER BY t.id DESC""").fetchall()
+        archived = conn.execute(
+            """SELECT t.*, (SELECT COUNT(*) FROM results r WHERE r.test_id=t.id) AS r_count
+               FROM tests t WHERE t.is_archived=1 ORDER BY t.archived_at DESC""").fetchall()
+    return render_template("teacher/studio/workspace_home.html", tests=tests, archived_tests=archived)
+
+
 @bp.route("/workspace")
 @teacher_only
 def workspace_home():
-    """Pick the test first: nothing can be created or imported without a selected test."""
-    with get_db() as conn:
-        tests = conn.execute(
-            """SELECT t.*, (SELECT COUNT(*) FROM questions q WHERE q.test_id=t.id) AS q_count,
-                      (SELECT COALESCE(SUM(q.marks),0) FROM questions q WHERE q.test_id=t.id) AS total_marks
-               FROM tests t WHERE COALESCE(t.is_archived,0)=0 ORDER BY t.id DESC""").fetchall()
-    return render_template("teacher/studio/workspace_home.html", tests=tests)
+    return render_workspace()
 
 
 @bp.route("/tests/<int:test_id>/questions")

@@ -7,7 +7,7 @@ from flask import jsonify, request, session
 
 from backend.config import VAPID_PUBLIC_KEY
 from backend.core import app
-from backend.services import push_validation
+from backend.services import notification_service, push_validation
 from backend.db.connection import get_db
 from backend.middleware.auth import student_login_required
 
@@ -17,18 +17,16 @@ from backend.middleware.auth import student_login_required
 def api_notifications():
     sid = session["student_id"]
     with get_db() as conn:
-        student = conn.execute("SELECT class_name FROM students WHERE id=?", (sid,)).fetchone()
-        class_name = student["class_name"] if student else ""
+        class_name = notification_service.student_class(conn, sid)
         rows = conn.execute(
-            """SELECT n.*,
-                      CASE WHEN r.id IS NULL THEN 0 ELSE 1 END AS is_read
-               FROM notifications n
-               LEFT JOIN notification_reads r
-                 ON r.notification_id = n.id AND r.student_id = ?
-               WHERE (n.student_id IS NULL AND (n.class_name='' OR n.class_name IS NULL OR n.class_name=?))
-                  OR n.student_id=?
-               ORDER BY n.created_at DESC LIMIT 30""",
-            (sid, class_name, sid)
+            f"""SELECT n.*,
+                       CASE WHEN r.id IS NULL THEN 0 ELSE 1 END AS is_read
+                FROM notifications n
+                LEFT JOIN notification_reads r
+                  ON r.notification_id = n.id AND r.student_id = ?
+                WHERE {notification_service.VISIBLE_SQL}
+                ORDER BY n.created_at DESC, n.id DESC LIMIT 30""",
+            (sid, class_name, sid, sid)
         ).fetchall()
     items = []
     for r in rows:
@@ -41,47 +39,62 @@ def api_notifications():
             "created_at": r["created_at"],
             "is_read": bool(r["is_read"]),
         })
-    return jsonify({"notifications": items})
+    unread = sum(1 for i in items if not i["is_read"])
+    return jsonify({"ok": True, "notifications": items, "unread_count": unread})
 
 
 @app.route("/api/notifications/mark-read", methods=["POST"])
 @student_login_required
 def api_mark_notifications_read():
+    """Mark notifications read for the signed-in student. ``ids`` = those ids, no ``ids`` = all visible.
+
+    Only notifications this student can see are ever touched, so a guessed id does nothing.
+    """
     sid = session["student_id"]
     payload = request.get_json(silent=True) or {}
     ids = payload.get("ids")  # list of ids, or None = all visible
     with get_db() as conn:
-        student = conn.execute("SELECT class_name FROM students WHERE id=?", (sid,)).fetchone()
-        class_name = student["class_name"] if student else ""
         if ids:
-            wanted = [int(i) for i in ids if str(i).isdigit()]
+            if not isinstance(ids, list):
+                return jsonify({"ok": False, "error": "ids must be a list."}), 400
+            wanted = [int(i) for i in ids[:200] if str(i).isdigit()]
             marks = ",".join("?" * len(wanted)) or "NULL"
-            target_ids = [
-                r["id"] for r in conn.execute(
-                    f"""SELECT id FROM notifications WHERE id IN ({marks})
-                        AND (student_id IS NULL OR student_id=?)""", wanted + [sid]).fetchall()
-            ]
+            class_name = notification_service.student_class(conn, sid)
+            conn.execute("BEGIN IMMEDIATE") if not conn.in_transaction else None
+            cur = conn.execute(
+                f"""INSERT OR IGNORE INTO notification_reads (notification_id, student_id, read_at)
+                    SELECT n.id, ?, ? FROM notifications n
+                    WHERE n.id IN ({marks}) AND {notification_service.VISIBLE_SQL}""",
+                [sid, datetime.now().isoformat()] + wanted + [class_name, sid, sid])
+            marked = cur.rowcount or 0
         else:
-            target_ids = [
-                r["id"] for r in conn.execute(
-                    """SELECT id FROM notifications
-                       WHERE (student_id IS NULL AND (class_name='' OR class_name IS NULL OR class_name=?))
-                          OR student_id=?""",
-                    (class_name, sid)
-                ).fetchall()
-            ]
-        now = datetime.now().isoformat()
-        for nid in target_ids:
-            try:
-                conn.execute(
-                    """INSERT OR IGNORE INTO notification_reads
-                       (notification_id, student_id, read_at) VALUES (?,?,?)""",
-                    (nid, sid, now)
-                )
-            except Exception:
-                pass
+            conn.execute("BEGIN IMMEDIATE") if not conn.in_transaction else None
+            marked = notification_service.mark_all_read(conn, sid)
         conn.commit()
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "marked": marked})
+
+
+@app.route("/api/notifications/clear", methods=["POST"])
+@student_login_required
+def api_clear_notifications():
+    """"All Clean": clear the signed-in student's OWN notification history (one transaction).
+
+    Personal notifications are deleted; shared class notifications are only hidden for this student.
+    Announcements and every other student's data are untouched. The student id comes from the
+    session, never from the request, so there is nothing to tamper with.
+    """
+    sid = session["student_id"]
+    with get_db() as conn:
+        try:
+            conn.execute("BEGIN IMMEDIATE") if not conn.in_transaction else None
+            result = notification_service.clear_for_student(conn, sid)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            app.logger.exception("notification clear failed for student %s", sid)
+            return jsonify({"ok": False, "error": "Could not clear notifications. Please try again."}), 500
+    return jsonify({"ok": True, "cleared": result["personal_deleted"] + result["shared_dismissed"],
+                    "unread_count": 0, **result})
 
 
 @app.route("/api/push/public-key")

@@ -12,9 +12,10 @@ from backend.config import PASS_PERCENTAGE, UPLOAD_FOLDER
 from backend.core import app
 from backend.db.connection import get_db
 from backend.middleware.auth import student_login_required
-from backend.services import exam_service
+from backend.services import exam_service, student_service
 from backend.services.insights_service import build_result_insights
 from backend.utils.helpers import percentage
+from backend.utils.usernames import assign_username
 
 
 @app.route("/dashboard")
@@ -102,20 +103,22 @@ def download_note(note_id):
 @app.route("/profile")
 @student_login_required
 def student_profile():
+    sid = session["student_id"]
     with get_db() as conn:
-        student = conn.execute("SELECT * FROM students WHERE id=?", (session["student_id"],)).fetchone()
+        student = conn.execute(
+            "SELECT id, name, class_name, roll, email, mobile, registered_at, username FROM students WHERE id=?",
+            (sid,)).fetchone()
+        username = student["username"] if student else None
+        if student is not None and not username:
+            # Rows created by older code have no username yet: give one ONCE (never regenerated later).
+            username = assign_username(conn, sid, student["name"])
+            conn.commit()
         history = conn.execute(
-            "SELECT * FROM login_history WHERE student_id=? ORDER BY login_time DESC LIMIT 20",
-            (session["student_id"],)
-        ).fetchall()
-        results = conn.execute(
-            """SELECT results.*, tests.title AS test_title FROM results
-               JOIN tests t ON t.id = results.test_id JOIN tests ON tests.id = results.test_id
-               WHERE results.student_id=? AND """ + exam_service.RELEASED_SQL + """
-               ORDER BY results.submitted_at DESC""",
-            (session["student_id"],)
-        ).fetchall()
-    return render_template("student/student_profile.html", student=student, history=history, results=results)
+            "SELECT login_time, ip_address FROM login_history WHERE student_id=? "
+            "ORDER BY login_time DESC LIMIT 20", (sid,)).fetchall()
+        results, stats = student_service.profile_overview(conn, sid)
+    return render_template("student/student_profile.html", student=student, username=username,
+                           history=history, results=results, stats=stats)
 
 
 READY_TTL_SECONDS = 15 * 60   # how long "Continue to Confirmation" stays valid

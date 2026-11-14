@@ -63,3 +63,49 @@ def mark_link_read(student_id, link):
             conn.commit()
     except Exception as e:
         print(f"[notification] {e}")
+
+
+# ---- what a student can see -------------------------------------------------------------------
+# One definition used by the bell API, the page context and the unread counter.
+#   params: (class_name, student_id, student_id)
+VISIBLE_SQL = """((n.student_id IS NULL AND (n.class_name='' OR n.class_name IS NULL OR n.class_name=?))
+                  OR n.student_id=?)
+                 AND NOT EXISTS (SELECT 1 FROM notification_dismissals d
+                                 WHERE d.notification_id=n.id AND d.student_id=?)"""
+
+
+def student_class(conn, student_id):
+    row = conn.execute("SELECT class_name FROM students WHERE id=?", (student_id,)).fetchone()
+    return (row["class_name"] if row else "") or ""
+
+
+def mark_all_read(conn, student_id):
+    """Mark every notification this student can currently see as read. Returns how many were new."""
+    cls = student_class(conn, student_id)
+    cur = conn.execute(
+        f"""INSERT OR IGNORE INTO notification_reads (notification_id, student_id, read_at)
+            SELECT n.id, ?, ? FROM notifications n WHERE {VISIBLE_SQL}""",
+        (student_id, datetime.now().isoformat(), cls, student_id, student_id))
+    return cur.rowcount or 0
+
+
+def clear_for_student(conn, student_id):
+    """"All Clean": remove ONE student's notification history. Caller commits (single transaction).
+
+    * personal rows (notifications.student_id = this student)  -> deleted
+    * shared class rows                                        -> dismissed for this student only
+    * announcements, other students' rows, teacher data        -> never touched
+    """
+    cls = student_class(conn, student_id)
+    now = datetime.now().isoformat()
+    shared = conn.execute(
+        f"""INSERT OR IGNORE INTO notification_dismissals (notification_id, student_id, dismissed_at)
+            SELECT n.id, ?, ? FROM notifications n
+            WHERE n.student_id IS NULL AND (n.class_name='' OR n.class_name IS NULL OR n.class_name=?)""",
+        (student_id, now, cls)).rowcount or 0
+    conn.execute(
+        """DELETE FROM notification_reads WHERE student_id=? AND notification_id IN
+           (SELECT notification_id FROM notification_dismissals WHERE student_id=?)""",
+        (student_id, student_id))
+    personal = conn.execute("DELETE FROM notifications WHERE student_id=?", (student_id,)).rowcount or 0
+    return {"personal_deleted": personal, "shared_dismissed": shared}

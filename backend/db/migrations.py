@@ -239,7 +239,7 @@ def _down_question_bank(conn):
     conn.execute("DROP TABLE IF EXISTS bank_categories")
 
 
-from backend.db import m008_exam_system, m010_support_tables, m011_publish_marking, m012_autosave, m013_sessions, m014_workspace, m015_chat  # noqa: E402
+from backend.db import m008_exam_system, m010_support_tables, m011_publish_marking, m012_autosave, m013_sessions, m014_workspace, m015_chat, m016_username, m017_notification_dismissals  # noqa: E402
 
 
 def _up_drop_legacy_attempts(conn):
@@ -264,7 +264,8 @@ def _down_drop_legacy_attempts(conn):
 FK_OFF = {"008_exam_system"}
 # Down-migrations that destroy data and therefore refuse to run without --force-destructive.
 DESTRUCTIVE_DOWN = {"011_publish_marking", "001_test_attempts", "006_ai_chat", "007_question_bank", "008_exam_system",
-                    "009_drop_legacy_attempts", "010_support_tables", "015_chat"}
+                    "009_drop_legacy_attempts", "010_support_tables", "015_chat",
+                    "017_notification_dismissals"}
 
 MIGRATIONS = [
     ("001_test_attempts", "Record when a student opens a test (for timer checks)",
@@ -297,6 +298,10 @@ MIGRATIONS = [
      m014_workspace.up, m014_workspace.down),
     ("015_chat", "Student chat: profiles/privacy/last-seen, conversations, messages (sent/delivered/seen), requests; notifications.student_id",
      m015_chat.up, m015_chat.down),
+    ("016_username", "Unique student usernames: students.username + unique NOCASE index, backfilled for existing students",
+     m016_username.up, m016_username.down),
+    ("017_notification_dismissals", "Per-student notification dismissals so 'All Clean' never deletes shared class notices",
+     m017_notification_dismissals.up, m017_notification_dismissals.down),
 ]
 
 

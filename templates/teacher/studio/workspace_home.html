@@ -2,25 +2,133 @@
 {% block title %}Test Workspace{% endblock %}
 {% block content %}
 {% include "partials/_studio_nav.html" %}
+
 <div class="card">
-  <h2>Choose a test</h2>
-  <p class="helper-text">Questions are always created and imported inside one selected test. Pick the test to open its Test Workspace.</p>
+  <div class="card-head">
+    <div>
+      <h2>Choose a test</h2>
+      <p class="helper-text">Manage everything about a test here: questions, review and publishing, rules, results and deleting.</p>
+    </div>
+    <div class="ws-tools">
+      <a class="btn btn-primary" href="{{ url_for('create_test') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i> Create a New Test</a>
+      <a class="btn btn-outline" href="{{ url_for('data_cleanup') }}">Data Cleanup</a>
+    </div>
+  </div>
 </div>
-<div class="card">
-  {% if tests %}
-  <div class="row-list">
-    {% for t in tests %}
-    <div class="row-item">
-      <div>
-        <div class="ttl">{{ t.title }} {% if (t.status or 'draft') == 'draft' %}<span class="badge badge-gray">Draft</span>{% else %}<span class="badge badge-green">Published</span>{% endif %}</div>
-        <div class="meta">Class {{ t.class_name }} &middot; {{ t.q_count }} questions &middot; {{ t.total_marks }} marks</div>
+
+{% if tests %}
+<div class="ws-list">
+  {% for t in tests %}
+  {% set published = (t.status or 'draft') == 'published' %}
+  <article class="card ws-test" aria-labelledby="wt{{ t.id }}">
+    <div class="ws-test-top">
+      <div class="ws-test-info">
+        <h3 id="wt{{ t.id }}" class="ws-title">{{ t.title }}</h3>
+        <div class="ws-badges">
+          {% if not published %}<span class="badge badge-gray">Draft</span>
+          {% else %}<span class="badge badge-green">Published</span>
+            {% if t.is_active %}<span class="badge badge-info">Active</span>{% else %}<span class="badge badge-warn">Paused</span>{% endif %}
+          {% endif %}
+        </div>
       </div>
-      <a class="btn btn-sm btn-primary" href="{{ url_for('studio.test_questions', test_id=t.id) }}">Open Workspace</a>
+      <a class="btn btn-sm btn-primary ws-main-btn" href="{{ url_for('add_questions', test_id=t.id) }}"><i class="fa-solid fa-pen-to-square" aria-hidden="true"></i> Manage Questions</a>
+    </div>
+
+    <dl class="ws-facts">
+      <div><dt>Class</dt><dd>{{ t.class_name }}</dd></div>
+      <div><dt>Questions</dt><dd>{{ t.q_count }}</dd></div>
+      <div><dt>Total marks</dt><dd>{{ t.total_marks }}</dd></div>
+      <div><dt>Submissions</dt><dd>{{ t.r_count }}</dd></div>
+      <div><dt>Duration</dt><dd>{{ t.duration_minutes }} min</dd></div>
+    </dl>
+
+    <div class="ws-actions">
+      <a class="btn btn-sm btn-outline" href="{{ url_for('test_review', test_id=t.id) }}">{% if published %}Review{% else %}Review &amp; Publish{% endif %}</a>
+      <a class="btn btn-sm btn-outline" href="{{ url_for('test_settings', test_id=t.id) }}">Rules</a>
+      <a class="btn btn-sm btn-secondary" href="{{ url_for('test_results_view', test_id=t.id) }}">View Results</a>
+
+      <details class="act-menu">
+        <summary class="btn btn-sm btn-outline" aria-label="More actions for {{ t.title }}"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i> More</summary>
+        <div class="act-pop" role="menu">
+          <div class="act-group">Questions</div>
+          <a role="menuitem" href="{{ url_for('add_questions', test_id=t.id) }}"><i class="fa-solid fa-list-check" aria-hidden="true"></i> Manage Questions</a>
+          <a role="menuitem" href="{{ url_for('studio.test_questions', test_id=t.id) }}#blocks"><i class="fa-solid fa-plus" aria-hidden="true"></i> Add Questions</a>
+          <a role="menuitem" href="{{ url_for('qbank.import_to_test', test_id=t.id) }}"><i class="fa-solid fa-layer-group" aria-hidden="true"></i> Import Questions</a>
+          <a role="menuitem" href="{{ url_for('studio.test_questions', test_id=t.id) }}#questionList"><i class="fa-solid fa-eye" aria-hidden="true"></i> Preview, Edit, Reorder &amp; Delete</a>
+
+          <div class="act-group">Publishing</div>
+          <a role="menuitem" href="{{ url_for('test_review', test_id=t.id) }}"><i class="fa-solid fa-clipboard-check" aria-hidden="true"></i> Review test</a>
+          {% if published %}
+          <form method="POST" action="{{ url_for('unpublish_test', test_id=t.id) }}" class="js-confirm"
+                data-title="Unpublish this test?" data-name="{{ t.title }}"
+                data-text="It goes back to draft and students can no longer see it. No one is notified."
+                data-ok-label="Unpublish"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" role="menuitem"><i class="fa-solid fa-eye-slash" aria-hidden="true"></i> Unpublish</button>
+          </form>
+          {% else %}
+          <form method="POST" action="{{ url_for('publish_test', test_id=t.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" role="menuitem"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Publish</button>
+          </form>
+          {% endif %}
+
+          <div class="act-group">Test controls</div>
+          <a role="menuitem" href="{{ url_for('test_settings', test_id=t.id) }}"><i class="fa-solid fa-sliders" aria-hidden="true"></i> Rules &amp; duration</a>
+          {% if published %}
+          <form method="POST" action="{{ url_for('toggle_test', test_id=t.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" role="menuitem"><i class="fa-solid {{ 'fa-pause' if t.is_active else 'fa-play' }}" aria-hidden="true"></i> {{ 'Pause' if t.is_active else 'Resume' }}</button>
+          </form>
+          {% if t.is_active %}
+          <form method="POST" action="{{ url_for('renotify_test', test_id=t.id) }}" class="js-confirm"
+                data-title="Notify students again?" data-name="{{ t.title }}"
+                data-text="Students of this class get the new-test notification one more time."
+                data-ok-label="Notify again" data-ok-style="primary"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" role="menuitem"><i class="fa-solid fa-bell" aria-hidden="true"></i> Notify again</button>
+          </form>
+          {% endif %}
+          {% endif %}
+          <a role="menuitem" href="{{ url_for('test_results_view', test_id=t.id) }}"><i class="fa-solid fa-chart-column" aria-hidden="true"></i> View Results</a>
+
+          <div class="act-group">Danger zone</div>
+          <form method="POST" action="{{ url_for('archive_test', test_id=t.id) }}" class="js-confirm"
+                data-title="Are you sure you want to delete this test?" data-name="{{ t.title }}"
+                data-text="Students will no longer see it. All questions, results and answers are kept, and you can restore it from “Deleted tests”."
+                data-ok-label="Delete Test"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" role="menuitem" class="act-danger"><i class="fa-solid fa-trash" aria-hidden="true"></i> Delete Test</button>
+          </form>
+        </div>
+      </details>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card"><div class="empty-state">No tests yet. <a href="{{ url_for('create_test') }}">Create a test</a> first, then manage it here.</div></div>
+{% endif %}
+
+{% if archived_tests %}
+<div class="card">
+  <h3>Deleted tests <span class="helper-text">(can be restored)</span></h3>
+  <div class="row-list">
+    {% for t in archived_tests %}
+    <div class="row-item ws-deleted">
+      <div class="ws-deleted-info">
+        <div class="ttl">{{ t.title }}</div>
+        <div class="meta">Class {{ t.class_name }} &middot; {{ t.r_count }} submission{{ '' if t.r_count == 1 else 's' }}</div>
+      </div>
+      <div class="ws-deleted-actions">
+        <a class="btn btn-sm btn-secondary" href="{{ url_for('test_results_view', test_id=t.id) }}">Results</a>
+        <form method="POST" action="{{ url_for('restore_test', test_id=t.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm" type="submit">Restore</button></form>
+        <form method="POST" action="{{ url_for('delete_test', test_id=t.id) }}" class="js-confirm"
+              data-title="Delete this test forever?" data-name="{{ t.title }}"
+              data-text="This permanently removes the test, its questions and ALL student attempts and results. This cannot be undone."
+              data-ok-label="Delete forever"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline" type="submit">Delete forever</button>
+        </form>
+      </div>
     </div>
     {% endfor %}
   </div>
-  {% else %}
-  <div class="empty-state">No tests yet. <a href="{{ url_for('create_test') }}">Create a test</a> first, then open its Test Workspace.</div>
-  {% endif %}
 </div>
+{% endif %}
+{% include 'teacher/_confirm_modal.html' %}
 {% endblock %}

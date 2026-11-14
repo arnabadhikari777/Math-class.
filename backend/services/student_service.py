@@ -124,12 +124,12 @@ def list_announcements(conn, student, per_page, offset):
 
 
 def unread_notifications(conn, student):
+    from backend.services.notification_service import VISIBLE_SQL
     return conn.execute(
-        """SELECT COUNT(*) FROM notifications n
-           WHERE ((n.student_id IS NULL AND (n.class_name='' OR n.class_name IS NULL OR n.class_name=?))
-                  OR n.student_id=?)
-             AND n.id NOT IN (SELECT notification_id FROM notification_reads WHERE student_id=?)""",
-        (student["class_name"], student["id"], student["id"])).fetchone()[0]
+        f"""SELECT COUNT(*) FROM notifications n
+            WHERE {VISIBLE_SQL}
+              AND n.id NOT IN (SELECT notification_id FROM notification_reads WHERE student_id=?)""",
+        (student["class_name"], student["id"], student["id"], student["id"])).fetchone()[0]
 
 
 def summary(conn, student):
@@ -156,3 +156,28 @@ def progress(conn, sid):
     for r in rows:
         r["percentage"] = percentage(r["score"], r["total_marks"])
     return rows
+
+
+def profile_overview(conn, sid):
+    """Everything the profile page shows about academic progress, computed from real rows only.
+
+    Only results whose marks are released to the student are counted (same rule as the dashboard),
+    so a student never learns a hidden score from their profile.
+    """
+    from backend.services.exam_service import RELEASED_SQL
+    rows = _rows(conn.execute(
+        """SELECT r.id, r.test_id, t.title AS test_title, r.score, r.total_marks, r.submitted_at
+           FROM results r JOIN tests t ON t.id=r.test_id
+           WHERE r.student_id=? AND """ + RELEASED_SQL + """
+           ORDER BY r.submitted_at DESC, r.id DESC""", (sid,)))
+    for r in rows:
+        r["percentage"] = percentage(r["score"], r["total_marks"])
+        r["passed"] = r["percentage"] >= pass_percentage()
+    stats = {"completed": len(rows), "average": None, "best": None, "latest": None, "passed": 0, "recent": []}
+    if rows:
+        stats["average"] = round(sum(r["percentage"] for r in rows) / len(rows), 1)
+        stats["best"] = max(rows, key=lambda r: (r["percentage"], r["submitted_at"]))
+        stats["latest"] = rows[0]
+        stats["passed"] = sum(1 for r in rows if r["passed"])
+        stats["recent"] = list(reversed(rows[:6]))          # oldest -> newest for the mini chart
+    return rows, stats

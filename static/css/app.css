@@ -167,6 +167,12 @@ h3 {
 body.amc-lock {
     overflow: hidden;
 }
+/* one shared lock: drawer and notification panel (static/js/shell.js). Keeps the page where it is. */
+html.amc-scroll-lock,
+html.amc-scroll-lock body {
+    overflow: hidden;
+    overscroll-behavior: none;
+}
 
 /* ───────────── App shell ───────────── */
 .topbar {
@@ -415,6 +421,9 @@ body.amc-lock {
 .scrim {
     display: none;
 }
+.side-head {
+    display: none;
+}
 
 .main {
     flex: 1;
@@ -553,17 +562,33 @@ footer a:hover {
     padding: 0 5px;
     border: 2px solid var(--surface);
 }
+.notif-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 190;
+    background: transparent;
+}
+.notif-backdrop[hidden] {
+    display: none;
+}
+/* The panel sits OUTSIDE the top bar (the bar's backdrop-filter would trap position:fixed). shell.js sets
+   top/right/width/max-height on tablets and desktops so it never leaves the screen; phones use the sheet below. */
 .notif-panel {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 10px);
-    width: min(380px, 92vw);
+    position: fixed;
+    top: calc(var(--topbar-h) + 8px);
+    right: 8px;
+    width: min(380px, calc(100vw - 16px));
+    max-height: calc(100vh - var(--topbar-h) - 20px);
+    max-height: calc(100dvh - var(--topbar-h) - 20px);
+    display: flex;
+    flex-direction: column;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     box-shadow: var(--shadow-lg);
     z-index: 200;
     overflow: hidden;
+    overscroll-behavior: contain;
     animation: amc-pop-in 0.18s var(--ease) both;
     transform-origin: top right;
 }
@@ -571,18 +596,64 @@ footer a:hover {
     display: none;
 }
 .notif-panel-head {
+    flex: none;
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 0.5rem;
-    flex-wrap: wrap;
     padding: 0.7rem 0.9rem;
     border-bottom: 1px solid var(--border);
     background: var(--surface2);
 }
+.notif-push {
+    flex: none;
+    padding: 0.65rem 0.9rem;
+    border-bottom: 1px solid var(--border);
+}
+.notif-push[hidden] {
+    display: none;
+}
+.notif-push-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+.notif-push-text {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    min-width: 0;
+    flex: 1 1 150px;
+}
+.notif-push-help {
+    margin-top: 0.4rem;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: var(--text-muted);
+}
 .notif-list {
-    max-height: 340px;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+@media (max-width: 640px) {
+    .notif-backdrop {
+        background: rgba(8, 12, 28, 0.35);
+    }
+    .notif-panel {
+        left: 8px;
+        right: 8px;
+        width: auto;
+        top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px) + 8px);
+        max-height: calc(100vh - var(--topbar-h) - 24px);
+        max-height: calc(
+            100dvh - var(--topbar-h) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px
+        );
+        transform-origin: top center;
+    }
 }
 .notif-item {
     display: flex;
@@ -595,6 +666,10 @@ footer a:hover {
 }
 .notif-item:last-child {
     border-bottom: 0;
+}
+.notif-item.is-new {
+    background: var(--primary-soft);
+    box-shadow: inset 3px 0 0 var(--primary);
 }
 .notif-item:hover {
     background: var(--surface2);
@@ -646,6 +721,9 @@ footer a:hover {
     text-align: center;
     color: var(--text-muted);
     font-size: 0.9rem;
+}
+.notif-empty .btn {
+    margin-top: 0.6rem;
 }
 .notif-empty i {
     display: block;
@@ -2284,111 +2362,65 @@ tr:hover td {
     .menu-btn {
         display: inline-grid;
     }
+    /* Teacher drawer: one element, edge to edge on the real screen height (dvh follows Android's moving
+       address bar), safe areas respected, scrolls on its own, hidden from tab/AT when closed. */
     .sidebar {
         position: fixed;
         z-index: 160;
         top: 0;
         left: 0;
         bottom: 0;
-        height: auto;
+        height: 100vh;
+        height: 100dvh;
         width: min(300px, 86vw);
         transform: translateX(-102%);
-        transition: transform 0.26s var(--ease);
-        box-shadow: var(--shadow-lg);
-        padding-top: 1rem;
+        visibility: hidden;
+        transition:
+            transform 0.26s var(--ease),
+            visibility 0s linear 0.26s;
+        border-right: 0;
+        border-radius: 0 18px 18px 0;
+        padding: calc(0.5rem + env(safe-area-inset-top, 0px)) 0.75rem calc(1.6rem + env(safe-area-inset-bottom, 0px));
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+    .sidebar:focus {
+        outline: none;
     }
     body.drawer-open .sidebar {
         transform: none;
+        visibility: visible;
+        transition-delay: 0s;
+        box-shadow: var(--shadow-lg);
     }
-    body.drawer-open .scrim {
+    .side-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.2rem 0.25rem 0.4rem 0.75rem;
+        margin-bottom: 0.2rem;
+        border-bottom: 1px solid var(--border);
+    }
+    .side-head-title {
+        font-weight: 700;
+        font-size: 1.02rem;
+    }
+    .scrim {
         display: block;
         position: fixed;
         inset: 0;
         z-index: 150;
-        background: rgba(8, 12, 28, 0.45);
+        background: rgba(8, 12, 28, 0.5);
         -webkit-backdrop-filter: blur(2px);
         backdrop-filter: blur(2px);
-        animation: amc-fade 0.2s ease both;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.26s var(--ease);
     }
-    .shell.has-sidebar .container {
-        margin-left: auto;
-        margin-right: auto;
-    }
-}
-@media (max-width: 768px) {
-    :root {
-        --topbar-h: 56px;
-    }
-    .top-links {
-        display: none;
-    }
-    .top-links.keep {
-        display: flex;
-        gap: 0;
-    }
-    .top-links.keep a {
-        padding: 0.4rem 0.5rem;
-        font-size: 0.82rem;
-    }
-    .topbar {
-        padding: 0 0.75rem;
-    }
-    .container {
-        margin: 0.9rem auto;
-        padding: 0 0.9rem 1.6rem;
-    }
-    .card {
-        padding: 1.05rem;
-        border-radius: 16px;
-    }
-    .hero {
-        padding: 1.7rem 1.15rem;
-        border-radius: 20px;
-    }
-    .hero h1 {
-        font-size: 1.55rem;
-    }
-    .page-head h1 {
-        font-size: 1.3rem;
-    }
-    .stats {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 0.65rem;
-    }
-    .stat .num {
-        font-size: 1.45rem;
-    }
-    .stat .stat-ic {
-        width: 30px;
-        height: 30px;
-        right: 0.65rem;
-        top: 0.65rem;
-        font-size: 0.8rem;
-    }
-    .grid-2,
-    .grid-3 {
-        grid-template-columns: 1fr;
-    }
-    th,
-    td {
-        padding: 0.55rem 0.55rem;
-        font-size: 0.85rem;
-    }
-    .bar-row {
-        grid-template-columns: 80px 1fr 40px;
-    }
-    .brand .nm {
-        display: none;
-    }
-    .btn-logout .lbl {
-        display: none;
-    }
-    .btn-logout {
-        padding: 0.45rem 0.6rem;
-    }
-    .auth-card {
-        padding: 1.6rem 1.15rem;
-        border-radius: 18px;
+    body.drawer-open .scrim {
+        opacity: 1;
+        pointer-events: auto;
     }
     .row-item,
     .test-item {
@@ -2399,6 +2431,8 @@ tr:hover td {
             var(--bottom-h) + env(safe-area-inset-bottom, 0px)
         );
     }
+    /* Bottom navigation: 56px touch targets, labelled icons, active pill + dot, safe-area aware.
+       Students: slides away on scroll down (body.nav-hidden, set by static/js/shell.js). */
     .bottom-nav {
         display: flex;
         position: fixed;
@@ -2410,17 +2444,27 @@ tr:hover td {
         padding: 0 6px env(safe-area-inset-bottom, 0px);
         background: var(--glass);
         border-top: 1px solid var(--border);
+        border-radius: 18px 18px 0 0;
+        box-shadow: 0 -6px 22px rgba(15, 23, 42, 0.07);
         -webkit-backdrop-filter: saturate(1.6) blur(16px);
         backdrop-filter: saturate(1.6) blur(16px);
+        transition: transform 0.3s var(--ease);
+        will-change: transform;
+    }
+    body.nav-hidden .bottom-nav {
+        transform: translateY(calc(100% + 2px));
+        box-shadow: none;
     }
     .bottom-nav a,
     .bottom-nav button {
         flex: 1;
+        min-width: 0;
+        min-height: 48px;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 3px;
+        gap: 2px;
         background: none;
         border: 0;
         font: inherit;
@@ -2430,19 +2474,32 @@ tr:hover td {
         text-decoration: none;
         cursor: pointer;
         position: relative;
+        touch-action: manipulation;
         -webkit-tap-highlight-color: transparent;
+        transition: color 0.2s;
+    }
+    .bottom-nav a:hover {
+        text-decoration: none;
+    }
+    .bottom-nav .bl {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        line-height: 1.2;
     }
     .bottom-nav .bi {
         font-size: 1.1rem;
         line-height: 1;
-        width: 52px;
-        height: 28px;
+        width: 54px;
+        height: 30px;
         display: grid;
         place-items: center;
-        border-radius: 14px;
+        border-radius: 15px;
         transition:
-            background 0.2s,
-            color 0.2s;
+            background 0.2s var(--ease),
+            color 0.2s,
+            transform 0.15s var(--ease);
     }
     .bottom-nav a.active {
         color: var(--primary);
@@ -2450,12 +2507,30 @@ tr:hover td {
     .bottom-nav a.active .bi {
         background: var(--primary-soft);
     }
+    .bottom-nav a.active::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        width: 22px;
+        height: 3px;
+        border-radius: 0 0 3px 3px;
+        background: var(--primary);
+    }
     .bottom-nav a:active .bi,
     .bottom-nav button:active .bi {
-        transform: scale(0.92);
+        transform: scale(0.9);
+    }
+    .bottom-nav a:focus-visible,
+    .bottom-nav button:focus-visible {
+        outline-offset: -3px;
+        border-radius: 12px;
     }
     body.has-bottom-nav .aiw-fab {
         bottom: calc(var(--bottom-h) + 12px + env(safe-area-inset-bottom, 0px));
+        transition: bottom 0.3s var(--ease);
+    }
+    body.nav-hidden.has-bottom-nav .aiw-fab {
+        bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     }
     /* on the exam page the chat button sits above the Previous / Skip / Next row, not on top of it */
     body.exam-page.has-bottom-nav .aiw-fab {
@@ -2467,4 +2542,101 @@ tr:hover td {
         left: 10px;
         width: auto;
     }
+}
+
+/* ───────────── Student profile (header card, overview, history, logins) ───────────── */
+.profile-card { display: flex; gap: 1.1rem; align-items: flex-start; }
+.profile-avatar {
+    flex: none; width: 64px; height: 64px; border-radius: 18px; display: grid; place-items: center;
+    font-size: 1.7rem; font-weight: 700; color: var(--primary); background: var(--primary-soft);
+}
+.profile-main { min-width: 0; flex: 1; }
+.profile-name { margin: 0; font-size: 1.35rem; line-height: 1.25; overflow-wrap: anywhere; }
+.profile-user { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.35rem 0 0.8rem; }
+.profile-handle {
+    font-weight: 600; color: var(--primary); background: var(--primary-soft);
+    padding: 0.2rem 0.65rem; border-radius: 999px; overflow-wrap: anywhere;
+}
+.profile-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.65rem 1.2rem; margin: 0; }
+.profile-facts div { min-width: 0; }
+.profile-facts dt { font-size: 0.75rem; color: var(--text-muted); font-weight: 500; }
+.profile-facts dd { margin: 0; font-weight: 500; overflow-wrap: anywhere; }
+.stat .num small { font-size: 0.95rem; color: var(--text-muted); font-weight: 600; }
+.stat-sub { font-size: 0.78rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.mini-bars { list-style: none; margin: 0; padding: 0; display: flex; align-items: flex-end; gap: 0.6rem; }
+.mini-bars li { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 0.3rem; }
+.mini-bar-track { width: 100%; max-width: 44px; height: 110px; background: var(--bg-soft); border-radius: 8px; display: flex; align-items: flex-end; overflow: hidden; }
+.mini-bar { width: 100%; border-radius: 8px 8px 0 0; background: var(--primary); }
+.mini-bar.low { background: var(--warning); }
+.mini-bar-val { font-size: 0.75rem; font-weight: 600; }
+.mini-bar-lbl { font-size: 0.7rem; color: var(--text-muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.history-list, .login-list { list-style: none; margin: 0; padding: 0; }
+.history-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 0.75rem; padding: 0.75rem 0; border-top: 1px solid var(--border); }
+.history-row:first-child { border-top: 0; }
+.history-main .ttl { font-weight: 600; overflow-wrap: anywhere; }
+.history-main .meta { font-size: 0.8rem; color: var(--text-muted); }
+.history-score { display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; }
+.login-list li { display: flex; justify-content: space-between; gap: 0.75rem; padding: 0.55rem 0; border-top: 1px solid var(--border); font-size: 0.9rem; flex-wrap: wrap; }
+.login-list li:first-child { border-top: 0; }
+
+@media (max-width: 560px) {
+    .profile-card { flex-direction: column; align-items: stretch; }
+    .history-row { grid-template-columns: minmax(0, 1fr) auto; }
+    .history-score { grid-column: 1; }
+    .history-row .btn { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sidebar,
+    .scrim,
+    .bottom-nav,
+    .bottom-nav .bi,
+    .notif-panel,
+    body.has-bottom-nav .aiw-fab {
+        transition: none !important;
+        animation: none !important;
+    }
+}
+
+/* ───────────── Test Workspace: one card per test, grouped action menu ───────────── */
+.ws-tools { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.ws-list { display: grid; gap: 0.9rem; }
+.ws-test { margin-bottom: 0; }
+.ws-test-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+.ws-test-info { min-width: 0; }
+.ws-title { margin: 0 0 0.35rem; overflow-wrap: anywhere; }
+.ws-badges { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+.ws-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 0.5rem 1rem; margin: 0.8rem 0; }
+.ws-facts dt { font-size: 0.72rem; color: var(--text-muted); font-weight: 500; }
+.ws-facts dd { margin: 0; font-weight: 600; }
+.ws-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.ws-deleted { flex-wrap: wrap; }
+.ws-deleted-info { min-width: 0; flex: 1 1 200px; }
+.ws-deleted-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+
+.act-menu { position: relative; }
+.act-menu > summary { list-style: none; cursor: pointer; }
+.act-menu > summary::-webkit-details-marker { display: none; }
+.act-pop {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 80;
+    width: min(290px, calc(100vw - 32px)); max-height: min(70vh, 460px); overflow-y: auto; overscroll-behavior: contain;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg); padding: 0.35rem;
+}
+.act-group { padding: 0.55rem 0.7rem 0.2rem; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); }
+.act-pop a, .act-pop button {
+    display: flex; align-items: center; gap: 0.6rem; width: 100%; min-height: 44px; padding: 0.5rem 0.7rem;
+    border: 0; border-radius: 8px; background: none; font: inherit; font-size: 0.9rem; text-align: left;
+    color: var(--text); text-decoration: none; cursor: pointer;
+}
+.act-pop a i, .act-pop button i { width: 1.1rem; text-align: center; color: var(--text-muted); }
+.act-pop a:hover, .act-pop button:hover { background: var(--surface2); text-decoration: none; }
+.act-pop .act-danger, .act-pop .act-danger i { color: var(--danger); }
+.act-pop form { margin: 0; }
+@media (max-width: 560px) {
+    .ws-test-top { flex-direction: column; }
+    .ws-main-btn { width: 100%; justify-content: center; }
+    .act-menu { margin-left: auto; }
 }

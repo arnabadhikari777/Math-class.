@@ -69,19 +69,10 @@ def test_settings(test_id):
 @app.route("/teacher/tests")
 @teacher_login_required
 def manage_tests():
-    with get_db() as conn:
-        tests = conn.execute("SELECT * FROM tests WHERE is_archived=0 ORDER BY created_at DESC").fetchall()
-        archived = conn.execute("SELECT * FROM tests WHERE is_archived=1 ORDER BY archived_at DESC").fetchall()
-        tests_data = []
-        for t in tests:
-            q_count = conn.execute(
-                "SELECT COUNT(*) AS c FROM questions WHERE test_id=?", (t["id"],)
-            ).fetchone()["c"]
-            r_count = conn.execute(
-                "SELECT COUNT(*) AS c FROM results WHERE test_id=?", (t["id"],)
-            ).fetchone()["c"]
-            tests_data.append({"test": t, "q_count": q_count, "r_count": r_count})
-    return render_template("teacher/manage_tests.html", tests_data=tests_data, archived_tests=archived)
+    """Old "All Tests" address, kept so every link and redirect still works. It shows the Test Workspace,
+    which is now the one place where tests are managed."""
+    from backend.routes.teacher.question_studio import render_workspace
+    return render_workspace()
 
 
 @app.route("/teacher/tests/create", methods=["GET", "POST"])

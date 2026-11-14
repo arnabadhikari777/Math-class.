@@ -48,6 +48,27 @@
         }
     }, true);
 
+    // <button data-copy="text" data-copy-done="Copied."> copies text to the clipboard.
+    document.addEventListener("click", function (e) {
+        var b = e.target.closest ? e.target.closest("[data-copy]") : null;
+        if (!b) return;
+        var text = b.getAttribute("data-copy") || "";
+        var done = b.getAttribute("data-copy-done") || "Copied.";
+        function ok() { if (window.AMC && window.AMC.toast) window.AMC.toast("success", done); }
+        function fail() { if (window.AMC && window.AMC.toast) window.AMC.toast("error", "Could not copy. Please select the text and copy it."); }
+        function legacy() {
+            var ta = document.createElement("textarea");
+            ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+            document.body.appendChild(ta); ta.select();
+            var good = false;
+            try { good = document.execCommand("copy"); } catch (err) { good = false; }
+            document.body.removeChild(ta);
+            good ? ok() : fail();
+        }
+        if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(ok, legacy);
+        else legacy();
+    });
+
     document.addEventListener("click", function (e) {
         var t = e.target.closest ? e.target.closest("[data-print], [data-busy-text]") : null;
         if (!t) return;

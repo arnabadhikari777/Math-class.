@@ -17,13 +17,13 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=4">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=5">
 {% block extra_head %}{% endblock %}
 </head>
 {% set ep = request.endpoint or '' %}
 {% set is_student = session.get('student_id') and not session.get('is_teacher') %}
 {% set is_teacher = session.get('is_teacher') and not session.get('student_id') %}
-<body class="{% if is_student or is_teacher %}has-bottom-nav{% endif %}{% if ep == 'test_exam' %} exam-page{% endif %}"{% if ep == 'test_result' %} data-result-test="{{ (request.view_args or {}).get('test_id', '') }}"{% endif %}>
+<body class="{% if is_student or is_teacher %}has-bottom-nav{% endif %}{% if is_student %} student-shell{% elif is_teacher %} teacher-shell{% endif %}{% if ep == 'test_exam' %} exam-page{% endif %}"{% if ep == 'test_result' %} data-result-test="{{ (request.view_args or {}).get('test_id', '') }}"{% endif %}>
 
 <header class="topbar">
   <div class="flex items-center gap-1">
@@ -56,35 +56,9 @@
     </button>
     {% if is_student %}
     <div class="notif-wrap" id="notifWrap">
-      <button type="button" class="notif-btn" id="notifBtn" aria-label="Notifications" title="Notifications" aria-haspopup="true" aria-expanded="false">
+      <button type="button" class="notif-btn" id="notifBtn" aria-label="Notifications{% if unread_notif_count %}, {{ unread_notif_count }} unread{% endif %}" title="Notifications" aria-haspopup="dialog" aria-expanded="false" aria-controls="notifPanel">
         <i class="fa-regular fa-bell" aria-hidden="true"></i>{% if unread_notif_count %}<span class="notif-badge" id="notifBadge">{{ unread_notif_count }}</span>{% endif %}
       </button>
-      <div class="notif-panel" id="notifPanel" hidden>
-        <div class="notif-panel-head">
-          <strong>Notifications</strong>
-          <div class="flex gap-1">
-            {% if push_enabled %}<button type="button" class="btn btn-sm btn-outline" id="pushSubBtn" title="Get notifications on this phone/browser even when the app is closed"><i class="fa-solid fa-bell" aria-hidden="true"></i> Enable alerts</button>{% endif %}
-            <button type="button" class="btn btn-sm btn-outline" id="markAllReadBtn"><i class="fa-solid fa-check-double" aria-hidden="true"></i> Mark all read</button>
-          </div>
-        </div>
-        <div class="notif-list" id="notifList">
-          {% if student_notifications %}
-            {% for n in student_notifications %}
-            {% set nt = n.notif_type if n.notif_type in ('test','notice','note','chat') else 'info' %}
-            <a class="notif-item" href="{{ n.link or url_for('student_dashboard') }}" data-id="{{ n.id }}">
-              <span class="notif-item-ic {{ nt }}"><i class="fa-solid {{ 'fa-file-pen' if nt == 'test' else 'fa-bullhorn' if nt == 'notice' else 'fa-book-open' if nt == 'note' else 'fa-comments' if nt == 'chat' else 'fa-circle-info' }}" aria-hidden="true"></i></span>
-              <span class="notif-item-body">
-                <span class="notif-item-title" style="display:block">{{ n.title }}</span>
-                <span class="notif-item-msg" style="display:block">{{ n.message }}</span>
-                <span class="notif-item-time" style="display:block">{{ n.created_at[:16].replace('T',' ') }}</span>
-              </span>
-            </a>
-            {% endfor %}
-          {% else %}
-            <div class="notif-empty"><i class="fa-solid fa-bell-slash" aria-hidden="true"></i>No new notifications</div>
-          {% endif %}
-        </div>
-      </div>
     </div>
     <form method="POST" action="{{ url_for('logout') }}" class="logout-form" data-no-busy="1"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% if session.get('impersonating') %}<button type="submit" class="btn-logout"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> <span class="lbl">Exit to Teacher</span></button>{% else %}<button type="submit" class="btn-logout" aria-label="Logout"><i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i> <span class="lbl">Logout</span></button>{% endif %}</form>
     {% elif is_teacher %}
@@ -93,9 +67,34 @@
   </div>
 </header>
 
+{% if is_student %}
+<div class="notif-backdrop" id="notifBackdrop" hidden></div>
+<section class="notif-panel" id="notifPanel" role="dialog" aria-label="Notifications" hidden>
+  <div class="notif-panel-head">
+    <strong>Notifications</strong>
+    {% if not session.get('impersonating') %}<button type="button" class="btn btn-sm btn-outline" id="clearNotifBtn" disabled><i class="fa-solid fa-broom" aria-hidden="true"></i> All Clean</button>{% endif %}
+  </div>
+  {% if push_enabled and not session.get('impersonating') %}
+  <div class="notif-push" id="pushBox" hidden>
+    <div class="notif-push-row">
+      <span class="notif-push-text"><i class="fa-solid fa-mobile-screen-button" aria-hidden="true"></i> <span id="pushStatus">Checking…</span></span>
+      <button type="button" class="btn btn-sm btn-primary" id="pushEnableBtn" hidden><i class="fa-solid fa-bell" aria-hidden="true"></i> Enable Notifications</button>
+      <button type="button" class="btn btn-sm btn-outline" id="pushDisableBtn" hidden><i class="fa-solid fa-bell-slash" aria-hidden="true"></i> Disable Notifications</button>
+    </div>
+    <p class="notif-push-help" id="pushHelp" hidden></p>
+  </div>
+  {% endif %}
+  <div class="notif-list" id="notifList" aria-live="polite"></div>
+</section>
+{% endif %}
+
 <div class="shell {{ 'has-sidebar' if is_teacher }}">
   {% if is_teacher %}
   <aside class="sidebar" id="sidebar" aria-label="Teacher menu">
+    <div class="side-head">
+      <span class="side-head-title">Menu</span>
+      <button type="button" class="icon-btn" id="drawerClose" aria-label="Close menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
     <div class="side-title">Main</div>
     <a class="side-link {{ 'active' if ep == 'teacher_dashboard' }}" href="{{ url_for('teacher_dashboard') }}"><i class="fa-solid fa-gauge" aria-hidden="true"></i> Dashboard</a>
     <a class="side-link {{ 'active' if ep in ('students_list','admit_student','edit_student','student_history') }}" href="{{ url_for('students_list') }}"><i class="fa-solid fa-users" aria-hidden="true"></i> Students</a>
@@ -113,7 +112,7 @@
     <a class="side-link {{ 'active' if ep == 'data_cleanup' }}" href="{{ url_for('data_cleanup') }}"><i class="fa-solid fa-broom" aria-hidden="true"></i> Data Cleanup</a>
     <a class="side-link" href="{{ url_for('export_students') }}"><i class="fa-solid fa-file-export" aria-hidden="true"></i> Export students</a>
   </aside>
-  <div class="scrim" id="scrim"></div>
+  <div class="scrim" id="scrim" aria-hidden="true"></div>
   {% endif %}
 
   <div class="main">
@@ -137,19 +136,19 @@
 {% for n in student_notifications %}{% set _ = amc_items.append({'id': n.id, 'title': n.title, 'message': n.message, 'type': n.notif_type, 'link': n.link or '', 'created_at': n.created_at}) %}{% endfor %}
 <script type="application/json" id="amcNotifData" nonce="{{ csp_nonce() }}">{{ {'sid': session.get('student_id'), 'impersonating': (true if session.get('impersonating') else false), 'items': amc_items}|tojson }}</script>
 <nav class="bottom-nav" aria-label="Main">
-  <a href="{{ url_for('student_dashboard') }}" class="{{ 'active' if ep == 'student_dashboard' }}"><span class="bi"><i class="fa-solid fa-house" aria-hidden="true"></i></span>Home</a>
-  <a href="{{ url_for('student_dashboard') }}#tests"><span class="bi"><i class="fa-solid fa-file-pen" aria-hidden="true"></i></span>Tests</a>
-  <a href="{{ url_for('notes_list') }}" class="{{ 'active' if ep == 'notes_list' }}"><span class="bi"><i class="fa-solid fa-book-open" aria-hidden="true"></i></span>Notes</a>
-  <a href="{{ url_for('chat_home') }}" data-chat-link class="{{ 'active' if ep in ('chat_home', 'chat_room') }}"><span class="bi"><i class="fa-solid fa-comments" aria-hidden="true"></i></span>Chat</a>
-  <a href="{{ url_for('student_profile') }}" class="{{ 'active' if ep == 'student_profile' }}"><span class="bi"><i class="fa-solid fa-user" aria-hidden="true"></i></span>Profile</a>
+  <a href="{{ url_for('student_dashboard') }}" data-nav="home" class="{{ 'active' if ep == 'student_dashboard' }}"{% if ep == 'student_dashboard' %} aria-current="page"{% endif %}><span class="bi"><i class="fa-solid fa-house" aria-hidden="true"></i></span><span class="bl">Home</span></a>
+  <a href="{{ url_for('student_dashboard') }}#tests" data-nav="tests"><span class="bi"><i class="fa-solid fa-file-pen" aria-hidden="true"></i></span><span class="bl">Tests</span></a>
+  <a href="{{ url_for('notes_list') }}" class="{{ 'active' if ep == 'notes_list' }}"{% if ep == 'notes_list' %} aria-current="page"{% endif %}><span class="bi"><i class="fa-solid fa-book-open" aria-hidden="true"></i></span><span class="bl">Notes</span></a>
+  <a href="{{ url_for('chat_home') }}" data-chat-link class="{{ 'active' if ep in ('chat_home', 'chat_room') }}"{% if ep in ('chat_home', 'chat_room') %} aria-current="page"{% endif %}><span class="bi"><i class="fa-solid fa-comments" aria-hidden="true"></i></span><span class="bl">Chat</span></a>
+  <a href="{{ url_for('student_profile') }}" class="{{ 'active' if ep == 'student_profile' }}"{% if ep == 'student_profile' %} aria-current="page"{% endif %}><span class="bi"><i class="fa-solid fa-user" aria-hidden="true"></i></span><span class="bl">Profile</span></a>
 </nav>
 {% elif is_teacher %}
 <nav class="bottom-nav" aria-label="Main">
-  <a href="{{ url_for('teacher_dashboard') }}" class="{{ 'active' if ep == 'teacher_dashboard' }}"><span class="bi"><i class="fa-solid fa-gauge" aria-hidden="true"></i></span>Home</a>
-  <a href="{{ url_for('students_list') }}" class="{{ 'active' if ep == 'students_list' }}"><span class="bi"><i class="fa-solid fa-users" aria-hidden="true"></i></span>Students</a>
-  <a href="{{ url_for('manage_tests') }}" class="{{ 'active' if ep == 'manage_tests' }}"><span class="bi"><i class="fa-solid fa-file-pen" aria-hidden="true"></i></span>Tests</a>
-  <a href="{{ url_for('qbank.questions') }}" class="{{ 'active' if ep.startswith('qbank.') }}"><span class="bi"><i class="fa-solid fa-circle-question" aria-hidden="true"></i></span>My Questions</a>
-  <button type="button" id="moreBtn" aria-label="More"><span class="bi"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></span>More</button>
+  <a href="{{ url_for('teacher_dashboard') }}" class="{{ 'active' if ep == 'teacher_dashboard' }}"{% if ep == 'teacher_dashboard' %} aria-current="page"{% endif %}><span class="bi"><i class="fa-solid fa-gauge" aria-hidden="true"></i></span><span class="bl">Home</span></a>
+  <a href="{{ url_for('students_list') }}" class="{{ 'active' if ep == 'students_list' }}"{% if ep == 'students_list' %} aria-current="page"{% endif %}><span class="bi"><i class="fa-solid fa-users" aria-hidden="true"></i></span><span class="bl">Students</span></a>
+  <a href="{{ url_for('manage_tests') }}" class="{{ 'active' if ep == 'manage_tests' }}"{% if ep == 'manage_tests' %} aria-current="page"{% endif %}><span class="bi"><i class="fa-solid fa-file-pen" aria-hidden="true"></i></span><span class="bl">Tests</span></a>
+  <a href="{{ url_for('qbank.questions') }}" class="{{ 'active' if ep.startswith('qbank.') }}"{% if ep.startswith('qbank.') %} aria-current="page"{% endif %}><span class="bi"><i class="fa-solid fa-circle-question" aria-hidden="true"></i></span><span class="bl">My Questions</span></a>
+  <button type="button" id="moreBtn" aria-label="More" aria-expanded="false" aria-controls="sidebar"><span class="bi"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></span><span class="bl">More</span></button>
 </nav>
 {% endif %}
 
@@ -160,177 +159,16 @@
 <script src="{{ url_for('static', filename='js/ai-widget.js') }}?v=11" defer></script>
 {% endif %}
 <script src="{{ url_for('static', filename='js/ui.js') }}?v=1" defer></script>
+<script src="{{ url_for('static', filename='js/shell.js') }}?v=1" defer></script>
 {% if is_student %}<script src="{{ url_for('static', filename='js/notify-center.js') }}?v=1" defer></script>
 <script src="{{ url_for('static', filename='js/chat.js') }}?v=2" defer></script>{% endif %}
 <script src="{{ url_for('static', filename='js/app.js') }}?v=2" defer></script>
 <script src="{{ url_for('static', filename='js/math.js') }}?v=1" defer></script>
 <script nonce="{{ csp_nonce() }}">
-  // ── Teacher menu drawer (phones / tablets) ──
-  (function () {
-    var body = document.body;
-    var btns = [document.getElementById('menuBtn'), document.getElementById('moreBtn')];
-    var scrim = document.getElementById('scrim'), side = document.getElementById('sidebar');
-    if (!side) return;
-    function set(open) {
-      body.classList.toggle('drawer-open', open);
-      var m = document.getElementById('menuBtn'); if (m) m.setAttribute('aria-expanded', open ? 'true' : 'false');
-    }
-    btns.forEach(function (b) { if (b) b.addEventListener('click', function () { set(!body.classList.contains('drawer-open')); }); });
-    if (scrim) scrim.addEventListener('click', function () { set(false); });
-    side.querySelectorAll('a').forEach(function (a) { a.addEventListener('click', function () { set(false); }); });
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') set(false); });
-  })();
-
   // ── PWA service worker ──
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   }
-
-  {% if session.get('student_id') and not session.get('is_teacher') %}
-  // Real push notifications (test/note/notice alerts on this phone/browser,
-  // even when the app isn't open) — only for students, only if they allow it.
-  (function() {
-    const subBtn = document.getElementById('pushSubBtn');
-
-    function urlBase64ToUint8Array(base64String) {
-      const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-      const rawData = atob(base64);
-      const outputArray = new Uint8Array(rawData.length);
-      for (let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
-      return outputArray;
-    }
-
-    function setBtnState(subscribed) {
-      if (!subBtn) return;
-      if (Notification && Notification.permission === 'denied') {
-        subBtn.innerHTML = '<i class="fa-solid fa-bell-slash" aria-hidden="true"></i> Notifications blocked';
-        subBtn.disabled = true;
-      } else if (subscribed) {
-        subBtn.innerHTML = '<i class="fa-solid fa-circle-check" aria-hidden="true"></i> Alerts enabled';
-      } else {
-        subBtn.innerHTML = '<i class="fa-solid fa-bell" aria-hidden="true"></i> Enable alerts';
-      }
-    }
-
-    async function getReg() {
-      if (!('serviceWorker' in navigator)) return null;
-      return navigator.serviceWorker.ready;
-    }
-
-    async function subscribe() {
-      try {
-        const reg = await getReg();
-        if (!reg || !('PushManager' in window)) return;
-        const permission = await Notification.requestPermission();
-        if (permission !== 'granted') { setBtnState(false); return; }
-        const keyRes = await fetch('/api/push/public-key');
-        const { publicKey } = await keyRes.json();
-        let sub = await reg.pushManager.getSubscription();
-        if (!sub) {
-          sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(publicKey)
-          });
-        }
-        await fetch('/api/push/subscribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
-          body: JSON.stringify(sub.toJSON())
-        });
-        setBtnState(true);
-      } catch (err) {
-        setBtnState(false);
-      }
-    }
-
-    // On load: if permission is already granted, keep the subscription in
-    // sync quietly (no extra prompt) so it survives across devices/visits.
-    (async function initCheck() {
-      if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
-      if (Notification.permission === 'granted') {
-        const reg = await getReg();
-        if (reg) {
-          const sub = await reg.pushManager.getSubscription();
-          if (sub) {
-            await fetch('/api/push/subscribe', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
-              body: JSON.stringify(sub.toJSON())
-            }).catch(() => {});
-            setBtnState(true);
-          } else {
-            setBtnState(false);
-          }
-        }
-      } else {
-        setBtnState(false);
-      }
-    })();
-
-    if (subBtn) subBtn.addEventListener('click', function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      subscribe();
-    });
-  })();
-  {% endif %}
-
-  // In-app notification bell (students). The big pop-ups live in static/js/notify-center.js.
-  (function() {
-    const btn = document.getElementById('notifBtn');
-    const panel = document.getElementById('notifPanel');
-    const wrap = document.getElementById('notifWrap');
-    const markAll = document.getElementById('markAllReadBtn');
-    if (!btn || !panel) return;
-    const CSRF = (document.querySelector('meta[name="csrf-token"]') || {}).content || '';
-
-    function setOpen(open) {
-      if (open) panel.removeAttribute('hidden'); else panel.setAttribute('hidden', '');
-      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-    }
-    btn.addEventListener('click', function(e) {
-      e.stopPropagation();
-      setOpen(panel.hasAttribute('hidden'));
-    });
-    document.addEventListener('click', function(e) {
-      if (!wrap.contains(e.target)) setOpen(false);
-    });
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape' && !panel.hasAttribute('hidden')) { setOpen(false); btn.focus(); }
-    });
-
-    function markRead(ids) {
-      fetch('/api/notifications/mark-read', {
-        method: 'POST', keepalive: true, credentials: 'same-origin',
-        headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
-        body: JSON.stringify(ids ? {ids: ids} : {})
-      }).then(function(r) {
-        if (!r.ok) throw new Error('mark-read failed');
-        const badge = document.getElementById('notifBadge');
-        if (badge && !ids) badge.remove();
-        const list = document.getElementById('notifList');
-        if (list && !ids) {
-          list.innerHTML = '<div class="notif-empty"><i class="fa-solid fa-bell-slash" aria-hidden="true"></i>No new notifications</div>';
-          if (window.AMC) window.AMC.toast('success', 'All notifications marked as read.');
-        }
-      }).catch(function() { if (window.AMC) window.AMC.toast('error', 'Could not update notifications. Please try again.'); });
-    }
-
-    if (markAll) {
-      markAll.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        markRead(null);
-      });
-    }
-    panel.querySelectorAll('.notif-item').forEach(function(item) {
-      item.addEventListener('click', function() {
-        const id = item.getAttribute('data-id');
-        if (id) markRead([parseInt(id, 10)]);
-      });
-    });
-  })();
 
   // Lightweight confetti (used on high scores)
   window.fireConfetti = function() {

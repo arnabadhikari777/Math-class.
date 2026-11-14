@@ -14,6 +14,7 @@ from backend.middleware.auth import teacher_login_required
 from backend.services.activity_service import log_activity
 from backend.utils.helpers import csv_safe, safe_back
 from backend.utils.validators import normalize_mobile, validate_password_strength
+from backend.utils.usernames import assign_username
 
 
 @app.route("/teacher/students")
@@ -78,7 +79,7 @@ def admit_student():
             if existing:
                 flash("Email already registered.", "error")
                 return redirect(url_for("admit_student"))
-            conn.execute(
+            cur = conn.execute(
                 """INSERT INTO students
                    (name, class_name, roll, email, mobile, password_hash,
                     is_verified, registered_at, admitted_by_teacher)
@@ -86,6 +87,7 @@ def admit_student():
                 (name, class_name, roll, email, mobile,
                  generate_password_hash(password), datetime.now().isoformat())
             )
+            assign_username(conn, cur.lastrowid, name)
             conn.commit()
         log_activity("teacher", "admit_student", f"{name} <{email}>")
         flash(f"Student {name} admitted and verified. Default password: {password}", "success")

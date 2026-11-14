@@ -17,6 +17,7 @@ from backend.services.email_service import _send_email_async
 from backend.services.otp_service import create_and_send_otp, verify_otp_code
 from backend.services.teacher_auth_service import check_teacher_credentials
 from backend.utils.validators import normalize_mobile, validate_password_strength
+from backend.utils.usernames import assign_username
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -65,12 +66,15 @@ def register():
                     (name, class_name, roll, mobile, password_hash, email)
                 )
             else:
-                conn.execute(
+                cur = conn.execute(
                     """INSERT INTO students
                        (name, class_name, roll, email, mobile, password_hash, is_verified, registered_at)
                        VALUES (?,?,?,?,?,?,0,?)""",
                     (name, class_name, roll, email, mobile, password_hash, datetime.now().isoformat())
                 )
+                assign_username(conn, cur.lastrowid, name)
+            if existing:
+                assign_username(conn, existing["id"], name)    # no-op when it already has one
             conn.commit()
         session["pending_email"] = email
         ok, msg, _ = create_and_send_otp(email, purpose="registration")

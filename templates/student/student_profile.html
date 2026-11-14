@@ -1,49 +1,85 @@
 {% extends "base.html" %}
 {% block title %}My Profile{% endblock %}
 {% block content %}
-<div class="card">
-  <h2><i class="fa-solid fa-user" aria-hidden="true"></i> {{ student.name }}</h2>
-  <p class="text-muted">
-    {{ student.email }}{% if student.mobile %} · <i class="fa-solid fa-mobile-screen" aria-hidden="true"></i> {{ student.mobile }}{% endif %} · Class {{ student.class_name }}
-    {% if student.roll %} · Roll {{ student.roll }}{% endif %}<br>
-    Registered: {{ student.registered_at[:16].replace('T',' ') }}
-  </p>
-</div>
 
-{% if results %}
-<div class="card">
-  <h3>Test History</h3>
-  <table>
-    <thead><tr><th>Test</th><th>Score</th><th>%</th><th>Date</th><th></th></tr></thead>
-    <tbody>
-      {% for r in results %}
-      <tr>
-        <td>{{ r.test_title }}</td>
-        <td>{{ r.score }}/{{ r.total_marks }}</td>
-        <td>{% set p = ((r.score / r.total_marks * 100) if r.total_marks else 0)|round(1) %}{{ p }}%</td>
-        <td class="text-muted">{{ r.submitted_at[:16].replace('T',' ') }}</td>
-        <td><a href="{{ url_for('test_result', test_id=r.test_id) }}" class="btn btn-sm btn-outline">Review</a></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endif %}
+<section class="card profile-card" aria-labelledby="profileName">
+  <div class="profile-avatar" aria-hidden="true">{{ (student.name or '?')[:1]|upper }}</div>
+  <div class="profile-main">
+    <h1 id="profileName" class="profile-name">{{ student.name }}</h1>
+    <div class="profile-user">
+      <span class="profile-handle" id="profileUsername">@{{ username }}</span>
+      <button type="button" class="btn btn-sm btn-outline" data-copy="{{ username }}" data-copy-done="Username copied." aria-label="Copy username">
+        <i class="fa-regular fa-copy" aria-hidden="true"></i> <span>Copy username</span>
+      </button>
+    </div>
+    <dl class="profile-facts">
+      <div><dt>Class</dt><dd>{{ class_display(student.class_name) }}</dd></div>
+      {% if student.roll %}<div><dt>Roll number</dt><dd>{{ student.roll }}</dd></div>{% endif %}
+      <div><dt>Email</dt><dd>{{ student.email }}</dd></div>
+      {% if student.mobile %}<div><dt>Mobile</dt><dd>{{ student.mobile }}</dd></div>{% endif %}
+      <div><dt>Registered</dt><dd>{{ student.registered_at[:10] }}</dd></div>
+    </dl>
+  </div>
+</section>
 
-{% if history %}
-<div class="card">
-  <h3>Recent Logins</h3>
-  <table>
-    <thead><tr><th>Time</th><th>IP</th></tr></thead>
-    <tbody>
-      {% for h in history %}
-      <tr>
-        <td>{{ h.login_time[:19].replace('T',' ') }}</td>
-        <td class="text-muted">{{ h.ip_address or '—' }}</td>
-      </tr>
+<section aria-labelledby="progressTitle">
+  <h2 id="progressTitle" class="section-title">Academic overview</h2>
+  <div class="stats">
+    <div class="stat"><span class="stat-ic green"><i class="fa-solid fa-circle-check" aria-hidden="true"></i></span><div class="label">Tests completed</div><div class="num">{{ stats.completed }}</div></div>
+    <div class="stat"><span class="stat-ic amber"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></span><div class="label">Average score</div><div class="num">{% if stats.average is not none %}{{ stats.average|round(1)|string|replace('.0','') }}%{% else %}&mdash;{% endif %}</div></div>
+    <div class="stat"><span class="stat-ic"><i class="fa-solid fa-trophy" aria-hidden="true"></i></span><div class="label">Best score</div><div class="num">{% if stats.best %}{{ stats.best.percentage|round(1)|string|replace('.0','') }}%{% else %}&mdash;{% endif %}</div>{% if stats.best %}<div class="stat-sub">{{ stats.best.test_title }}</div>{% endif %}</div>
+    <div class="stat"><span class="stat-ic green"><i class="fa-solid fa-award" aria-hidden="true"></i></span><div class="label">Passed</div><div class="num">{% if stats.completed %}{{ stats.passed }}<small>/{{ stats.completed }}</small>{% else %}&mdash;{% endif %}</div></div>
+  </div>
+
+  {% if stats.recent|length >= 2 %}
+  <div class="card">
+    <div class="card-head"><h3>Recent performance</h3><span class="text-muted">Last {{ stats.recent|length }} tests</span></div>
+    <ol class="mini-bars" aria-label="Score for each of your last {{ stats.recent|length }} tests">
+      {% for r in stats.recent %}
+      <li title="{{ r.test_title }}: {{ r.percentage|round(1) }}%">
+        <span class="mini-bar-val">{{ r.percentage|round|int }}%</span>
+        <span class="mini-bar-track"><span class="mini-bar {{ 'ok' if r.passed else 'low' }}" style="height: {{ [r.percentage, 4]|max|round|int }}%"></span></span>
+        <span class="mini-bar-lbl">{{ r.test_title }}</span>
+      </li>
       {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endif %}
+    </ol>
+  </div>
+  {% endif %}
+</section>
+
+<section class="card" aria-labelledby="historyTitle">
+  <div class="card-head"><h2 id="historyTitle">Test history</h2>{% if results %}<span class="badge badge-info">{{ results|length }}</span>{% endif %}</div>
+  {% if results %}
+  <ul class="history-list">
+    {% for r in results %}
+    <li class="history-row">
+      <div class="history-main">
+        <div class="ttl">{{ r.test_title }}</div>
+        <div class="meta"><i class="fa-regular fa-calendar" aria-hidden="true"></i> {{ r.submitted_at[:16].replace('T',' ') }}</div>
+      </div>
+      <div class="history-score">
+        <strong>{{ r.score|marks }}/{{ r.total_marks|marks }}</strong>
+        <span class="badge {{ 'badge-success' if r.passed else 'badge-danger' }}">{{ r.percentage|round(1)|string|replace('.0','') }}%</span>
+      </div>
+      <a href="{{ url_for('test_result', test_id=r.test_id) }}" class="btn btn-sm btn-outline">Review</a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="empty-state"><i class="fa-regular fa-clipboard" aria-hidden="true"></i><p>No test results yet. Your scores will appear here after you take a test.</p></div>
+  {% endif %}
+</section>
+
+<section class="card" aria-labelledby="loginTitle">
+  <div class="card-head"><h2 id="loginTitle">Login history</h2><span class="text-muted">Latest {{ history|length }}</span></div>
+  {% if history %}
+  <ul class="login-list">
+    {% for h in history %}
+    <li><span><i class="fa-regular fa-clock" aria-hidden="true"></i> {{ h.login_time[:19].replace('T',' ') }}</span><span class="text-muted">{{ h.ip_address or '—' }}</span></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="empty-state"><i class="fa-regular fa-clock" aria-hidden="true"></i><p>No logins recorded yet.</p></div>
+  {% endif %}
+</section>
 {% endblock %}

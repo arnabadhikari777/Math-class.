@@ -29,6 +29,7 @@
     document.getElementById('cfName').textContent = f.dataset.name || '';
     document.getElementById('cfText').textContent = f.dataset.text || '';
     document.getElementById('cfOk').textContent = f.dataset.okLabel || 'Delete';
+    document.getElementById('cfOk').className = 'btn ' + (f.dataset.okStyle === 'primary' ? 'btn-primary' : 'btn-danger');
     back.classList.add('on'); document.getElementById('cfCancel').focus();
   }, true);
   document.getElementById('cfCancel').onclick = close;
