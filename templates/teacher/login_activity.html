@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Student Login Activity{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Student Login Activity</h1>
+  <p class="text-muted">Recent logins across all students. Times are shown in Asia/Kolkata.</p>
+</div>
+
+<form method="get" class="filter-bar card" style="padding:1rem;margin-bottom:1rem;display:flex;flex-wrap:wrap;gap:.75rem;align-items:end">
+  <div>
+    <label for="q">Search name / username</label>
+    <input id="q" type="search" name="q" value="{{ q }}" placeholder="e.g. Rahul">
+  </div>
+  <div>
+    <label for="cls">Class</label>
+    <select id="cls" name="class">
+      <option value="">All classes</option>
+      {% for c in classes %}
+      <option value="{{ c }}" {% if c == class_name %}selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-primary"><i class="fa-solid fa-filter"></i> Filter</button>
+  {% if q or class_name %}
+  <a href="{{ url_for('teacher_login_activity') }}" class="btn btn-ghost">Clear</a>
+  {% endif %}
+</form>
+
+<section class="card">
+  <div class="card-head">
+    <h2>Login records</h2>
+    <span class="badge badge-info">{{ total }} total</span>
+  </div>
+  {% if rows %}
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Student</th>
+          <th>Class</th>
+          <th>Login time</th>
+          <th>Via</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>
+            <a href="{{ url_for('student_history', student_id=r.student_id) }}">{{ r.name }}</a>
+            {% if r.username %}<span class="text-muted" style="font-size:.85em">@{{ r.username }}</span>{% endif %}
+          </td>
+          <td>{{ r.class_name }}</td>
+          <td>{{ (r.login_time or '')[:19]|replace('T', ' ') }}</td>
+          <td>{% if r.via_teacher %}<span class="badge">Teacher view</span>{% else %}Self{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if total > per_page %}
+  <div class="pager" style="margin-top:1rem;display:flex;gap:.5rem;justify-content:center">
+    {% if page > 1 %}
+    <a class="btn btn-ghost" href="{{ url_for('teacher_login_activity', page=page-1, q=q, class=class_name) }}">Previous</a>
+    {% endif %}
+    <span class="text-muted">Page {{ page }}</span>
+    {% if page * per_page < total %}
+    <a class="btn btn-ghost" href="{{ url_for('teacher_login_activity', page=page+1, q=q, class=class_name) }}">Next</a>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="empty-state">
+    <i class="fa-regular fa-clock" aria-hidden="true"></i>
+    <p>No login records match your filters.</p>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -113,12 +113,11 @@ def student_profile():
             # Rows created by older code have no username yet: give one ONCE (never regenerated later).
             username = assign_username(conn, sid, student["name"])
             conn.commit()
-        history = conn.execute(
-            "SELECT login_time, ip_address FROM login_history WHERE student_id=? "
-            "ORDER BY login_time DESC LIMIT 20", (sid,)).fetchall()
+        # Login history is intentionally NOT shown to students (privacy).
+        # Teachers can view it under Student Login Activity.
         results, stats = student_service.profile_overview(conn, sid)
     return render_template("student/student_profile.html", student=student, username=username,
-                           history=history, results=results, stats=stats)
+                           results=results, stats=stats)
 
 
 READY_TTL_SECONDS = 15 * 60   # how long "Continue to Confirmation" stays valid

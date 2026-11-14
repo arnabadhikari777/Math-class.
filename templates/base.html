@@ -108,6 +108,7 @@
     <a class="side-link {{ 'active' if ep == 'teacher_contacts' }}" href="{{ url_for('teacher_contacts') }}"><i class="fa-solid fa-envelope" aria-hidden="true"></i> Inbox</a>
     <a class="side-link {{ 'active' if ep.startswith('api_ai_admin') }}" href="{{ url_for('api_ai_admin.page') }}"><i class="fa-solid fa-robot" aria-hidden="true"></i> AI Chats</a>
     <div class="side-title">Advanced</div>
+    <a class="side-link {{ 'active' if ep == 'teacher_login_activity' }}" href="{{ url_for('teacher_login_activity') }}"><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> Login Activity</a>
     <a class="side-link {{ 'active' if ep == 'teacher_activity' }}" href="{{ url_for('teacher_activity') }}"><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Activity Log</a>
     <a class="side-link {{ 'active' if ep == 'data_cleanup' }}" href="{{ url_for('data_cleanup') }}"><i class="fa-solid fa-broom" aria-hidden="true"></i> Data Cleanup</a>
     <a class="side-link" href="{{ url_for('export_students') }}"><i class="fa-solid fa-file-export" aria-hidden="true"></i> Export students</a>

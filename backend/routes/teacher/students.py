@@ -328,3 +328,46 @@ def export_students():
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment;filename=students_export.csv"}
     )
+
+@app.route("/teacher/login-activity")
+@teacher_login_required
+def teacher_login_activity():
+    """Global view of student login activity for the teacher."""
+    q = (request.args.get("q") or "").strip()
+    class_name = (request.args.get("class") or "").strip()
+    page = max(1, int(request.args.get("page") or 1))
+    per_page = 50
+    offset = (page - 1) * per_page
+    where = ["1=1"]
+    params = []
+    if q:
+        where.append("(s.name LIKE ? OR s.username LIKE ? OR s.email LIKE ?)")
+        like = "%" + q + "%"
+        params.extend([like, like, like])
+    if class_name:
+        where.append("s.class_name = ?")
+        params.append(class_name)
+    sql_where = " AND ".join(where)
+    with get_db() as conn:
+        total = conn.execute(
+            f"""SELECT COUNT(*) FROM login_history lh
+               JOIN students s ON s.id = lh.student_id
+               WHERE {sql_where}""", params
+        ).fetchone()[0]
+        rows = conn.execute(
+            f"""SELECT lh.id, lh.login_time, lh.ip_address, lh.via_teacher,
+                      s.id AS student_id, s.name, s.class_name, s.username
+               FROM login_history lh
+               JOIN students s ON s.id = lh.student_id
+               WHERE {sql_where}
+               ORDER BY lh.login_time DESC
+               LIMIT ? OFFSET ?""", params + [per_page, offset]
+        ).fetchall()
+        classes = [r[0] for r in conn.execute(
+            "SELECT DISTINCT class_name FROM students ORDER BY class_name").fetchall()]
+    return render_template(
+        "teacher/login_activity.html",
+        rows=rows, total=total, page=page, per_page=per_page,
+        q=q, class_name=class_name, classes=classes,
+    )
+

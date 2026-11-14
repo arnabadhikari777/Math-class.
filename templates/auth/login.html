@@ -9,10 +9,10 @@
       <p>Sign in to continue to your tests, notes and results.</p>
     </div>
     <form method="POST" action="{{ url_for('login') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label for="lgEmail">Email address</label>
+      <label for="lgEmail">Email or Username</label>
       <div class="field">
-        <i class="fa-regular fa-envelope fi" aria-hidden="true"></i>
-        <input id="lgEmail" type="email" name="email" required placeholder="you@example.com" autocomplete="email" inputmode="email">
+        <i class="fa-regular fa-user fi" aria-hidden="true"></i>
+        <input id="lgEmail" type="text" name="email" required placeholder="you@example.com or username" autocomplete="username">
       </div>
 
       <label for="lgPass">Password</label>

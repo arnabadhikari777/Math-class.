@@ -70,16 +70,4 @@
   {% endif %}
 </section>
 
-<section class="card" aria-labelledby="loginTitle">
-  <div class="card-head"><h2 id="loginTitle">Login history</h2><span class="text-muted">Latest {{ history|length }}</span></div>
-  {% if history %}
-  <ul class="login-list">
-    {% for h in history %}
-    <li><span><i class="fa-regular fa-clock" aria-hidden="true"></i> {{ h.login_time[:19].replace('T',' ') }}</span><span class="text-muted">{{ h.ip_address or '—' }}</span></li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <div class="empty-state"><i class="fa-regular fa-clock" aria-hidden="true"></i><p>No logins recorded yet.</p></div>
-  {% endif %}
-</section>
 {% endblock %}

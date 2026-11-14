@@ -3,6 +3,10 @@
 
 import hashlib
 from datetime import datetime
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:
+    ZoneInfo = None
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from flask import flash, redirect, render_template, request, session, url_for
@@ -233,12 +237,28 @@ def login():
     if session.get("student_id") and not session.get("is_teacher"):
         return redirect(url_for("student_dashboard"))
     if request.method == "POST":
-        email = request.form.get("email", "").strip().lower()
+        identifier = request.form.get("email", "").strip()
         password = request.form.get("password", "")
+        if not identifier or not password:
+            flash("Please enter your email/username and password.", "error")
+            return redirect(url_for("login"))
         with get_db() as conn:
-            student = conn.execute("SELECT * FROM students WHERE email=?", (email,)).fetchone()
+            # Support login by email OR username (username has no @ prefix)
+            if "@" in identifier:
+                student = conn.execute(
+                    "SELECT * FROM students WHERE email=?", (identifier.lower(),)
+                ).fetchone()
+            else:
+                student = conn.execute(
+                    "SELECT * FROM students WHERE username=? COLLATE NOCASE", (identifier,)
+                ).fetchone()
+                if student is None:
+                    # fallback: maybe they typed email without realising
+                    student = conn.execute(
+                        "SELECT * FROM students WHERE email=?", (identifier.lower(),)
+                    ).fetchone()
         if student is None or not check_password_hash(student["password_hash"], password):
-            flash("Incorrect email or password.", "error")
+            flash("Incorrect email/username or password.", "error")
             return redirect(url_for("login"))
         if student["is_blocked"]:
             flash("Your account has been blocked. Contact Sir.", "error")
@@ -247,8 +267,8 @@ def login():
             flash("This account is archived. Contact Sir to have it restored.", "error")
             return redirect(url_for("login"))
         if student["is_verified"] == 0:
-            session["pending_email"] = email
-            ok, msg, _ = create_and_send_otp(email, purpose="registration")
+            session["pending_email"] = student["email"]
+            ok, msg, _ = create_and_send_otp(student["email"], purpose="registration")
             flash(
                 "Account not verified. " + msg,
                 "success" if ok else "error"
@@ -263,10 +283,14 @@ def login():
         session["student_class"] = student["class_name"]
         session["sv"] = student["session_version"] or 0
         ip_addr = request.headers.get("X-Forwarded-For", request.remote_addr)
+        try:
+            now_ist = datetime.now(ZoneInfo("Asia/Kolkata")).isoformat(timespec="seconds") if ZoneInfo else datetime.now().isoformat(timespec="seconds")
+        except Exception:
+            now_ist = datetime.now().isoformat(timespec="seconds")
         with get_db() as conn:
             conn.execute(
                 "INSERT INTO login_history (student_id, login_time, ip_address, via_teacher) VALUES (?,?,?,0)",
-                (student["id"], datetime.now().isoformat(), ip_addr)
+                (student["id"], now_ist, ip_addr)
             )
             conn.commit()
         flash(f"Welcome back, {student['name']}!", "success")

@@ -239,7 +239,7 @@ def _down_question_bank(conn):
     conn.execute("DROP TABLE IF EXISTS bank_categories")
 
 
-from backend.db import m008_exam_system, m010_support_tables, m011_publish_marking, m012_autosave, m013_sessions, m014_workspace, m015_chat, m016_username, m017_notification_dismissals  # noqa: E402
+from backend.db import m008_exam_system, m010_support_tables, m011_publish_marking, m012_autosave, m013_sessions, m014_workspace, m015_chat, m016_username, m017_notification_dismissals, m018_doubts_and_profile  # noqa: E402
 
 
 def _up_drop_legacy_attempts(conn):
@@ -302,6 +302,8 @@ MIGRATIONS = [
      m016_username.up, m016_username.down),
     ("017_notification_dismissals", "Per-student notification dismissals so 'All Clean' never deletes shared class notices",
      m017_notification_dismissals.up, m017_notification_dismissals.down),
+    ("018_doubts_and_profile", "Doubt Management System + student profile pictures (Cloudinary)",
+     m018_doubts_and_profile.up, m018_doubts_and_profile.down),
 ]
 
 
