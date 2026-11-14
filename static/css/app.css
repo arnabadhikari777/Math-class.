@@ -2640,3 +2640,196 @@ tr:hover td {
     .ws-main-btn { width: 100%; justify-content: center; }
     .act-menu { margin-left: auto; }
 }
+
+/* ───────────── Mobile & small-screen UX polish (overflow-safe, readable) ───────────── */
+/* Prevent text/layout from escaping the viewport on phones while keeping desktop intact. */
+@media (max-width: 720px) {
+    .container {
+        margin: 0.85rem auto 0;
+        padding: 0 0.9rem 1.8rem;
+    }
+    .shell.has-sidebar .container {
+        margin-left: auto;
+        margin-right: auto;
+        max-width: 100%;
+    }
+    .page-head {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+    .page-head h1 {
+        font-size: 1.35rem;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+    }
+    .page-head > .flex {
+        width: 100%;
+        justify-content: flex-start;
+    }
+    .page-head .btn {
+        flex: 1 1 auto;
+        min-width: 0;
+        justify-content: center;
+    }
+    .grid-2,
+    .grid-3 {
+        grid-template-columns: 1fr;
+        gap: 0.9rem;
+    }
+    .card {
+        padding: 1rem 1rem;
+        border-radius: 12px;
+    }
+    .card-head {
+        gap: 0.5rem;
+    }
+    .stats {
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 0.65rem;
+    }
+    .stat {
+        padding: 0.85rem 0.75rem;
+    }
+    .stat .num {
+        font-size: 1.35rem;
+    }
+    .row-item,
+    .test-item {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 0.55rem 0.75rem;
+        padding: 0.75rem 0.15rem;
+    }
+    .row-item > div:first-child,
+    .test-item > div:first-child {
+        flex: 1 1 160px;
+        min-width: 0;
+    }
+    .row-item .ttl,
+    .test-item .ttl,
+    .ws-title {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+    .row-item .meta,
+    .test-item .meta {
+        overflow-wrap: anywhere;
+    }
+    .bar-row {
+        grid-template-columns: minmax(0, 1fr) 1.6fr auto;
+        gap: 0.45rem;
+        font-size: 0.8rem;
+    }
+    .bar-row .nm {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: unset;
+        overflow-wrap: anywhere;
+    }
+    .topbar {
+        padding: 0 0.75rem;
+        gap: 0.5rem;
+    }
+    .brand {
+        font-size: 0.95rem;
+        gap: 0.45rem;
+        min-width: 0;
+    }
+    .brand span,
+    .brand .brand-text {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .top-actions {
+        gap: 0.3rem;
+        flex-shrink: 0;
+    }
+    .icon-btn {
+        width: 38px;
+        height: 38px;
+    }
+    .hero {
+        padding: 1.5rem 1.15rem;
+        border-radius: 16px;
+    }
+    .quick-actions {
+        grid-template-columns: 1fr;
+    }
+    /* Forms stay full-width and readable */
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    input[type="tel"],
+    input[type="search"],
+    input[type="date"],
+    input[type="datetime-local"],
+    input[type="time"],
+    input[type="url"],
+    select,
+    textarea {
+        font-size: 16px; /* prevents iOS zoom on focus */
+    }
+    label {
+        margin-top: 0.85rem;
+    }
+    /* Tables already scroll; tighten cells a bit */
+    table {
+        font-size: 0.88rem;
+    }
+    th, td {
+        padding: 0.55rem 0.6rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: 0 0.7rem 1.5rem;
+        margin-top: 0.65rem;
+    }
+    .page-head h1 {
+        font-size: 1.22rem;
+    }
+    .stats {
+        grid-template-columns: 1fr 1fr;
+    }
+    .stat .label {
+        font-size: 0.72rem;
+    }
+    .card {
+        padding: 0.9rem 0.85rem;
+    }
+    .btn {
+        padding: 0.6rem 0.85rem;
+        font-size: 0.9rem;
+    }
+    .btn-sm {
+        padding: 0.4rem 0.65rem;
+        font-size: 0.82rem;
+    }
+    .bar-row {
+        grid-template-columns: 1fr;
+        gap: 0.25rem;
+    }
+    .bar-row .nm {
+        order: -1;
+    }
+}
+
+/* Extra safety: never let long unbroken strings blow the layout */
+.ttl,
+.meta,
+.page-head h1,
+.page-head p,
+.card h2,
+.card h3,
+.notif-item-title,
+.notif-item-msg,
+.announce strong,
+.ws-title {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
