@@ -81,6 +81,11 @@ def max_bytes():
     return int(min(10, max(1, mb)) * 1024 * 1024)
 
 
+def max_mb():
+    """The size limit in whole megabytes - the SAME number the server enforces; templates/JS show it to students."""
+    return max_bytes() // (1024 * 1024)
+
+
 # -------------------------------------------------------------- validation
 def detect_type(head):
     """ফাইলের প্রথম byte দেখে আসল ধরন (নাম/extension বিশ্বাস করা হয় না)।"""
@@ -95,18 +100,35 @@ def detect_type(head):
     return None
 
 
+def _is_heif(head):
+    """iPhone 'HEIC/HEIF' photos: a real image, but Cloudinary uploads here accept only JPG/PNG/WEBP/GIF."""
+    return head[4:8] == b"ftyp" and head[8:12] in (b"heic", b"heix", b"hevc", b"hevx", b"mif1", b"msf1", b"heim", b"heis")
+
+
+# Extensions we accept on the *name*. The file CONTENT is what decides; a camera/gallery picker on some Android
+# phones hands over a name with no extension (or .jfif / .jpe), which is a perfectly valid JPEG.
+ACCEPTED_NAME_EXTENSIONS = ALLOWED_EXTENSIONS | {"jpe", "jfif", ""}
+
+
 def validate(filename, data):
+    """Returns the real image type ('jpeg'|'png'|'gif'|'webp'). Raises ImageStoreError with a student-friendly message."""
     name = filename or ""
     ext = name.rsplit(".", 1)[1].lower() if "." in name else ""
-    if ext not in ALLOWED_EXTENSIONS:
-        raise ImageStoreError("'%s': only JPG, PNG, WEBP or GIF images are allowed." % name)
+    if ext in ("heic", "heif") or (ext not in ACCEPTED_NAME_EXTENSIONS and _is_heif((data or b"")[:16])):
+        raise ImageStoreError("'%s': HEIC/HEIF pictures are not supported. Please choose a JPG or PNG "
+                              "(on iPhone: Settings > Camera > Formats > Most Compatible)." % name)
+    if ext not in ACCEPTED_NAME_EXTENSIONS:
+        raise ImageStoreError("'%s': only JPG, PNG, WEBP or GIF pictures are allowed." % name)
     if not data:
         raise ImageStoreError("'%s': the file is empty." % name)
     if len(data) > max_bytes():
-        raise ImageStoreError("'%s': image size must not exceed %d MB." % (name, max_bytes() // (1024 * 1024)))
+        raise ImageStoreError("'%s': the picture is larger than %d MB. Please choose a smaller one." % (name, max_mb()))
     kind = detect_type(data[:16])
     if kind is None:
-        raise ImageStoreError("'%s': this is not a valid image file." % name)
+        if _is_heif(data[:16]):
+            raise ImageStoreError("'%s': HEIC/HEIF pictures are not supported. Please choose a JPG or PNG "
+                                  "(on iPhone: Settings > Camera > Formats > Most Compatible)." % name)
+        raise ImageStoreError("'%s': this is not a valid picture file (JPG, PNG, WEBP or GIF)." % name)
     return kind
 
 
@@ -157,17 +179,20 @@ def folder_for(category):
 
 def upload(filename, data, category=None):
     """ছবি Cloudinary-তে তোলে। Return: dict(url, public_id, width, height, bytes, format)।"""
-    validate(filename, data)
+    kind = validate(filename, data)
     problem = config_problem()
     if problem:
         raise ImageStoreError(problem)
     c = config()
+    base = os.path.basename(filename or "image")
+    if "." not in base or base.rsplit(".", 1)[1].lower() not in ALLOWED_EXTENSIONS:
+        base = "%s.%s" % (base.rsplit(".", 1)[0] or "image", "jpg" if kind == "jpeg" else kind)
     params = {"timestamp": str(int(time.time()))}
     folder = folder_for(category)
     if folder:
         params["folder"] = folder
     payload = dict(params, api_key=c["key"], signature=_sign(params, c["secret"]))
-    status, body = _post("image/upload", payload, files={"file": (os.path.basename(filename or "image"), data)})
+    status, body = _post("image/upload", payload, files={"file": (base, data)})
     if status != 200 or "secure_url" not in body:
         err = body.get("error") if isinstance(body.get("error"), dict) else {}
         msg = _friendly(err.get("message"))

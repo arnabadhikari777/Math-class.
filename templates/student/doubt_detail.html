@@ -6,18 +6,19 @@
   <div class="dbt-top"><h1 class="dbt-title">{{ d.subject }}</h1><span class="text-muted dbt-date">{{ d.created_at|ist }}</span></div>
   {% if d.chapter or d.topic %}<div class="text-muted dbt-sub">{{ [d.chapter, d.topic]|select|join(' · ') }}</div>{% endif %}
   <div class="dbt-badges">
-    <span class="badge {{ 'badge-success' if status == 'answered' else 'badge-warn' }}">{{ 'Answered by Teacher' if status == 'answered' else 'Waiting for Teacher' }}</span>
-    <span class="badge {{ 'badge-info' if msgs else 'badge-gray' }}">{{ 'AI answer available' if msgs else 'No AI answer yet' }}</span>
+    {% if status == 'answered' %}<span class="dbt-chip done">Answered</span>{% else %}<span class="dbt-chip wait">Waiting for Teacher</span>{% endif %}
+    {% if msgs %}<span class="dbt-chip ai">AI Answer Available</span>{% endif %}
   </div>
   <h2 class="dbt-h">Your question</h2>
-  <p class="dbt-text">{{ d.question }}</p>
-  {% if d.image_url %}<a href="{{ d.image_url }}" target="_blank" rel="noopener"><img class="dbt-img" src="{{ d.image_url|cdn_thumb(900) }}" alt="Question picture" loading="lazy"></a>{% endif %}
+  <p class="dbt-q math-render">{{ d.question }}</p>
+  {% if d.image_url %}<button type="button" class="dbt-img-btn" data-zoom="{{ d.image_url }}" aria-label="Zoom the question picture"><img class="dbt-img" src="{{ d.image_url|cdn_thumb(900) }}" alt="Question picture" loading="lazy" decoding="async"></button>{% endif %}
 </section>
 
 <section class="card dbt-teacher">
-  <h2 class="dbt-h">Teacher’s Answer</h2>
+  <span class="dbt-label"><i class="fa-solid fa-user-tie" aria-hidden="true"></i> Teacher’s Answer</span>
   {% if d.teacher_answer %}
-    <p class="dbt-text">{{ d.teacher_answer }}</p>
+    <p class="dbt-ans math-render" id="tAns" data-raw="{{ d.teacher_answer }}">{{ d.teacher_answer }}</p>
+    <button type="button" class="btn btn-sm btn-outline dbt-copy" data-copy="tAns"><i class="fa-regular fa-copy" aria-hidden="true"></i> Copy answer</button>
     <p class="text-muted dbt-date">Answered {{ d.teacher_answered_at|ist }}{% if d.teacher_updated_at and d.teacher_updated_at != d.teacher_answered_at %} · updated {{ d.teacher_updated_at|ist }}{% endif %}</p>
   {% else %}
     <p class="text-muted"><i class="fa-regular fa-hourglass-half" aria-hidden="true"></i> Waiting for Teacher. You can ask the AI in the meantime.</p>
@@ -25,16 +26,16 @@
 </section>
 
 <section class="card dbt-ai">
-  <h2 class="dbt-h">AI Answer</h2>
+  <span class="dbt-label"><i class="fa-solid fa-robot" aria-hidden="true"></i> AI Answer <span class="dbt-chip mute">not from your teacher</span></span>
   {% if msgs %}
     <div class="dbt-chat">
-    {% for m in msgs %}<div class="dbt-msg {{ 'me' if m.role == 'user' else 'ai' }}"><span class="dbt-who">{{ 'You' if m.role == 'user' else 'AI' }}</span><div class="dbt-text">{{ m.content }}</div></div>{% endfor %}
+    {% for m in msgs %}<div class="dbt-msg {{ 'me' if m.role == 'user' else 'ai' }}"><span class="dbt-who">{{ 'You' if m.role == 'user' else 'AI' }}</span><div class="dbt-text math-render">{{ m.content }}</div></div>{% endfor %}
     </div>
   {% else %}
     <p class="text-muted">The AI has not looked at this doubt yet.</p>
   {% endif %}
   <button type="button" class="btn btn-outline" data-ask-ai="{{ d.id }}"><i class="fa-solid fa-robot" aria-hidden="true"></i> {{ 'Continue with AI' if msgs else 'Ask AI to solve this' }}</button>
-  <p class="text-muted dbt-hint">AI answers are not from your teacher. Check important steps with Sir.</p>
+  <p class="text-muted dbt-hint">AI answers can be wrong and are not from your teacher. Check important steps with Sir.</p>
 </section>
 
 <form method="POST" action="{{ url_for('doubt_delete', doubt_id=d.id) }}" data-confirm="Delete this doubt and its AI chat? This cannot be undone.">

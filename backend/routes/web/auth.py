@@ -268,6 +268,11 @@ def login():
         session["student_id"] = student["id"]
         session["student_name"] = student["name"]
         session["student_class"] = student["class_name"]
+        try:                                   # profile picture in the header survives logout/login
+            if "profile_image_url" in student.keys() and student["profile_image_url"]:
+                session["student_avatar"] = student["profile_image_url"]
+        except (AttributeError, IndexError):
+            pass
         session["sv"] = student["session_version"] or 0
         ip_addr = request.headers.get("X-Forwarded-For", request.remote_addr)
         with get_db() as conn:

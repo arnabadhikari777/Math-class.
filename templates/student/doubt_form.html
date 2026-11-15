@@ -1,26 +1,48 @@
 {% extends "base.html" %}
 {% block title %}Ask a Doubt{% endblock %}
 {% block content %}
-<div class="page-head"><h1>Ask a Doubt</h1><p>Write your question clearly. Sir will answer it, and you can also ask the AI.</p></div>
-<form method="POST" action="{{ url_for('doubt_new') }}" enctype="multipart/form-data" class="card dbt-form" id="doubtForm" novalidate>
+<div class="page-head"><h1>Ask a Doubt</h1><p>Write your question clearly. Sir will answer it, and you can also ask the AI while you wait.</p></div>
+<form method="POST" action="{{ url_for('doubt_new') }}" enctype="multipart/form-data" class="card dbt-form" id="doubtForm" data-max-bytes="{{ max_mb * 1048576 }}" novalidate>
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="token" value="{{ token }}">
-  <label for="dSubject">Subject <span class="req">*</span></label>
-  <input id="dSubject" name="subject" list="dSubjects" required maxlength="60" value="{{ f.get('subject', '') }}" placeholder="e.g. Maths" autocomplete="off">
+  <div class="dbt-errbox" id="dErr" role="alert" hidden></div>
+
+  <label for="dSubject">Subject <span class="req" aria-hidden="true">*</span></label>
+  <div class="dbt-chips" role="group" aria-label="Quick subjects">{% for s in subjects[:8] %}<button type="button" data-subject-chip="{{ s }}">{{ s }}</button>{% endfor %}</div>
+  <input id="dSubject" type="text" name="subject" list="dSubjects" required maxlength="60" value="{{ f.get('subject', '') }}" placeholder="Pick one above or type a subject" autocomplete="off" aria-describedby="eSubject" class="{{ 'invalid' if field_error == 'subject' }}">
   <datalist id="dSubjects">{% for s in subjects %}<option value="{{ s }}">{% endfor %}</datalist>
+  <p class="fld-err" id="eSubject" role="alert" hidden></p>
+
   <div class="dbt-two">
     <div><label for="dChapter">Chapter <span class="text-muted">(optional)</span></label>
-      <input id="dChapter" name="chapter" maxlength="120" value="{{ f.get('chapter', '') }}" placeholder="e.g. Quadratic Equations"></div>
+      <input id="dChapter" type="text" name="chapter" maxlength="120" value="{{ f.get('chapter', '') }}" placeholder="e.g. Quadratic Equations" autocomplete="off"></div>
     <div><label for="dTopic">Topic <span class="text-muted">(optional)</span></label>
-      <input id="dTopic" name="topic" maxlength="120" value="{{ f.get('topic', '') }}" placeholder="e.g. Discriminant"></div>
+      <input id="dTopic" type="text" name="topic" maxlength="120" value="{{ f.get('topic', '') }}" placeholder="e.g. Discriminant" autocomplete="off"></div>
   </div>
-  <label for="dQuestion">Your question <span class="req">*</span></label>
-  <textarea id="dQuestion" name="question" rows="6" required maxlength="4000" placeholder="Write your doubt in detail…">{{ f.get('question', '') }}</textarea>
+
+  <label for="dQuestion">Your question <span class="req" aria-hidden="true">*</span></label>
+  <textarea id="dQuestion" name="question" rows="7" required maxlength="4000" placeholder="Write your doubt in detail: what you tried, and where you got stuck. You can write maths like $x^2-5x+6=0$." aria-describedby="eQuestion dCount" class="{{ 'invalid' if field_error == 'question' }}">{{ f.get('question', '') }}</textarea>
+  <p class="dbt-count" id="dCount" aria-live="polite">0 / 4000</p>
+  <p class="fld-err" id="eQuestion" role="alert" hidden></p>
+
   <label for="dImage">Question picture <span class="text-muted">(optional)</span></label>
-  <input id="dImage" type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif">
-  <p class="text-muted dbt-hint">JPG, PNG, WEBP or GIF, up to 5 MB.</p>
-  <img id="dPreview" class="dbt-preview" alt="Selected picture preview" hidden>
-  <button type="submit" class="btn btn-primary" id="dSubmit"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Send to Sir</button>
-  <p class="text-muted dbt-hint" id="dBusy" hidden>Sending… please do not close this page.</p>
+  <label class="dbt-drop" for="dImage">
+    <i class="fa-regular fa-image" aria-hidden="true"></i>
+    <strong>Tap to take a photo or choose from gallery</strong>
+    <span class="text-muted dbt-hint">JPG, PNG, WEBP or GIF · up to {{ max_mb }} MB</span>
+    <input id="dImage" type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif" aria-describedby="eImage">
+  </label>
+  <p class="fld-err" id="eImage" role="alert" hidden></p>
+  <div class="dbt-pv" id="dPv" hidden>
+    <img alt="Selected picture preview" width="64" height="64">
+    <div class="info"><strong class="nm"></strong><br><span class="sz text-muted"></span></div>
+    <div class="acts"><button type="button" class="btn btn-sm btn-outline" id="dReplace">Replace</button><button type="button" class="btn btn-sm btn-outline" id="dRemove">Remove</button></div>
+  </div>
+  {% if f.get('subject') %}<p class="text-muted dbt-hint">If you had chosen a picture, please choose it again - browsers cannot keep it after an error.</p>{% endif %}
+
+  <div class="dbt-actions">
+    <button type="submit" class="btn btn-primary" id="dSubmit"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Send to Sir</button>
+    <p class="text-muted dbt-hint" id="dBusy" role="status" hidden>Sending… please keep this page open.</p>
+  </div>
 </form>
 {% endblock %}

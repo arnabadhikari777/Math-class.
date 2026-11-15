@@ -46,10 +46,13 @@ def notify_student(student_id, title, message, link="", notif_type="chat", push=
                        VALUES (?,?,?,?,?,?,?)""",
                     (title, message, notif_type, "", link or "", now, student_id))
             conn.commit()
+        saved = True
     except Exception as e:
         print(f"[notification] {e}")
+        saved = False
     if push:
         send_push_to_class(title, message, link=link, student_id=student_id)
+    return saved
 
 
 def mark_link_read(student_id, link):

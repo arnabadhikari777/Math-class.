@@ -6,7 +6,9 @@ Security rules used everywhere in this file:
   * every teacher route has @teacher_login_required; every POST is CSRF-protected by the global hook;
   * images go through the one existing Cloudinary implementation (services/image_store.py).
 """
+import logging
 import secrets
+import sqlite3
 
 from flask import abort, flash, jsonify, redirect, render_template, request, session, url_for
 
@@ -17,6 +19,8 @@ from backend.middleware.rate_limit import rate_limit
 from backend.services import doubt_service as ds
 from backend.services import image_store, notification_service
 from backend.services.activity_service import log_activity
+
+log = logging.getLogger(__name__)
 
 
 def _int(name, default=1, lo=1, hi=100000):
@@ -35,17 +39,50 @@ def _acting_student_blocked():
 
 
 # =============================================================== student: doubts
+def _wants_json():
+    """The upgraded form submits with fetch() (so it can show errors inline and retry safely); plain browsers still POST normally."""
+    return request.headers.get("X-Requested-With") == "fetch" or request.accept_mimetypes.best == "application/json"
+
+
+def _ref():
+    return secrets.token_hex(3).upper()
+
+
 @app.route("/doubts")
 @student_login_required
 def doubt_box():
-    sid, page, subject = session["student_id"], _int("page"), request.args.get("subject", "").strip()[:60]
-    with get_db() as conn:
-        items, total = ds.list_for_student(conn, sid, page, subject)
-        subjects = [r[0] for r in conn.execute(
-            "SELECT DISTINCT subject FROM doubts WHERE student_id=? ORDER BY subject COLLATE NOCASE", (sid,))]
+    sid, page = session["student_id"], _int("page")
+    subject = request.args.get("subject", "").strip()[:60]
+    q = " ".join(request.args.get("q", "").split())[:80]
+    status = request.args.get("status", "")
+    status = status if status in ds.STATUS_FILTERS else ""
+    items, total, subjects, load_error = [], 0, [], False
+    try:
+        with get_db() as conn:
+            items, total = ds.list_for_student(conn, sid, page, subject, q, status)
+            subjects = ds.student_subjects(conn, sid)
+    except sqlite3.Error:
+        ref = _ref()
+        log.exception("doubt list failed ref=%s student=%s", ref, sid)
+        load_error = ref
     pages = max(1, -(-total // ds.PER_PAGE))
-    return render_template("student/doubts.html", items=items, total=total, page=page, pages=pages,
-                           subject=subject, subjects=subjects)
+    return render_template("student/doubts.html", items=items, total=total, page=page, pages=pages, subject=subject,
+                           subjects=subjects, q=q, status=status, load_error=load_error,
+                           filtered=bool(subject or q or status)), (500 if load_error else 200)
+
+
+def _form_page(form, token, status, message=None, field=None, ref=None, retryable=True):
+    """Re-show the form with everything the student typed (the picture itself cannot be re-filled by a browser - the
+    message says so when it matters). JSON for fetch(), the normal page otherwise."""
+    if _wants_json():
+        return jsonify({"ok": False, "error": message, "field": field, "ref": ref, "retryable": retryable,
+                        "token": token}), status
+    if message:
+        flash(message, "error")
+    with get_db() as conn:
+        subjects = ds.subject_suggestions(conn, session["student_id"])
+    return render_template("student/doubt_form.html", f=form, token=token, subjects=subjects,
+                           max_mb=image_store.max_mb(), field_error=field), status
 
 
 @app.route("/doubts/new", methods=["GET", "POST"])
@@ -55,48 +92,90 @@ def doubt_new():
     sid = session["student_id"]
     if request.method == "POST":
         if _acting_student_blocked():
+            if _wants_json():
+                return jsonify({"ok": False, "error": "This action is not available while viewing as a student.",
+                                "retryable": False}), 403
             return redirect(url_for("doubt_box"))
         form = request.form
+        token = ds.clean_token(form.get("token"))
         try:
             subject, chapter, topic, question = ds.validate_form(
                 form.get("subject"), form.get("chapter"), form.get("topic"), form.get("question"))
         except ds.DoubtError as e:
-            flash(str(e), "error")
-            return render_template("student/doubt_form.html", f=form, token=form.get("token") or secrets.token_hex(16),
-                                   subjects=ds.SUBJECTS), 400
-        token = (form.get("token") or "")[:64]
-        with get_db() as conn:     # repeated tap / reload with the same token -> open the existing doubt
-            old = conn.execute("SELECT id FROM doubts WHERE student_id=? AND client_token=?", (sid, token)).fetchone() if token else None
+            msg = str(e)
+            return _form_page(form, token or secrets.token_hex(16), 400, msg,
+                              field="subject" if "subject" in msg.lower() else "question", retryable=False)
+
+        # repeated tap / reload / retry with the same token -> open the doubt that already exists (nothing is uploaded again)
+        with get_db() as conn:
+            old = ds.find_by_token(conn, sid, token)
         if old:
-            return redirect(url_for("doubt_view", doubt_id=old["id"]))
+            return _done(old["id"], created=False)
+
         image = None
         f = request.files.get("image")
         if f and f.filename:
             data = f.read(image_store.max_bytes() + 1)
             try:
                 image_store.validate(f.filename, data)
-                image = image_store.upload(f.filename, data, "doubts")
             except image_store.ImageStoreError as e:
-                flash("Your doubt was not sent. " + str(e), "error")
-                return render_template("student/doubt_form.html", f=form, token=token or secrets.token_hex(16),
-                                       subjects=ds.SUBJECTS), 400
+                return _form_page(form, token or secrets.token_hex(16), 400, "Your doubt was not sent. " + str(e),
+                                  field="image", retryable=False)
+            try:
+                image = image_store.upload(f.filename, data, "doubts")
+            except image_store.ImageStoreError as e:       # Cloudinary / network / configuration problem
+                log.warning("doubt image upload failed student=%s: %s", sid, e)
+                return _form_page(form, token or secrets.token_hex(16), 502,
+                                  "Your doubt was not sent because the picture could not be uploaded (%s). "
+                                  "Your text is still here - try again, or send it without the picture." % e,
+                                  field="image", retryable=True)
+
         try:
             with get_db() as conn:
-                student = conn.execute("SELECT name, class_name FROM students WHERE id=?", (sid,)).fetchone()
-                did, created = ds.create_doubt(conn, sid, subject, chapter, topic, question, image, token)
-                if created:
-                    ds.notify_teacher_new(conn, did, student["name"], student["class_name"], subject)
-                conn.commit()
-        except Exception:
-            if image:
-                ds.destroy_image_quietly(image["public_id"])   # do not leave an orphan image on Cloudinary
-            app.logger.exception("doubt insert failed")
-            flash("Something went wrong and your doubt was not saved. Please try again.", "error")
-            return render_template("student/doubt_form.html", f=form, token=token or secrets.token_hex(16),
-                                   subjects=ds.SUBJECTS), 500
-        flash("Your doubt was sent to Sir. You can ask the AI about it while you wait.", "success")
-        return redirect(url_for("doubt_view", doubt_id=did))
-    return render_template("student/doubt_form.html", f={}, token=secrets.token_hex(16), subjects=ds.SUBJECTS)
+                did, created, notified = ds.submit_doubt(conn, sid, subject, chapter, topic, question, image, token)
+        except ds.DoubtError as e:
+            _discard(image)
+            return _form_page(form, token or secrets.token_hex(16), 403, str(e), retryable=False)
+        except sqlite3.OperationalError as e:               # "database is locked" / busy: transient, safe to retry
+            ref = _ref()
+            log.error("doubt insert busy ref=%s student=%s: %s", ref, sid, e)
+            _discard(image)                                  # no orphan picture on Cloudinary
+            return _form_page(form, token or secrets.token_hex(16), 503,
+                              "The server is busy right now, so your doubt was not saved. Please tap Send again "
+                              "in a few seconds. (ref %s)" % ref, ref=ref, retryable=True)
+        except Exception:                                    # noqa: BLE001 - logged with a reference, never shown as a traceback
+            ref = _ref()
+            log.exception("doubt insert failed ref=%s student=%s", ref, sid)
+            _discard(image)
+            return _form_page(form, token or secrets.token_hex(16), 500,
+                              "Something went wrong on our side and your doubt was not saved. Your text is still "
+                              "here - please try again. If it keeps happening, tell Sir this code: %s." % ref,
+                              ref=ref, retryable=True)
+        if not created:
+            _discard(image)       # another request with the same token won the race: drop THIS request's picture, keep theirs
+        if not notified:
+            log.error("doubt #%s saved but Sir's notification failed", did)
+        return _done(did, created=created)
+    with get_db() as conn:
+        subjects = ds.subject_suggestions(conn, sid)
+    return render_template("student/doubt_form.html", f={}, token=secrets.token_hex(16), subjects=subjects,
+                           max_mb=image_store.max_mb())
+
+
+def _discard(image):
+    if image:
+        ds.destroy_image_quietly(image["public_id"], "doubt not saved")
+
+
+def _done(doubt_id, created):
+    url = url_for("doubt_view", doubt_id=doubt_id)
+    msg = ("Your doubt was sent to Sir. You can ask the AI about it while you wait." if created
+           else "This doubt was already sent - here it is.")
+    if _wants_json():
+        flash(msg, "success")      # shown on the doubt page after the browser navigates there
+        return jsonify({"ok": True, "created": created, "redirect": url, "id": doubt_id})
+    flash(msg, "success")
+    return redirect(url)
 
 
 @app.route("/doubts/<int:doubt_id>")
@@ -204,17 +283,34 @@ def _teacher_doubt_badge():
 def teacher_doubts():
     subject = request.args.get("subject", "").strip()[:60]
     class_name = request.args.get("class_name", "").strip()[:20]
+    q = " ".join(request.args.get("q", "").split())[:80]
     status = request.args.get("status", "")
     status = status if status in ("pending", "answered") else ""
     page = _int("page")
-    with get_db() as conn:
-        counts = ds.teacher_counts(conn)
-        items, total = ds.teacher_list(conn, subject, class_name, status, page)
-        subjects = [r[0] for r in conn.execute("SELECT DISTINCT subject FROM doubts ORDER BY subject COLLATE NOCASE")]
-        notes = conn.execute("SELECT * FROM teacher_notifications ORDER BY id DESC LIMIT 8").fetchall()
+    items, total, subjects, notes, load_error = [], 0, [], [], False
+    counts = {"total": 0, "pending": 0, "answered": 0, "new": 0}
+    try:
+        with get_db() as conn:
+            counts = ds.teacher_counts(conn)
+            items, total = ds.teacher_list(conn, subject, class_name, status, page, q)
+            subjects = [r[0] for r in conn.execute("SELECT DISTINCT subject FROM doubts ORDER BY subject COLLATE NOCASE")]
+            notes = conn.execute("SELECT * FROM teacher_notifications ORDER BY id DESC LIMIT 8").fetchall()
+    except sqlite3.Error:
+        ref = _ref()
+        log.exception("teacher doubt list failed ref=%s", ref)
+        load_error = ref
     pages = max(1, -(-total // ds.PER_PAGE))
     return render_template("teacher/doubts.html", items=items, counts=counts, total=total, page=page, pages=pages,
-                           subject=subject, class_name=class_name, status=status, subjects=subjects, notes=notes)
+                           subject=subject, class_name=class_name, status=status, subjects=subjects, notes=notes, q=q,
+                           load_error=load_error, filtered=bool(subject or class_name or status or q)), (500 if load_error else 200)
+
+
+def _teacher_reply(ok, message, status=200, category=None, **extra):
+    """fetch() gets JSON (inline confirmation, no page reload); a plain form post gets the usual flash + redirect."""
+    if _wants_json():
+        return jsonify(dict(extra, ok=ok, message=message)), status
+    flash(message, category or ("success" if ok else "error"))
+    return None
 
 
 @app.route("/teacher/doubts/<int:doubt_id>", methods=["GET", "POST"])
@@ -226,22 +322,38 @@ def teacher_doubt_view(doubt_id):
                FROM doubts d JOIN students s ON s.id=d.student_id WHERE d.id=?""", (doubt_id,)).fetchone()
         if d is None:
             abort(404)
-        if request.method == "POST":
-            try:
+    if request.method == "POST":
+        back = redirect(url_for("teacher_doubt_view", doubt_id=doubt_id))
+        try:
+            with get_db() as conn:
                 row, is_update = ds.save_teacher_answer(conn, doubt_id, request.form.get("answer"))
                 conn.commit()
-            except ds.DoubtError as e:
-                flash(str(e), "error")
-                return redirect(url_for("teacher_doubt_view", doubt_id=doubt_id))
-            ds.notify_student_answer(d["student_id"], doubt_id, d["subject"], is_update)
-            log_activity("teacher", "doubt_answer", "doubt #%d" % doubt_id)
-            flash("Answer saved. The student has been notified.", "success")
-            return redirect(url_for("teacher_doubt_view", doubt_id=doubt_id))
+        except ds.DoubtError as e:
+            return _teacher_reply(False, str(e), 400, field="answer") or back
+        except sqlite3.Error:
+            ref = _ref()
+            log.exception("teacher answer save failed ref=%s doubt=%s", ref, doubt_id)
+            return _teacher_reply(False, "The answer could not be saved (ref %s). Your text is still in the box - please try again." % ref,
+                                  503, ref=ref) or back
+        notified = ds.notify_student_answer(d["student_id"], doubt_id, d["subject"], is_update)
+        log_activity("teacher", "doubt_answer", "doubt #%d" % doubt_id)
+        if notified:
+            msg = "Answer saved. The student has been notified."
+        else:
+            log.error("answer to doubt #%s saved but the student's notification failed", doubt_id)
+            msg = "Answer saved, but the student's notification could not be created. The student can still see the answer in My Doubts."
+        with get_db() as conn:
+            fresh = conn.execute("SELECT teacher_answered_at, teacher_updated_at FROM doubts WHERE id=?", (doubt_id,)).fetchone()
+        reply = _teacher_reply(True, msg, 200, category="success" if notified else "error", notified=bool(notified),
+                               updated_at=fresh["teacher_updated_at"] if fresh else None, answered=True)
+        return reply if reply is not None else back
+    with get_db() as conn:
         conn.execute("UPDATE doubts SET teacher_seen=1 WHERE id=?", (doubt_id,))
         conn.execute("UPDATE teacher_notifications SET is_read=1 WHERE link=?", ("/teacher/doubts/%d" % doubt_id,))
         conn.commit()
         _cid, msgs = ds.ai_messages(conn, doubt_id)
-    return render_template("teacher/doubt_detail.html", d=d, msgs=msgs)
+        nav = ds.teacher_neighbors(conn, doubt_id)
+    return render_template("teacher/doubt_detail.html", d=d, msgs=msgs, nav=nav)
 
 
 @app.route("/teacher/doubts/<int:doubt_id>/delete", methods=["POST"])

@@ -164,7 +164,8 @@
             if (busy()) { set(false); lastY = y; return; }
             var dy = y - lastY;
             if (Math.abs(dy) < THRESHOLD) return;       // small movement: keep the current state
-            if (y >= max - 2) { lastY = y; return; }    // rubber-band at the very bottom: do nothing
+            if (max < window.innerHeight * 0.6) { set(false); lastY = y; return; } // short page: nothing to gain by hiding
+            if (y >= max - 2) { set(false); lastY = y; return; }    // end of page: bar is back (footer / last items reachable)
             set(dy > 0);
             lastY = y;
         }
@@ -551,5 +552,72 @@
         }
         window.AMC = window.AMC || {};
         window.AMC.push = { refresh: refresh };
+    })();
+    /* ───────────── 5. popover menus: account menu + public "More" (data-menu) ───────────── */
+    (function menus() {
+        var menus = Array.prototype.slice.call(doc.querySelectorAll("[data-menu]"));
+        if (!menus.length) return;
+        function parts(m) { return { t: m.querySelector("[data-menu-trigger]"), p: m.querySelector("[data-menu-panel]") }; }
+        function isOpen(m) { var x = parts(m); return !!x.p && !x.p.hidden; }
+        function setOpen(m, v, focusBack) {
+            var x = parts(m);
+            if (!x.t || !x.p) return;
+            x.p.hidden = !v;
+            x.t.setAttribute("aria-expanded", v ? "true" : "false");
+            body.classList.toggle("menu-open", menus.some(isOpen));
+            if (v) { var first = x.p.querySelector("a, button"); if (first && !x.t.matches(":hover")) { /* keep focus on trigger for touch */ } }
+            if (!v && focusBack) { try { x.t.focus({ preventScroll: true }); } catch (e) { /* old browser */ } }
+        }
+        function closeAll(except, focusBack) { menus.forEach(function (m) { if (m !== except && isOpen(m)) setOpen(m, false, focusBack); }); }
+        menus.forEach(function (m) {
+            var x = parts(m);
+            if (!x.t || !x.p) return;
+            x.t.addEventListener("click", function (e) {
+                e.stopPropagation();
+                var v = !isOpen(m);
+                closeAll(m, false);
+                setOpen(m, v, false);
+                if (v) { var np = $("notifPanel"); if (np && !np.hidden && $("notifBtn")) $("notifBtn").click(); }
+            });
+            x.p.addEventListener("keydown", function (e) {
+                var items = Array.prototype.slice.call(x.p.querySelectorAll("a[href], button"));
+                var i = items.indexOf(doc.activeElement);
+                if (e.key === "ArrowDown") { e.preventDefault(); (items[i + 1] || items[0]).focus(); }
+                else if (e.key === "ArrowUp") { e.preventDefault(); (items[i - 1] || items[items.length - 1]).focus(); }
+            });
+            x.t.addEventListener("keydown", function (e) {
+                if (e.key === "ArrowDown") { e.preventDefault(); closeAll(m, false); setOpen(m, true, false); var f = x.p.querySelector("a, button"); if (f) f.focus(); }
+            });
+        });
+        // outside tap/click closes (pointerdown also works on iOS for non-interactive areas)
+        doc.addEventListener("pointerdown", function (e) {
+            menus.forEach(function (m) { if (isOpen(m) && !m.contains(e.target)) setOpen(m, false, false); });
+        });
+        doc.addEventListener("keydown", function (e) {
+            if (e.key !== "Escape") return;
+            menus.forEach(function (m) { if (isOpen(m)) { e.preventDefault(); setOpen(m, false, true); } });
+        });
+        // other floating controls close an open menu
+        ["notifBtn", "qaBtn"].forEach(function (id) {
+            var b = $(id);
+            if (b) b.addEventListener("click", function () { closeAll(null, false); }, true);
+        });
+        window.addEventListener("pageshow", function (e) { if (e.persisted) closeAll(null, false); });
+    })();
+
+    /* ───────────── 6. virtual keyboard: body.kb-open hides bottom bar + floating buttons ───────────── */
+    (function keyboard() {
+        var vv = window.visualViewport;
+        if (!vv) return;
+        var base = Math.max(window.innerHeight, vv.height);
+        function field() { var a = doc.activeElement; return !!a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !/^(checkbox|radio|button|submit|file)$/.test(a.type || ""); }
+        function check() {
+            if (!field()) { base = Math.max(window.innerHeight, vv.height); body.classList.remove("kb-open"); return; }
+            body.classList.toggle("kb-open", vv.height < base - 120);
+        }
+        vv.addEventListener("resize", check);
+        doc.addEventListener("focusin", function () { setTimeout(check, 250); });
+        doc.addEventListener("focusout", function () { setTimeout(check, 100); });
+        window.addEventListener("orientationchange", function () { setTimeout(function () { base = Math.max(window.innerHeight, vv.height); check(); }, 400); });
     })();
 })();

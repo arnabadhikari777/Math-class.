@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Doubt Management{% endblock %}
+{% macro url(n=1) %}{% set a = {'page': n} %}{% if q %}{% set _ = a.update({'q': q}) %}{% endif %}{% if subject %}{% set _ = a.update({'subject': subject}) %}{% endif %}{% if class_name %}{% set _ = a.update({'class_name': class_name}) %}{% endif %}{% if status %}{% set _ = a.update({'status': status}) %}{% endif %}{{ url_for('teacher_doubts', **a) }}{% endmacro %}
 {% block content %}
 <div class="page-head"><h1>Doubt Management</h1><p>Doubts asked by students. Only your answer marks a doubt as answered.</p></div>
 <div class="stats">
@@ -15,34 +16,48 @@
 </section>
 {% endif %}
 
-<form method="get" class="card dbt-filters">
-  <select name="status" aria-label="Status"><option value="">All status</option><option value="pending" {{ 'selected' if status=='pending' }}>Pending</option><option value="answered" {{ 'selected' if status=='answered' }}>Answered</option></select>
-  <select name="subject" aria-label="Subject"><option value="">All subjects</option>{% for s in subjects %}<option value="{{ s }}" {{ 'selected' if s|lower == subject|lower }}>{{ s }}</option>{% endfor %}</select>
-  <select name="class_name" aria-label="Class"><option value="">All classes</option>{% for o in class_options %}<option value="{{ o.value }}" {{ "selected" if o.value == class_name }}>{{ o.label }}</option>{% endfor %}</select>
-  <button class="btn btn-primary btn-sm">Filter</button>
+<form method="get" class="dbt-search" role="search">
+  <div class="row">
+    <label for="tq" class="sr-only">Search</label>
+    <input id="tq" type="search" name="q" value="{{ q }}" placeholder="Search student, question, chapter" maxlength="80">
+    <label for="tsubj" class="sr-only">Subject</label>
+    <select id="tsubj" name="subject" data-autosubmit><option value="">All subjects</option>{% for s in subjects %}<option value="{{ s }}" {{ 'selected' if s|lower == subject|lower }}>{{ s }}</option>{% endfor %}</select>
+    <label for="tcls" class="sr-only">Class</label>
+    <select id="tcls" name="class_name" data-autosubmit><option value="">All classes</option>{% for o in class_options %}<option value="{{ o.value }}" {{ "selected" if o.value == class_name }}>{{ o.label }}</option>{% endfor %}</select>
+    <input type="hidden" name="status" value="{{ status }}">
+    <button class="btn btn-primary" type="submit">Search</button>
+  </div>
+  <div class="dbt-seg" role="group" aria-label="Status">
+    {% for key, label in (('', 'All'), ('pending', 'Pending'), ('answered', 'Answered')) %}
+    {% set a = {} %}{% if q %}{% set _ = a.update({'q': q}) %}{% endif %}{% if subject %}{% set _ = a.update({'subject': subject}) %}{% endif %}{% if class_name %}{% set _ = a.update({'class_name': class_name}) %}{% endif %}{% if key %}{% set _ = a.update({'status': key}) %}{% endif %}
+    <a href="{{ url_for('teacher_doubts', **a) }}" class="{{ 'on' if status == key }}">{{ label }}</a>
+    {% endfor %}
+  </div>
 </form>
 
-{% if items %}
+{% if load_error %}
+<div class="dbt-errbox" role="alert">The doubts could not be loaded (ref {{ load_error }}). <a href="{{ url_for('teacher_doubts') }}">Try again</a></div>
+{% elif items %}
+<p class="text-muted dbt-hint">{{ total }} doubt{{ '' if total == 1 else 's' }}{% if filtered %} · <a href="{{ url_for('teacher_doubts') }}">Clear filters</a>{% endif %}</p>
 <div class="dbt-list">
   {% for d in items %}
   <a class="card dbt-card" href="{{ url_for('teacher_doubt_view', doubt_id=d.id) }}">
-    <div class="dbt-top"><strong>{{ d.student_name }} <span class="text-muted">· {{ class_display(d.class_name) }}</span></strong><span class="text-muted dbt-date">{{ d.created_at|ist(False) }}</span></div>
+    <div class="dbt-top"><strong>{{ d.student_name }} <span class="text-muted">· {{ class_display(d.class_name) }}</span></strong><span class="text-muted dbt-date">{{ d.created_at|ist }}</span></div>
     <div class="dbt-sub">{{ d.subject }}{% if d.chapter or d.topic %} · {{ [d.chapter, d.topic]|select|join(' · ') }}{% endif %}</div>
-    <div class="text-muted dbt-prev">{{ d.preview }}</div>
+    <div class="dbt-prev">{% if d.has_image %}<i class="fa-regular fa-image dbt-thumb" aria-label="Has a picture"></i>{% endif %}{{ d.preview }}</div>
     <div class="dbt-badges">
-      {% if not d.teacher_seen %}<span class="badge badge-info">New</span>{% endif %}
-      <span class="badge {{ 'badge-success' if d.status == 'answered' else 'badge-warn' }}">{{ 'Answered' if d.status == 'answered' else 'Pending' }}</span>
-      {% if d.ai_available %}<span class="badge badge-gray">AI answered</span>{% endif %}
+      {% if not d.teacher_seen %}<span class="dbt-chip new">New</span>{% endif %}
+      {% if d.status == 'answered' %}<span class="dbt-chip done">Answered</span>{% else %}<span class="dbt-chip wait">Pending</span>{% endif %}
+      {% if d.ai_available %}<span class="dbt-chip mute">AI chat exists</span>{% endif %}
     </div>
   </a>
   {% endfor %}
 </div>
 {% if pages > 1 %}
 <nav class="dbt-pager" aria-label="Pages">
-  {% set qs = '&status=' ~ status ~ '&subject=' ~ (subject|urlencode) ~ '&class_name=' ~ (class_name|urlencode) %}
-  {% if page > 1 %}<a class="btn btn-sm btn-outline" href="?page={{ page - 1 }}{{ qs }}">Newer</a>{% endif %}
+  {% if page > 1 %}<a class="btn btn-sm btn-outline" href="{{ url(page - 1) }}">Newer</a>{% endif %}
   <span class="text-muted">Page {{ page }} of {{ pages }}</span>
-  {% if page < pages %}<a class="btn btn-sm btn-outline" href="?page={{ page + 1 }}{{ qs }}">Older</a>{% endif %}
+  {% if page < pages %}<a class="btn btn-sm btn-outline" href="{{ url(page + 1) }}">Older</a>{% endif %}
 </nav>
 {% endif %}
 {% else %}

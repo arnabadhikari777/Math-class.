@@ -153,7 +153,7 @@ class DoubtTests(AppCase):
         n1 = self.q("SELECT * FROM notifications WHERE notif_type='doubt' AND link=?", "/doubts/%d" % did)
         self.assertEqual(len(n1), 1); self.assertEqual(n1[0]["student_id"], self.stu)
         page = stu.get("/doubts/%d" % did).get_data(as_text=True)
-        self.assertIn("Answered by Teacher", page); self.assertIn("Factorise", page); self.assertIn("x = 2 or 3", page)
+        self.assertIn("Answered", page); self.assertIn("Factorise", page); self.assertIn("x = 2 or 3", page)
         # same text again -> no new notification; edit -> still ONE row (refreshed)
         self.post(t, "/teacher/doubts/%d" % did, {"answer": "Factorise: (x-2)(x-3)=0"})
         self.post(t, "/teacher/doubts/%d" % did, {"answer": "Factorise: (x-2)(x-3)=0, so x=2 or 3"})

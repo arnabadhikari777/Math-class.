@@ -2,27 +2,38 @@
 {% block title %}Doubt #{{ d.id }}{% endblock %}
 {% block content %}
 <p><a href="{{ url_for('teacher_doubts') }}" class="text-muted"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Doubt Management</a></p>
+<nav class="dbt-nav" aria-label="Doubt navigation">
+  {% if nav.older %}<a class="btn btn-sm btn-outline" href="{{ url_for('teacher_doubt_view', doubt_id=nav.older) }}"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Older</a>{% endif %}
+  {% if nav.newer %}<a class="btn btn-sm btn-outline" href="{{ url_for('teacher_doubt_view', doubt_id=nav.newer) }}">Newer <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></a>{% endif %}
+  {% if nav.next_pending %}<a class="btn btn-sm btn-primary" href="{{ url_for('teacher_doubt_view', doubt_id=nav.next_pending) }}">Next pending <i class="fa-solid fa-forward" aria-hidden="true"></i></a>{% endif %}
+</nav>
 <section class="card">
   <div class="dbt-top"><h1 class="dbt-title">{{ d.student_name }} <span class="text-muted">· {{ class_display(d.student_class) }}</span></h1><span class="text-muted dbt-date">{{ d.created_at|ist }}</span></div>
   <div class="dbt-sub"><strong>{{ d.subject }}</strong>{% if d.chapter %} · {{ d.chapter }}{% endif %}{% if d.topic %} · {{ d.topic }}{% endif %}</div>
   <h2 class="dbt-h">Question</h2>
-  <p class="dbt-text">{{ d.question }}</p>
-  {% if d.image_url %}<a href="{{ d.image_url }}" target="_blank" rel="noopener"><img class="dbt-img" src="{{ d.image_url|cdn_thumb(900) }}" alt="Question picture" loading="lazy"></a>{% endif %}
+  <p class="dbt-q math-render">{{ d.question }}</p>
+  {% if d.image_url %}<button type="button" class="dbt-img-btn" data-zoom="{{ d.image_url }}" aria-label="Zoom the question picture"><img class="dbt-img" src="{{ d.image_url|cdn_thumb(900) }}" alt="Question picture" loading="lazy" decoding="async"></button>{% endif %}
 </section>
 
 <section class="card dbt-teacher">
-  <h2 class="dbt-h">Your Answer {% if d.teacher_answered_at %}<span class="badge badge-success">Answered</span>{% else %}<span class="badge badge-warn">Pending</span>{% endif %}</h2>
-  <form method="POST" action="{{ url_for('teacher_doubt_view', doubt_id=d.id) }}">
+  <span class="dbt-label"><i class="fa-solid fa-user-tie" aria-hidden="true"></i> Your Answer</span>
+  {% if d.teacher_answered_at %}<span class="dbt-chip done" id="aBadge">Answered</span>{% else %}<span class="dbt-chip wait" id="aBadge">Pending</span>{% endif %}
+  <form method="POST" action="{{ url_for('teacher_doubt_view', doubt_id=d.id) }}" id="answerForm">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <textarea name="answer" rows="8" required maxlength="8000" placeholder="Write the answer for the student…">{{ d.teacher_answer or '' }}</textarea>
-    <button class="btn btn-primary mt-1" type="submit">{{ 'Save changes' if d.teacher_answered_at else 'Save and publish answer' }}</button>
+    <label for="aText" class="sr-only">Answer</label>
+    <textarea id="aText" name="answer" rows="9" required maxlength="8000" placeholder="Write the answer for the student… (maths like $x^2$ is supported)">{{ d.teacher_answer or '' }}</textarea>
+    <p class="dbt-count" id="aCount" aria-live="polite">0 / 8000</p>
+    <div class="dbt-save">
+      <button class="btn btn-primary" type="submit" id="aSave">{{ 'Save changes' if d.teacher_answered_at else 'Save and publish answer' }}</button>
+      <span class="dbt-saved" id="aStatus" role="status" aria-live="polite"></span>
+    </div>
   </form>
   {% if d.teacher_answered_at %}<p class="text-muted dbt-date">First answered {{ d.teacher_answered_at|ist }}{% if d.teacher_updated_at %} · last edited {{ d.teacher_updated_at|ist }}{% endif %}</p>{% endif %}
 </section>
 
 <section class="card dbt-ai">
-  <h2 class="dbt-h">AI conversation <span class="badge badge-gray">AI, not teacher</span></h2>
-  {% if msgs %}<div class="dbt-chat">{% for m in msgs %}<div class="dbt-msg {{ 'me' if m.role == 'user' else 'ai' }}"><span class="dbt-who">{{ 'Student' if m.role == 'user' else 'AI' }}</span><div class="dbt-text">{{ m.content }}</div></div>{% endfor %}</div>
+  <span class="dbt-label"><i class="fa-solid fa-robot" aria-hidden="true"></i> AI conversation <span class="dbt-chip mute">AI, not teacher</span></span>
+  {% if msgs %}<div class="dbt-chat">{% for m in msgs %}<div class="dbt-msg {{ 'me' if m.role == 'user' else 'ai' }}"><span class="dbt-who">{{ 'Student' if m.role == 'user' else 'AI' }}</span><div class="dbt-text math-render">{{ m.content }}</div></div>{% endfor %}</div>
   {% else %}<p class="text-muted">The student has not asked the AI about this doubt.</p>{% endif %}
 </section>
 

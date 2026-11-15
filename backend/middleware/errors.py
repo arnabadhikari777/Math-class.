@@ -1,9 +1,14 @@
 # -*- coding: utf-8 -*-
 """Error pages: 404, 500, 413."""
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import flash, jsonify, redirect, render_template, request, url_for
 
 from backend.core import app
+
+
+def _fetch_request():
+    """Forms upgraded with fetch() send this header and expect JSON, never an HTML error page."""
+    return request.headers.get("X-Requested-With") == "fetch"
 
 
 @app.errorhandler(404)
@@ -15,10 +20,21 @@ from backend.utils.helpers import safe_back  # noqa: E402
 
 @app.errorhandler(500)
 def server_error(e):
+    if _fetch_request():
+        return jsonify({"ok": False, "retryable": True,
+                        "error": "Something went wrong on our side. Please try again in a moment."}), 500
     return render_template("error.html", code=500, message="Something went wrong on our side."), 500
 
 
 @app.errorhandler(413)
 def too_large(e):
+    path = request.path or ""
+    if path.startswith("/doubts") or path == "/profile/avatar":       # student picture uploads
+        from backend.services import image_store
+        msg = "That picture is too large. Please choose one smaller than %d MB." % image_store.max_mb()
+        if _fetch_request():
+            return jsonify({"ok": False, "error": msg, "field": "image", "retryable": False}), 413
+        flash(msg, "error")
+        return redirect(url_for("student_profile") if path == "/profile/avatar" else url_for("doubt_new"))
     flash("File is too large. Maximum size is 15 MB.", "error")
     return redirect(safe_back("upload_note"))

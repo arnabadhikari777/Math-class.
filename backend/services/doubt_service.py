@@ -6,11 +6,16 @@ Teacher answer and AI answer are stored in different places and never mix:
   * AI answers      -> ai_messages of the doubt's own ai_conversations row (doubt_id)
 """
 import json
+import logging
 import re
+import sqlite3
 from datetime import timedelta
 
-from backend.services import image_store, notification_service
+from backend.db.connection import escape_like
+from backend.services import image_service, notification_service
 from backend.utils.timeutil import IST, now_ist, now_ist_iso, parse
+
+log = logging.getLogger(__name__)
 
 MAX_SUBJECT, MAX_CHAPTER, MAX_TOPIC, MAX_QUESTION, MAX_ANSWER = 60, 120, 120, 4000, 8000
 PER_PAGE = 12
@@ -38,21 +43,45 @@ def validate_form(subject, chapter, topic, question):
 
 
 # ------------------------------------------------------------------ student side
+_TOKEN_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
+
+
+def clean_token(raw):
+    """The browser's one-per-form idempotency token, or '' if missing/odd (then no duplicate protection applies)."""
+    raw = str(raw or "").strip()
+    return raw if _TOKEN_RE.match(raw) else ""
+
+
+def find_by_token(conn, student_id, token):
+    if not token:
+        return None
+    return conn.execute("SELECT id FROM doubts WHERE student_id=? AND client_token=?", (student_id, token)).fetchone()
+
+
 def create_doubt(conn, student_id, subject, chapter, topic, question, image=None, token=""):
-    """Insert one doubt. A repeated ``token`` returns the existing doubt (no duplicate)."""
-    token = (token or "")[:64]
-    if token:
-        row = conn.execute("SELECT id FROM doubts WHERE student_id=? AND client_token=?", (student_id, token)).fetchone()
-        if row:
-            return row["id"], False
+    """Insert one doubt. A repeated ``token`` returns the existing doubt (no duplicate, no error).
+
+    Safe under a race: if another request inserted the same (student, token) between our check and our INSERT, the
+    unique index ``uq_doubts_token`` rejects ours; we then hand back the winner's row instead of failing."""
+    token = clean_token(token)
+    row = find_by_token(conn, student_id, token)
+    if row:
+        return row["id"], False
     img = image or {}
     meta = json.dumps({k: img.get(k) for k in ("width", "height", "bytes", "format")}) if img else None
-    cur = conn.execute(
-        """INSERT INTO doubts (student_id, subject, chapter, topic, question, image_url, image_public_id,
-                               image_meta, client_token, created_at)
-           VALUES (?,?,?,?,?,?,?,?,?,?)""",
-        (student_id, subject, chapter, topic, question, img.get("url"), img.get("public_id"), meta,
-         token or None, now_ist_iso()))
+    try:
+        cur = conn.execute(
+            """INSERT INTO doubts (student_id, subject, chapter, topic, question, image_url, image_public_id,
+                                   image_meta, client_token, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (student_id, subject, chapter, topic, question, img.get("url"), img.get("public_id"), meta,
+             token or None, now_ist_iso()))
+    except sqlite3.IntegrityError as exc:
+        # Only the token index is a "duplicate"; any other integrity problem (e.g. the student row is gone) is real.
+        row = find_by_token(conn, student_id, token) if "client_token" in str(exc) else None
+        if row:
+            return row["id"], False
+        raise
     return cur.lastrowid, True
 
 
@@ -63,6 +92,37 @@ def notify_teacher_new(conn, doubt_id, student_name, class_name, subject):
            VALUES (?,?,?,?,?,?)""",
         ("New doubt: %s" % subject, "%s (%s) asked a new doubt." % (student_name, class_name or "-"),
          "doubt", "/teacher/doubts/%d" % doubt_id, "doubt-new:%d" % doubt_id, now_ist_iso()))
+
+
+def submit_doubt(conn, student_id, subject, chapter, topic, question, image=None, token=""):
+    """The ONE write path for a new doubt: doubt row + teacher notification in ONE transaction.
+
+    Returns (doubt_id, created, notified). ``created`` is False when this token was already submitted
+    (double tap, refresh, retry after a dropped connection) - the existing doubt is returned.
+
+    * BEGIN IMMEDIATE takes the write lock first, so two simultaneous submissions of the same token are
+      serialised: the second one simply finds the first one's row (and the unique index stays as the safety net).
+    * The notification runs inside a SAVEPOINT: if only the notification fails the student's question is still
+      saved (the teacher still sees it as 'New' in Doubt Management) and the failure is logged loudly.
+    * Anything else raises and the whole transaction is rolled back by the caller's ``with get_db()``."""
+    conn.execute("BEGIN IMMEDIATE")
+    student = conn.execute("SELECT id, name, class_name FROM students WHERE id=?", (student_id,)).fetchone()
+    if student is None:
+        raise DoubtError("Your account could not be found. Please log in again.")
+    did, created = create_doubt(conn, student_id, subject, chapter, topic, question, image, token)
+    notified = True
+    if created:
+        conn.execute("SAVEPOINT doubt_notify")
+        try:
+            notify_teacher_new(conn, did, student["name"], student["class_name"], subject)
+            conn.execute("RELEASE doubt_notify")
+        except sqlite3.Error:
+            conn.execute("ROLLBACK TO doubt_notify")
+            conn.execute("RELEASE doubt_notify")
+            notified = False
+            log.exception("teacher notification for doubt #%s could not be saved (the doubt itself was saved)", did)
+    conn.commit()
+    return did, created, notified
 
 
 def _status(row):
@@ -76,17 +136,51 @@ def card(row):
     return d
 
 
-def list_for_student(conn, sid, page=1, subject=""):
+STATUS_FILTERS = ("waiting", "answered", "ai")
+
+
+def _like(text):
+    return "%" + escape_like(text) + "%"
+
+
+def list_for_student(conn, sid, page=1, subject="", q="", status=""):
     where, args = "student_id=?", [sid]
     if subject:
         where += " AND subject=? COLLATE NOCASE"
         args.append(subject)
+    if q:
+        where += (" AND (question LIKE ? ESCAPE '\\' OR chapter LIKE ? ESCAPE '\\' OR topic LIKE ? ESCAPE '\\' "
+                  "OR subject LIKE ? ESCAPE '\\')")
+        args += [_like(q)] * 4
+    if status == "waiting":
+        where += " AND teacher_answered_at IS NULL"
+    elif status == "answered":
+        where += " AND teacher_answered_at IS NOT NULL"
+    elif status == "ai":
+        where += " AND ai_answered_at IS NOT NULL"
     total = conn.execute("SELECT COUNT(*) FROM doubts WHERE " + where, args).fetchone()[0]
     page = max(1, page)
     rows = conn.execute(
-        "SELECT id, subject, chapter, topic, created_at, teacher_answered_at, ai_answered_at FROM doubts "
+        "SELECT id, subject, chapter, topic, created_at, teacher_answered_at, ai_answered_at, "
+        "substr(question,1,180) AS preview, (image_url IS NOT NULL AND image_url <> '') AS has_image FROM doubts "
         "WHERE %s ORDER BY id DESC LIMIT ? OFFSET ?" % where, args + [PER_PAGE, (page - 1) * PER_PAGE]).fetchall()
     return [card(r) for r in rows], total
+
+
+def student_subjects(conn, sid):
+    """Subjects this student already used (filter dropdown + suggestions)."""
+    return [r[0] for r in conn.execute(
+        "SELECT DISTINCT subject FROM doubts WHERE student_id=? ORDER BY subject COLLATE NOCASE", (sid,))]
+
+
+def subject_suggestions(conn, sid):
+    """Built-in subjects first, then the student's own earlier subjects (no duplicates, case-insensitive)."""
+    seen, out = set(), []
+    for name in SUBJECTS + student_subjects(conn, sid):
+        if name.lower() not in seen:
+            seen.add(name.lower())
+            out.append(name)
+    return out
 
 
 def get_own(conn, doubt_id, sid):
@@ -112,13 +206,15 @@ def delete_doubt(conn, doubt_id):
     return row["image_public_id"] if row else None
 
 
-def destroy_image_quietly(public_id):
+def destroy_image_quietly(public_id, reason="doubt image removed"):
+    """Best-effort Cloudinary delete. A failure never blocks the user, but it is no longer lost: it is logged and
+    queued in ``deletion_queue`` (retried by `python -m backend.services.image_service`)."""
     if not public_id:
         return
     try:
-        image_store.destroy(public_id)
-    except Exception:
-        pass   # an undeletable image never blocks deleting the doubt
+        image_service.discard_orphan(public_id, reason)
+    except Exception:  # noqa: BLE001 - even queueing failed: leave a log line for the owner
+        log.exception("could not delete or queue Cloudinary image %s", public_id)
 
 
 # ------------------------------------------------------------------ teacher side
@@ -132,7 +228,7 @@ def teacher_counts(conn):
     return {"total": r["total"] or 0, "pending": r["pending"] or 0, "answered": r["answered"] or 0, "new": r["new"] or 0}
 
 
-def teacher_list(conn, subject="", class_name="", status="", page=1):
+def teacher_list(conn, subject="", class_name="", status="", page=1, q=""):
     where, args = ["1=1"], []
     if subject:
         where.append("d.subject=? COLLATE NOCASE"); args.append(subject)
@@ -142,16 +238,34 @@ def teacher_list(conn, subject="", class_name="", status="", page=1):
         where.append("d.teacher_answered_at IS NULL")
     elif status == "answered":
         where.append("d.teacher_answered_at IS NOT NULL")
+    if q:
+        where.append("(s.name LIKE ? ESCAPE '\\' OR d.question LIKE ? ESCAPE '\\' OR d.chapter LIKE ? ESCAPE '\\' "
+                     "OR d.topic LIKE ? ESCAPE '\\' OR d.subject LIKE ? ESCAPE '\\')")
+        args += [_like(q)] * 5
     sql_where = " AND ".join(where)
     total = conn.execute("SELECT COUNT(*) FROM doubts d JOIN students s ON s.id=d.student_id WHERE " + sql_where,
                          args).fetchone()[0]
     rows = conn.execute(
         """SELECT d.id, d.subject, d.chapter, d.topic, d.created_at, d.teacher_answered_at, d.ai_answered_at,
-                  d.teacher_seen, substr(d.question,1,140) AS preview, s.name AS student_name, s.class_name
+                  d.teacher_seen, substr(d.question,1,160) AS preview, s.name AS student_name, s.class_name,
+                  (d.image_url IS NOT NULL AND d.image_url <> '') AS has_image
            FROM doubts d JOIN students s ON s.id=d.student_id WHERE %s
            ORDER BY d.id DESC LIMIT ? OFFSET ?""" % sql_where, args + [PER_PAGE, (max(1, page) - 1) * PER_PAGE]).fetchall()
     return [card(r) | {"preview": r["preview"], "student_name": r["student_name"], "class_name": r["class_name"],
-                       "teacher_seen": r["teacher_seen"]} for r in rows], total
+                       "teacher_seen": r["teacher_seen"], "has_image": bool(r["has_image"])} for r in rows], total
+
+
+def teacher_neighbors(conn, doubt_id):
+    """Ids for the detail page's navigation: the next older / newer doubt and the next one still waiting."""
+    def one(sql, *a):
+        r = conn.execute(sql, a).fetchone()
+        return r[0] if r else None
+    return {
+        "older": one("SELECT id FROM doubts WHERE id<? ORDER BY id DESC LIMIT 1", doubt_id),
+        "newer": one("SELECT id FROM doubts WHERE id>? ORDER BY id ASC LIMIT 1", doubt_id),
+        "next_pending": one("SELECT id FROM doubts WHERE teacher_answered_at IS NULL AND id<>? "
+                            "ORDER BY (id<?) ASC, ABS(id-?) ASC LIMIT 1", doubt_id, doubt_id, doubt_id),
+    }
 
 
 def save_teacher_answer(conn, doubt_id, answer):
@@ -175,10 +289,12 @@ def save_teacher_answer(conn, doubt_id, answer):
 
 
 def notify_student_answer(student_id, doubt_id, subject, is_update):
+    """Returns True if the student's notification was saved. (The answer itself is already committed; a failed
+    notification is reported to the teacher by the route - it is never silently ignored.)"""
     # notify_student keeps ONE row per (student, link): an edited answer refreshes it instead of duplicating.
-    notification_service.notify_student(
+    return notification_service.notify_student(
         student_id, "Teacher %s your doubt" % ("updated the answer to" if is_update else "answered"),
-        "Your %s doubt has a teacher's answer." % subject, link="/doubts/%d" % doubt_id, notif_type="doubt")
+        "Your %s doubt has a teacher's answer." % subject, link="/doubts/%d" % doubt_id, notif_type="doubt") is not False
 
 
 # ------------------------------------------------------------------ AI: conversation + context
