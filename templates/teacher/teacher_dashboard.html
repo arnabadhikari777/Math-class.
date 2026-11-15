@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
+<a class="card dbt-card" href="{{ url_for('teacher_doubts') }}" style="display:block">
+  <div class="dbt-top"><strong><i class="fa-solid fa-circle-question" aria-hidden="true"></i> Doubt Management</strong><span class="text-muted">Open</span></div>
+  <div class="dbt-badges"><span class="badge badge-info">{{ doubt_counts.new }} new</span><span class="badge badge-warn">{{ doubt_counts.pending }} pending</span><span class="badge badge-success">{{ doubt_counts.answered }} answered</span></div>
+</a>
+
 
 <div class="page-head">
   <div>

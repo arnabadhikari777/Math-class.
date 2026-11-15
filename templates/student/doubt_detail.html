@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Doubt #{{ d.id }}{% endblock %}
+{% block content %}
+<p><a href="{{ url_for('doubt_box') }}" class="text-muted"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> My Doubts</a></p>
+<section class="card">
+  <div class="dbt-top"><h1 class="dbt-title">{{ d.subject }}</h1><span class="text-muted dbt-date">{{ d.created_at|ist }}</span></div>
+  {% if d.chapter or d.topic %}<div class="text-muted dbt-sub">{{ [d.chapter, d.topic]|select|join(' · ') }}</div>{% endif %}
+  <div class="dbt-badges">
+    <span class="badge {{ 'badge-success' if status == 'answered' else 'badge-warn' }}">{{ 'Answered by Teacher' if status == 'answered' else 'Waiting for Teacher' }}</span>
+    <span class="badge {{ 'badge-info' if msgs else 'badge-gray' }}">{{ 'AI answer available' if msgs else 'No AI answer yet' }}</span>
+  </div>
+  <h2 class="dbt-h">Your question</h2>
+  <p class="dbt-text">{{ d.question }}</p>
+  {% if d.image_url %}<a href="{{ d.image_url }}" target="_blank" rel="noopener"><img class="dbt-img" src="{{ d.image_url|cdn_thumb(900) }}" alt="Question picture" loading="lazy"></a>{% endif %}
+</section>
+
+<section class="card dbt-teacher">
+  <h2 class="dbt-h">Teacher’s Answer</h2>
+  {% if d.teacher_answer %}
+    <p class="dbt-text">{{ d.teacher_answer }}</p>
+    <p class="text-muted dbt-date">Answered {{ d.teacher_answered_at|ist }}{% if d.teacher_updated_at and d.teacher_updated_at != d.teacher_answered_at %} · updated {{ d.teacher_updated_at|ist }}{% endif %}</p>
+  {% else %}
+    <p class="text-muted"><i class="fa-regular fa-hourglass-half" aria-hidden="true"></i> Waiting for Teacher. You can ask the AI in the meantime.</p>
+  {% endif %}
+</section>
+
+<section class="card dbt-ai">
+  <h2 class="dbt-h">AI Answer</h2>
+  {% if msgs %}
+    <div class="dbt-chat">
+    {% for m in msgs %}<div class="dbt-msg {{ 'me' if m.role == 'user' else 'ai' }}"><span class="dbt-who">{{ 'You' if m.role == 'user' else 'AI' }}</span><div class="dbt-text">{{ m.content }}</div></div>{% endfor %}
+    </div>
+  {% else %}
+    <p class="text-muted">The AI has not looked at this doubt yet.</p>
+  {% endif %}
+  <button type="button" class="btn btn-outline" data-ask-ai="{{ d.id }}"><i class="fa-solid fa-robot" aria-hidden="true"></i> {{ 'Continue with AI' if msgs else 'Ask AI to solve this' }}</button>
+  <p class="text-muted dbt-hint">AI answers are not from your teacher. Check important steps with Sir.</p>
+</section>
+
+<form method="POST" action="{{ url_for('doubt_delete', doubt_id=d.id) }}" data-confirm="Delete this doubt and its AI chat? This cannot be undone.">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button type="submit" class="btn btn-sm btn-outline"><i class="fa-regular fa-trash-can" aria-hidden="true"></i> Delete this doubt</button>
+</form>
+{% endblock %}

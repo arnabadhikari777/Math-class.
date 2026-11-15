@@ -1,78 +1,35 @@
 {% extends "base.html" %}
 {% block title %}Student Login Activity{% endblock %}
 {% block content %}
-<div class="page-head">
-  <h1><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Student Login Activity</h1>
-  <p class="text-muted">Recent logins across all students. Times are shown in Asia/Kolkata.</p>
-</div>
-
-<form method="get" class="filter-bar card" style="padding:1rem;margin-bottom:1rem;display:flex;flex-wrap:wrap;gap:.75rem;align-items:end">
-  <div>
-    <label for="q">Search name / username</label>
-    <input id="q" type="search" name="q" value="{{ q }}" placeholder="e.g. Rahul">
-  </div>
-  <div>
-    <label for="cls">Class</label>
-    <select id="cls" name="class">
-      <option value="">All classes</option>
-      {% for c in classes %}
-      <option value="{{ c }}" {% if c == class_name %}selected{% endif %}>{{ c }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <button type="submit" class="btn btn-primary"><i class="fa-solid fa-filter"></i> Filter</button>
-  {% if q or class_name %}
-  <a href="{{ url_for('teacher_login_activity') }}" class="btn btn-ghost">Clear</a>
-  {% endif %}
+<div class="page-head"><h1>Student Login Activity</h1><p>Times are shown in India time (IST). Older records made before this update are shown exactly as they were stored.</p></div>
+<form method="get" class="card dbt-filters">
+  <input type="search" name="q" value="{{ q }}" placeholder="Search student name" aria-label="Search student name" maxlength="60">
+  <select name="class_name" aria-label="Class"><option value="">All classes</option>{% for o in class_options %}<option value="{{ o.value }}" {{ "selected" if o.value == class_name }}>{{ o.label }}</option>{% endfor %}</select>
+  <button class="btn btn-primary btn-sm">Search</button>
 </form>
 
-<section class="card">
-  <div class="card-head">
-    <h2>Login records</h2>
-    <span class="badge badge-info">{{ total }} total</span>
-  </div>
-  {% if rows %}
-  <div class="table-wrap">
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Student</th>
-          <th>Class</th>
-          <th>Login time</th>
-          <th>Via</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in rows %}
-        <tr>
-          <td>
-            <a href="{{ url_for('student_history', student_id=r.student_id) }}">{{ r.name }}</a>
-            {% if r.username %}<span class="text-muted" style="font-size:.85em">@{{ r.username }}</span>{% endif %}
-          </td>
-          <td>{{ r.class_name }}</td>
-          <td>{{ (r.login_time or '')[:19]|replace('T', ' ') }}</td>
-          <td>{% if r.via_teacher %}<span class="badge">Teacher view</span>{% else %}Self{% endif %}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% if total > per_page %}
-  <div class="pager" style="margin-top:1rem;display:flex;gap:.5rem;justify-content:center">
-    {% if page > 1 %}
-    <a class="btn btn-ghost" href="{{ url_for('teacher_login_activity', page=page-1, q=q, class=class_name) }}">Previous</a>
-    {% endif %}
-    <span class="text-muted">Page {{ page }}</span>
-    {% if page * per_page < total %}
-    <a class="btn btn-ghost" href="{{ url_for('teacher_login_activity', page=page+1, q=q, class=class_name) }}">Next</a>
-    {% endif %}
-  </div>
-  {% endif %}
-  {% else %}
-  <div class="empty-state">
-    <i class="fa-regular fa-clock" aria-hidden="true"></i>
-    <p>No login records match your filters.</p>
-  </div>
-  {% endif %}
+{% if latest %}
+<section class="card"><h2 class="dbt-h">Latest login activity</h2>
+  <ul class="dbt-notes">{% for r in latest %}<li><strong>{{ r.name }}</strong> <span class="text-muted">· {{ class_display(r.class_name) }} · {{ r.login_time|ist }}</span></li>{% endfor %}</ul>
+</section>
+{% endif %}
+
+<section class="card"><h2 class="dbt-h">Login history <span class="text-muted">({{ total }})</span></h2>
+{% if rows %}
+<div class="table-wrap"><table class="table dbt-table">
+  <thead><tr><th>Student</th><th>Class</th><th>Date</th><th>Time</th></tr></thead>
+  <tbody>
+  {% for r in rows %}{% set parts = (r.login_time|ist).split(', ') %}
+    <tr><td data-label="Student">{{ r.name }}{% if r.via_teacher %} <span class="badge badge-gray">Opened by Sir</span>{% endif %}</td><td data-label="Class">{{ class_display(r.class_name) }}</td><td data-label="Date">{{ parts[0] }}</td><td data-label="Time">{{ parts[1] if parts|length > 1 else '' }}</td></tr>
+  {% endfor %}
+  </tbody></table></div>
+{% if pages > 1 %}
+<nav class="dbt-pager" aria-label="Pages">
+  {% set qs = '&q=' ~ (q|urlencode) ~ '&class_name=' ~ (class_name|urlencode) %}
+  {% if page > 1 %}<a class="btn btn-sm btn-outline" href="?page={{ page - 1 }}{{ qs }}">Newer</a>{% endif %}
+  <span class="text-muted">Page {{ page }} of {{ pages }}</span>
+  {% if page < pages %}<a class="btn btn-sm btn-outline" href="?page={{ page + 1 }}{{ qs }}">Older</a>{% endif %}
+</nav>{% endif %}
+{% else %}<div class="empty-state"><i class="fa-regular fa-clock" aria-hidden="true"></i><p>No login records found.</p></div>{% endif %}
 </section>
 {% endblock %}

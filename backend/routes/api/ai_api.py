@@ -14,6 +14,7 @@ from backend.ai import context, provider
 from backend.db import get_db
 from backend.middleware.rate_limit import _bucket_ok
 from backend.utils.api_response import fail, ok, page_meta, paging, student_api
+from backend.services import doubt_service as ds
 from backend.services import student_service as svc
 
 bp = Blueprint("api_ai", __name__, url_prefix="/api/v1/ai")
@@ -135,6 +136,9 @@ def chat():
     hint_test = body.get("test_id")
     if hint_test is not None and (not isinstance(hint_test, int) or isinstance(hint_test, bool)):
         return fail("invalid_param", "test_id must be a number.")
+    doubt_id = body.get("doubt_id")
+    if doubt_id is not None and (not isinstance(doubt_id, int) or isinstance(doubt_id, bool)):
+        return fail("invalid_param", "doubt_id must be a number.")
 
     if not provider.is_enabled():
         return fail("ai_not_configured", "AI assistant is not available right now.", 503)
@@ -148,6 +152,30 @@ def chat():
         if student is None or student["is_blocked"]:
             return fail("forbidden", "Account not available.", 403)
         conv = None
+        doubt = None
+        # ---- which saved doubt (if any) is this message about?  Always the student's OWN doubts. ----
+        if doubt_id is not None:                                   # 1. explicit selection
+            doubt = ds.get_own(conn, doubt_id, sid)
+            if doubt is None:
+                return fail("not_found", "Doubt not found.", 404)
+        elif cid is not None:                                      # 2. conversation already belongs to a doubt
+            r = conn.execute("SELECT doubt_id FROM ai_conversations WHERE id=? AND student_id=?", (cid, sid)).fetchone()
+            if r and r["doubt_id"]:
+                doubt = ds.get_own(conn, r["doubt_id"], sid)
+        elif ds.looks_like_doubt_reference(text):                  # 3-6. search the student's own doubts
+            res = ds.resolve(conn, sid, text)
+            if res["status"] == "resolved":
+                doubt = res["doubt"]
+            elif res["status"] == "ambiguous":
+                return ok({"needs_choice": True, "candidates": res["candidates"], "reason": "several"})
+            else:
+                cands = ds.picker_list(conn, sid, 6)
+                if cands:      # unclear reference: never guess, let the student choose
+                    return ok({"needs_choice": True, "candidates": cands, "reason": "unclear"})
+        if doubt is not None:
+            # a doubt always uses ITS OWN conversation; a different conversation id is ignored (no mixing)
+            cid = ds.conversation_for(conn, doubt, _now())
+            conn.commit()
         if cid is not None:
             conv = _own_conversation(conn, cid, sid)
             if conv is None:
@@ -163,6 +191,8 @@ def chat():
                 test_ref = t["id"]  # reference only; correctness data still comes from results
         locked = context.active_test(conn, sid)
         system = context.build_system_prompt(conn, student, locked)
+        if doubt is not None:
+            system += ds.prompt_block(doubt)
         history = []
         if conv is not None:
             rows = conn.execute(
@@ -192,10 +222,36 @@ def chat():
             "INSERT INTO ai_messages (conversation_id, role, content, provider, created_at) VALUES (?,?,?,?,?)",
             (cid, "assistant", answer, used, now))
         reply_id = cur.lastrowid
+        if doubt is not None:      # AI activity only touches the AI columns, never the teacher's
+            ds.update_summary(conn, doubt, answer)
         conn.commit()
     by = _answered_by(used)
     return ok({"conversation_id": cid,
+               "doubt": ({"id": doubt["id"], "subject": doubt["subject"]} if doubt is not None else None),
                "test_mode": bool(locked) or False,
                "fallback": bool(prefer and by and by["id"] != prefer),
                "message": {"id": reply_id, "role": "assistant", "content": answer, "created_at": now,
                            "answered_by": by}})
+
+
+# ---------------------------------------------------------------- saved doubts inside the AI chat
+@bp.get("/doubts")
+@student_api
+def my_doubts():
+    """The student's OWN doubts, for the picker inside the AI chat (short previews only)."""
+    with get_db() as conn:
+        return ok(ds.picker_list(conn, session["student_id"], 20))
+
+
+@bp.get("/doubts/<int:did>/messages")
+@student_api
+def doubt_messages(did):
+    """Per-doubt AI history. 404 for a doubt that is not this student's."""
+    sid = session["student_id"]
+    with get_db() as conn:
+        d = ds.get_own(conn, did, sid)
+        if d is None:
+            return fail("not_found", "Doubt not found.", 404)
+        cid, rows = ds.ai_messages(conn, did, MAX_MESSAGES_PER_CONVERSATION)
+    return ok({"conversation_id": cid, "doubt": {"id": d["id"], "subject": d["subject"]},
+               "messages": [_msg(r) for r in rows]})

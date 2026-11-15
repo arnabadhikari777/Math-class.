@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}My Doubts{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>My Doubts</h1>
+  <p>Ask Sir your questions. You can also ask the AI about any doubt while you wait.</p>
+</div>
+<div class="dbt-bar">
+  <a class="btn btn-primary" href="{{ url_for('doubt_new') }}"><i class="fa-solid fa-circle-question" aria-hidden="true"></i> Ask a Doubt</a>
+  {% if subjects|length > 1 or subject %}
+  <form method="get" class="dbt-filter">
+    <label for="dbtSubject" class="sr-only">Subject</label>
+    <select id="dbtSubject" name="subject" onchange="this.form.submit()">
+      <option value="">All subjects</option>
+      {% for s in subjects %}<option value="{{ s }}" {{ 'selected' if s|lower == subject|lower }}>{{ s }}</option>{% endfor %}
+    </select>
+  </form>
+  {% endif %}
+</div>
+
+{% if items %}
+<div class="dbt-list">
+  {% for d in items %}
+  <a class="card dbt-card" href="{{ url_for('doubt_view', doubt_id=d.id) }}">
+    <div class="dbt-top"><strong>{{ d.subject }}</strong><span class="text-muted dbt-date">{{ d.created_at|ist(False) }}</span></div>
+    {% if d.chapter or d.topic %}<div class="text-muted dbt-sub">{{ [d.chapter, d.topic]|select|join(' · ') }}</div>{% endif %}
+    <div class="dbt-badges">
+      <span class="badge {{ 'badge-success' if d.status == 'answered' else 'badge-warn' }}">{{ 'Answered by Teacher' if d.status == 'answered' else 'Waiting for Teacher' }}</span>
+      <span class="badge {{ 'badge-info' if d.ai_available else 'badge-gray' }}">{{ 'AI answer available' if d.ai_available else 'No AI answer yet' }}</span>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% if pages > 1 %}
+<nav class="dbt-pager" aria-label="Pages">
+  {% if page > 1 %}<a class="btn btn-sm btn-outline" href="?page={{ page - 1 }}{% if subject %}&subject={{ subject|urlencode }}{% endif %}">Newer</a>{% endif %}
+  <span class="text-muted">Page {{ page }} of {{ pages }}</span>
+  {% if page < pages %}<a class="btn btn-sm btn-outline" href="?page={{ page + 1 }}{% if subject %}&subject={{ subject|urlencode }}{% endif %}">Older</a>{% endif %}
+</nav>
+{% endif %}
+{% else %}
+<div class="empty-state"><i class="fa-regular fa-circle-question" aria-hidden="true"></i>
+  <p>{{ 'No doubts for this subject.' if subject else 'You have not asked any doubt yet. Tap “Ask a Doubt” to start.' }}</p></div>
+{% endif %}
+{% endblock %}

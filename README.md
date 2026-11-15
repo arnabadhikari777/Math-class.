@@ -12,6 +12,13 @@ Flask + SQLite, no ORM. Installable as a PWA.
 - AI assistant for students (Gemini/Groq/...) with chat monitoring for Sir
 - JEE Main countdowns, Auto/Light/Dark theme, push notifications, JSON API `/api/v1`
 
+## Doubts, profile picture, login activity (Nov 2026 upgrade)
+- **Doubt Management** (`backend/routes/web/doubts.py`, `backend/services/doubt_service.py`, migration `m018_doubts.py`): students ask doubts (`/doubts`, optional Cloudinary picture); Sir answers in *Teacher > Doubts* (`/teacher/doubts`). The teacher answer and the AI answer are stored separately - only a teacher answer marks a doubt "Answered".
+- **AI + doubts**: each doubt owns one `ai_conversations` row (`doubt_id`), so its AI history is never mixed with another doubt. The chat API accepts `doubt_id`; messages like "solve my maths doubt" are matched against the student's OWN doubts and the student picks when several match.
+- **Profile picture**: *Profile > Add picture* (Cloudinary, initials stay as fallback). **Login**: "Email or Username" (no `@` needed).
+- **Teacher > Login Activity** shows login date/time by student name in Asia/Kolkata. Students no longer see login history. New timestamps are stored zone-aware (`+05:30`); old zone-less rows are shown unchanged.
+- **Answer-sheet PDF** embeds Cloudinary question images (only `res.cloudinary.com` of your cloud, size/time limited) and refuses to print Bengali with a font that cannot draw it (see `PDF_FONT_PATH` in `.env.example`).
+
 ## Quick start
 ```bash
 pip install -r requirements.txt

@@ -239,7 +239,7 @@ def _down_question_bank(conn):
     conn.execute("DROP TABLE IF EXISTS bank_categories")
 
 
-from backend.db import m008_exam_system, m010_support_tables, m011_publish_marking, m012_autosave, m013_sessions, m014_workspace, m015_chat, m016_username, m017_notification_dismissals, m018_doubts_and_profile  # noqa: E402
+from backend.db import m008_exam_system, m010_support_tables, m011_publish_marking, m012_autosave, m013_sessions, m014_workspace, m015_chat, m016_username, m017_notification_dismissals, m018_doubts  # noqa: E402
 
 
 def _up_drop_legacy_attempts(conn):
@@ -265,7 +265,7 @@ FK_OFF = {"008_exam_system"}
 # Down-migrations that destroy data and therefore refuse to run without --force-destructive.
 DESTRUCTIVE_DOWN = {"011_publish_marking", "001_test_attempts", "006_ai_chat", "007_question_bank", "008_exam_system",
                     "009_drop_legacy_attempts", "010_support_tables", "015_chat",
-                    "017_notification_dismissals"}
+                    "017_notification_dismissals", "018_doubts"}
 
 MIGRATIONS = [
     ("001_test_attempts", "Record when a student opens a test (for timer checks)",
@@ -302,8 +302,8 @@ MIGRATIONS = [
      m016_username.up, m016_username.down),
     ("017_notification_dismissals", "Per-student notification dismissals so 'All Clean' never deletes shared class notices",
      m017_notification_dismissals.up, m017_notification_dismissals.down),
-    ("018_doubts_and_profile", "Doubt Management System + student profile pictures (Cloudinary)",
-     m018_doubts_and_profile.up, m018_doubts_and_profile.down),
+    ("018_doubts", "Doubt Management, per-doubt AI history, student profile picture, teacher notifications",
+     m018_doubts.up, m018_doubts.down),
 ]
 
 

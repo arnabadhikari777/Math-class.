@@ -3,7 +3,7 @@
 {% block content %}
 
 <section class="card profile-card" aria-labelledby="profileName">
-  <div class="profile-avatar" aria-hidden="true">{{ (student.name or '?')[:1]|upper }}</div>
+  <div class="profile-avatar{% if student.profile_image_url %} has-img{% endif %}" aria-hidden="true">{% if student.profile_image_url %}<img src="{{ student.profile_image_url|cdn_thumb(160) }}" alt="" width="80" height="80" loading="lazy">{% else %}{{ (student.name or '?')[:1]|upper }}{% endif %}</div>
   <div class="profile-main">
     <h1 id="profileName" class="profile-name">{{ student.name }}</h1>
     <div class="profile-user">
@@ -12,6 +12,13 @@
         <i class="fa-regular fa-copy" aria-hidden="true"></i> <span>Copy username</span>
       </button>
     </div>
+    <form method="POST" action="{{ url_for('avatar_upload') }}" enctype="multipart/form-data" class="avatar-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="btn btn-sm btn-outline" for="avatarFile"><i class="fa-solid fa-camera" aria-hidden="true"></i> {{ 'Change picture' if student.profile_image_url else 'Add picture' }}</label>
+      <input id="avatarFile" class="avatar-input" type="file" name="avatar" accept="image/jpeg,image/png,image/webp" data-autosubmit>
+      <span class="text-muted avatar-hint">JPG, PNG or WEBP, up to 3 MB</span>
+    </form>
+    {% if student.profile_image_url %}<form method="POST" action="{{ url_for('avatar_remove') }}" class="avatar-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="btn btn-sm btn-outline">Remove picture</button></form>{% endif %}
     <dl class="profile-facts">
       <div><dt>Class</dt><dd>{{ class_display(student.class_name) }}</dd></div>
       {% if student.roll %}<div><dt>Roll number</dt><dd>{{ student.roll }}</dd></div>{% endif %}

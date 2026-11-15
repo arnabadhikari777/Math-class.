@@ -106,15 +106,13 @@ def student_profile():
     sid = session["student_id"]
     with get_db() as conn:
         student = conn.execute(
-            "SELECT id, name, class_name, roll, email, mobile, registered_at, username FROM students WHERE id=?",
+            "SELECT id, name, class_name, roll, email, mobile, registered_at, username, profile_image_url FROM students WHERE id=?",
             (sid,)).fetchone()
         username = student["username"] if student else None
         if student is not None and not username:
             # Rows created by older code have no username yet: give one ONCE (never regenerated later).
             username = assign_username(conn, sid, student["name"])
             conn.commit()
-        # Login history is intentionally NOT shown to students (privacy).
-        # Teachers can view it under Student Login Activity.
         results, stats = student_service.profile_overview(conn, sid)
     return render_template("student/student_profile.html", student=student, username=username,
                            results=results, stats=stats)

@@ -134,7 +134,7 @@
 
     /* ───────────── 3. student bottom navigation: hide on scroll down, show on scroll up ───────────── */
     (function smartNav() {
-        if (!body.classList.contains("student-shell")) return; // teacher navigation never hides
+        if (!body.classList.contains("student-shell") && !body.classList.contains("teacher-shell")) return; // student + teacher bottom bars
         var nav = doc.querySelector(".bottom-nav");
         if (!nav) return;
         var phone = mq("(max-width: 960px)");

@@ -9,6 +9,7 @@
     var API = "/api/v1/ai";
     var STORE_KEY = "aiw_conv";
     var conversationId = null;
+    var activeDoubt = null; // the saved doubt this chat is about (null = normal chat)
     var lastText = "";
     var busy = false;
     var AI_KEY = "aiw_ai";
@@ -367,6 +368,12 @@
         "aiw-test",
         "A test is open: I can explain concepts but I won\u2019t solve its questions."
     );
+    var doubtBar = el("div", "aiw-doubt");
+    var doubtLbl = el("span", "aiw-doubt-l", "");
+    var doubtBtn = el("button", null, "Choose a doubt");
+    doubtBtn.type = "button";
+    doubtBar.appendChild(doubtLbl);
+    doubtBar.appendChild(doubtBtn);
     var picker = el("div", "aiw-pick");
     picker.style.display = "none";
     var offBar = el(
@@ -390,6 +397,7 @@
     form.appendChild(send);
     panel.appendChild(head);
     panel.appendChild(picker);
+    panel.appendChild(doubtBar);
     panel.appendChild(note);
     panel.appendChild(testBar);
     panel.appendChild(offBar);
@@ -733,6 +741,97 @@
         return m ? parseInt(m[1], 10) : null;
     }
 
+    // ---- saved doubts: pick one, or let the student choose when the AI cannot tell which ----
+    function setDoubt(d) {
+        activeDoubt = d && d.id ? d : null;
+        doubtLbl.textContent = activeDoubt
+            ? "Doubt #" + activeDoubt.id + (activeDoubt.subject ? " \u00b7 " + activeDoubt.subject : "")
+            : "No doubt selected";
+        doubtBtn.textContent = activeDoubt ? "Change" : "Choose a doubt";
+    }
+    setDoubt(null);
+    function fmtDate(v) {
+        var d = new Date(v);
+        return isNaN(d) ? "" : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+    }
+    function renderDoubtChoices(list, container, onPick) {
+        list.forEach(function (c) {
+            var b = el("button", "aiw-dc");
+            b.type = "button";
+            b.appendChild(el("b", null, c.subject + (c.topic ? " \u00b7 " + c.topic : c.chapter ? " \u00b7 " + c.chapter : "")));
+            b.appendChild(el("span", null, c.preview || ""));
+            b.appendChild(el("small", null, fmtDate(c.created_at)));
+            b.addEventListener("click", function () { onPick(c); });
+            container.appendChild(b);
+        });
+    }
+    function loadDoubtHistory(d) {
+        // each doubt has its OWN conversation; the server returns only that one
+        return api("/doubts/" + encodeURIComponent(d.id) + "/messages").then(function (res) {
+            if (!(res.status === 200 && res.body && res.body.ok)) return false;
+            finishTyping();
+            setDoubt(d);
+            conversationId = res.body.data.conversation_id || null;
+            storeSet(conversationId);
+            log.textContent = "";
+            showHistory(false);
+            var msgs = res.body.data.messages || [];
+            msgs.forEach(function (m) { addMsg(m.role, m.content, m.answered_by); });
+            if (!msgs.length) {
+                var m = el("div", "aiw-msg aiw-bot");
+                var body = el("div", "aiw-body", "Doubt #" + d.id + " is selected. I can solve it step by step.");
+                m.appendChild(body);
+                var go = el("button", "aiw-dc aiw-go", "Solve this doubt");
+                go.type = "button";
+                go.addEventListener("click", function () { submit("Please solve this doubt step by step.", false); });
+                m.appendChild(go);
+                log.appendChild(m);
+            }
+            scrollDown();
+            return true;
+        });
+    }
+    function showDoubtPicker() {
+        showHistory(true);
+        hist.textContent = "";
+        hist.appendChild(el("div", "aiw-hist-t", "Which doubt do you want help with?"));
+        api("/doubts").then(function (res) {
+            var list = res.status === 200 && res.body && res.body.ok ? res.body.data : [];
+            if (!list.length) {
+                hist.appendChild(el("div", "aiw-hist-empty", "You have no saved doubts yet. Use \u201cAsk a Doubt\u201d to add one."));
+                return;
+            }
+            renderDoubtChoices(list, hist, function (c) { loadDoubtHistory(c); });
+        }).catch(function () {
+            hist.appendChild(el("div", "aiw-hist-empty", "No connection. Check your internet."));
+        });
+    }
+    function showChoiceInChat(list, text) {
+        var m = el("div", "aiw-msg aiw-bot");
+        m.appendChild(el("div", "aiw-body", "Which doubt do you want me to solve?"));
+        var wrap = el("div", "aiw-dcs");
+        renderDoubtChoices(list, wrap, function (c) {
+            m.remove();
+            setDoubt(c);
+            submit(text, true);
+        });
+        m.appendChild(wrap);
+        log.appendChild(m);
+        scrollDown();
+    }
+    doubtBtn.addEventListener("click", function () {
+        if (busy) return;
+        histOpen ? showHistory(false) : showDoubtPicker();
+    });
+    window.AMCAI = {
+        openDoubt: function (id) {
+            open();
+            loadDoubtHistory({ id: id, subject: "" }).then(function (ok) {
+                if (!ok) showErr("That doubt could not be opened.", false);
+            });
+        }
+    };
+
     function submit(text, isRetry) {
         if (busy) return;
         text = (text || "").trim();
@@ -750,6 +849,7 @@
         var payload = { message: text };
         var requested = chosen;
         if (chosen) payload.ai = chosen;
+        if (activeDoubt) payload.doubt_id = activeDoubt.id;
         if (conversationId) payload.conversation_id = conversationId;
         else {
             var h = testHint();
@@ -759,9 +859,12 @@
             .then(function (res) {
                 typing.remove();
                 setBusy(false);
-                if (res.status === 200 && res.body && res.body.ok) {
+                if (res.status === 200 && res.body && res.body.ok && res.body.data.needs_choice) {
+                    showChoiceInChat(res.body.data.candidates || [], text);
+                } else if (res.status === 200 && res.body && res.body.ok) {
                     conversationId = res.body.data.conversation_id;
                     storeSet(conversationId);
+                    if (res.body.data.doubt) setDoubt(res.body.data.doubt);
                     testBar.classList.toggle("on", !!res.body.data.test_mode);
                     var note =
                         res.body.data.fallback &&
@@ -1005,6 +1108,7 @@
         finishTyping();
         conversationId = null;
         storeSet(null);
+        setDoubt(null);
         log.textContent = "";
         greet();
         showHistory(false);

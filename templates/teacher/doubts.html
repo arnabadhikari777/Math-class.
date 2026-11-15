@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Doubt Management{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Doubt Management</h1><p>Doubts asked by students. Only your answer marks a doubt as answered.</p></div>
+<div class="stats">
+  <div class="stat"><span class="stat-ic cyan"><i class="fa-solid fa-bell" aria-hidden="true"></i></span><div class="label">New Doubts</div><div class="num">{{ counts.new }}</div></div>
+  <div class="stat"><span class="stat-ic amber"><i class="fa-solid fa-hourglass-half" aria-hidden="true"></i></span><div class="label">Pending Doubts</div><div class="num">{{ counts.pending }}</div></div>
+  <div class="stat"><span class="stat-ic green"><i class="fa-solid fa-circle-check" aria-hidden="true"></i></span><div class="label">Answered Doubts</div><div class="num">{{ counts.answered }}</div></div>
+</div>
+
+{% if notes %}
+<section class="card"><div class="dbt-top"><h2 class="dbt-h">Notifications</h2>
+  <form method="POST" action="{{ url_for('teacher_notifications_read_all') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-sm btn-outline">Mark all read</button></form></div>
+  <ul class="dbt-notes">{% for n in notes %}<li class="{{ '' if n.is_read else 'unread' }}"><a href="{{ n.link }}"><strong>{{ n.title }}</strong> <span class="text-muted">{{ n.message }} · {{ n.created_at|ist }}</span></a></li>{% endfor %}</ul>
+</section>
+{% endif %}
+
+<form method="get" class="card dbt-filters">
+  <select name="status" aria-label="Status"><option value="">All status</option><option value="pending" {{ 'selected' if status=='pending' }}>Pending</option><option value="answered" {{ 'selected' if status=='answered' }}>Answered</option></select>
+  <select name="subject" aria-label="Subject"><option value="">All subjects</option>{% for s in subjects %}<option value="{{ s }}" {{ 'selected' if s|lower == subject|lower }}>{{ s }}</option>{% endfor %}</select>
+  <select name="class_name" aria-label="Class"><option value="">All classes</option>{% for o in class_options %}<option value="{{ o.value }}" {{ "selected" if o.value == class_name }}>{{ o.label }}</option>{% endfor %}</select>
+  <button class="btn btn-primary btn-sm">Filter</button>
+</form>
+
+{% if items %}
+<div class="dbt-list">
+  {% for d in items %}
+  <a class="card dbt-card" href="{{ url_for('teacher_doubt_view', doubt_id=d.id) }}">
+    <div class="dbt-top"><strong>{{ d.student_name }} <span class="text-muted">· {{ class_display(d.class_name) }}</span></strong><span class="text-muted dbt-date">{{ d.created_at|ist(False) }}</span></div>
+    <div class="dbt-sub">{{ d.subject }}{% if d.chapter or d.topic %} · {{ [d.chapter, d.topic]|select|join(' · ') }}{% endif %}</div>
+    <div class="text-muted dbt-prev">{{ d.preview }}</div>
+    <div class="dbt-badges">
+      {% if not d.teacher_seen %}<span class="badge badge-info">New</span>{% endif %}
+      <span class="badge {{ 'badge-success' if d.status == 'answered' else 'badge-warn' }}">{{ 'Answered' if d.status == 'answered' else 'Pending' }}</span>
+      {% if d.ai_available %}<span class="badge badge-gray">AI answered</span>{% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% if pages > 1 %}
+<nav class="dbt-pager" aria-label="Pages">
+  {% set qs = '&status=' ~ status ~ '&subject=' ~ (subject|urlencode) ~ '&class_name=' ~ (class_name|urlencode) %}
+  {% if page > 1 %}<a class="btn btn-sm btn-outline" href="?page={{ page - 1 }}{{ qs }}">Newer</a>{% endif %}
+  <span class="text-muted">Page {{ page }} of {{ pages }}</span>
+  {% if page < pages %}<a class="btn btn-sm btn-outline" href="?page={{ page + 1 }}{{ qs }}">Older</a>{% endif %}
+</nav>
+{% endif %}
+{% else %}
+<div class="empty-state"><i class="fa-regular fa-circle-question" aria-hidden="true"></i><p>No doubts match these filters.</p></div>
+{% endif %}
+{% endblock %}

@@ -3,10 +3,6 @@
 
 import hashlib
 from datetime import datetime
-try:
-    from zoneinfo import ZoneInfo
-except ImportError:
-    ZoneInfo = None
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from flask import flash, redirect, render_template, request, session, url_for
@@ -21,6 +17,7 @@ from backend.services.email_service import _send_email_async
 from backend.services.otp_service import create_and_send_otp, verify_otp_code
 from backend.services.teacher_auth_service import check_teacher_credentials
 from backend.utils.validators import normalize_mobile, validate_password_strength
+from backend.utils.timeutil import now_ist_iso
 from backend.utils.usernames import assign_username
 
 
@@ -237,29 +234,19 @@ def login():
     if session.get("student_id") and not session.get("is_teacher"):
         return redirect(url_for("student_dashboard"))
     if request.method == "POST":
-        identifier = request.form.get("email", "").strip()
+        ident = (request.form.get("identifier") or request.form.get("email") or "").strip()
         password = request.form.get("password", "")
-        if not identifier or not password:
-            flash("Please enter your email/username and password.", "error")
-            return redirect(url_for("login"))
         with get_db() as conn:
-            # Support login by email OR username (username has no @ prefix)
-            if "@" in identifier:
-                student = conn.execute(
-                    "SELECT * FROM students WHERE email=?", (identifier.lower(),)
-                ).fetchone()
-            else:
-                student = conn.execute(
-                    "SELECT * FROM students WHERE username=? COLLATE NOCASE", (identifier,)
-                ).fetchone()
-                if student is None:
-                    # fallback: maybe they typed email without realising
-                    student = conn.execute(
-                        "SELECT * FROM students WHERE email=?", (identifier.lower(),)
-                    ).fetchone()
+            if "@" in ident.lstrip("@"):     # an email address (usernames never contain "@")
+                student = conn.execute("SELECT * FROM students WHERE email=?", (ident.lower(),)).fetchone()
+            else:                # a username; a leading "@" typed by habit is ignored, nothing is stored with it
+                uname = ident.lstrip("@").strip()
+                student = (conn.execute("SELECT * FROM students WHERE username=? COLLATE NOCASE", (uname,)).fetchone()
+                           if uname else None)
         if student is None or not check_password_hash(student["password_hash"], password):
-            flash("Incorrect email/username or password.", "error")
+            flash("Incorrect email, username or password.", "error")
             return redirect(url_for("login"))
+        email = student["email"]
         if student["is_blocked"]:
             flash("Your account has been blocked. Contact Sir.", "error")
             return redirect(url_for("login"))
@@ -267,8 +254,8 @@ def login():
             flash("This account is archived. Contact Sir to have it restored.", "error")
             return redirect(url_for("login"))
         if student["is_verified"] == 0:
-            session["pending_email"] = student["email"]
-            ok, msg, _ = create_and_send_otp(student["email"], purpose="registration")
+            session["pending_email"] = email
+            ok, msg, _ = create_and_send_otp(email, purpose="registration")
             flash(
                 "Account not verified. " + msg,
                 "success" if ok else "error"
@@ -283,14 +270,10 @@ def login():
         session["student_class"] = student["class_name"]
         session["sv"] = student["session_version"] or 0
         ip_addr = request.headers.get("X-Forwarded-For", request.remote_addr)
-        try:
-            now_ist = datetime.now(ZoneInfo("Asia/Kolkata")).isoformat(timespec="seconds") if ZoneInfo else datetime.now().isoformat(timespec="seconds")
-        except Exception:
-            now_ist = datetime.now().isoformat(timespec="seconds")
         with get_db() as conn:
             conn.execute(
                 "INSERT INTO login_history (student_id, login_time, ip_address, via_teacher) VALUES (?,?,?,0)",
-                (student["id"], now_ist, ip_addr)
+                (student["id"], now_ist_iso(), ip_addr)
             )
             conn.commit()
         flash(f"Welcome back, {student['name']}!", "success")

@@ -40,9 +40,9 @@ const T=()=>new Promise(r=>setTimeout(r,20));
  sc(20); ok(!d.body.classList.contains('nav-hidden'),'top always shows');
  d.querySelector('[data-nav=tests]').ownerDocument.defaultView.location.hash='#tests'; w.dispatchEvent(new w.Event('hashchange'));
  ok(d.querySelector('[data-nav=tests]').classList.contains('active')&&!d.querySelector('[data-nav=home]').classList.contains('active'),'#tests highlights Tests');
- // teacher nav never hides
+ // teacher bottom bar now also hides on scroll down (requested mobile upgrade)
  ({w,d}=mk(`<nav class="bottom-nav"></nav>`,{cls:'teacher-shell'})); Object.defineProperty(w,'pageYOffset',{get:()=>500}); w.dispatchEvent(new w.Event('scroll'));
- ok(!d.body.classList.contains('nav-hidden'),'teacher nav unaffected');
+ ok(d.body.classList.contains('nav-hidden'),'teacher nav hides on scroll down like the student nav');
  // bell
  const items=[{id:1,title:'<b>A</b>',message:'m',type:'test',link:'/t',created_at:'2026-11-14T10:00:00',is_read:false},{id:2,title:'B',message:'m',type:'info',link:'',created_at:'2026-11-13T10:00:00',is_read:true}];
  const html=`<button id="notifBtn"><span class="notif-badge" id="notifBadge">1</span></button><div id="notifBackdrop" hidden></div><section id="notifPanel" hidden><button id="clearNotifBtn" disabled></button><div id="notifList"></div></section><script id="amcNotifData" type="application/json">{}</script>`;

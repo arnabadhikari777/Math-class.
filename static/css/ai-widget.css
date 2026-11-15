@@ -977,3 +977,10 @@ body.aiw-open {
         animation: none;
     }
 }
+
+/* saved-doubt bar + choices (the floating AI button itself is unchanged) */
+.aiw-doubt{display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.3rem .75rem;font-size:12px;border-bottom:1px solid rgba(128,128,128,.2)}
+.aiw-doubt button{font:inherit;font-size:12px;background:none;border:0;color:inherit;text-decoration:underline;cursor:pointer;min-height:32px}
+.aiw-dc{display:grid;gap:2px;text-align:left;width:100%;margin:.3rem 0;padding:.55rem .7rem;border:1px solid rgba(128,128,128,.3);border-radius:10px;background:transparent;color:inherit;font:inherit;cursor:pointer;min-height:44px}
+.aiw-dc b{font-size:13px}.aiw-dc span{font-size:12px;opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.aiw-dc small{opacity:.65}
+.aiw-go{text-align:center;font-weight:600;margin-top:.5rem}

@@ -62,3 +62,10 @@ def format_marks(value):
 def inject_push_flag():
     """Templates hide the "Enable alerts" button when no VAPID keys are configured."""
     return {"push_enabled": PUSH_ENABLED}
+
+
+@app.template_filter("ist")
+def ist_filter(value, with_time=True):
+    """Show a stored timestamp in Asia/Kolkata (legacy zone-less values are shown as stored)."""
+    from backend.utils.timeutil import fmt_ist
+    return fmt_ist(value, with_time)

@@ -23,6 +23,8 @@ def teacher_dashboard():
                FROM login_history lh JOIN students s ON s.id = lh.student_id
                ORDER BY lh.login_time DESC LIMIT 10"""
         ).fetchall()
+        from backend.services import doubt_service
+        doubt_counts = doubt_service.teacher_counts(conn)
         announcements = conn.execute("SELECT * FROM announcements ORDER BY created_at DESC LIMIT 5").fetchall()
         recent_tests = conn.execute(
             """SELECT t.id, t.title, t.subject, t.class_name, t.status, t.created_at,
@@ -40,7 +42,7 @@ def teacher_dashboard():
         total_students=total_students, pending=pending,
         total_notes=total_notes, total_tests=total_tests,
         total_results=total_results, new_contacts=new_contacts,
-        recent_logins=recent_logins, announcements=announcements
+        recent_logins=recent_logins, announcements=announcements, doubt_counts=doubt_counts
     )
 
 

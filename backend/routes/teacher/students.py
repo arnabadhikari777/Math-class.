@@ -9,6 +9,7 @@ from werkzeug.security import generate_password_hash
 from flask import Response, abort, flash, redirect, render_template, request, session, url_for
 
 from backend.core import app
+from backend.utils.timeutil import now_ist_iso
 from backend.db.connection import get_db
 from backend.middleware.auth import teacher_login_required
 from backend.services.activity_service import log_activity
@@ -281,7 +282,7 @@ def login_as_student(student_id):
     with get_db() as conn:
         conn.execute(
             "INSERT INTO login_history (student_id, login_time, ip_address, via_teacher) VALUES (?,?,?,1)",
-            (student["id"], datetime.now().isoformat(), ip_addr)
+            (student["id"], now_ist_iso(), ip_addr)
         )
         conn.commit()
     log_activity("teacher", "impersonate", f"{student['name']} (id={student_id}) log={log_id}")
@@ -328,46 +329,3 @@ def export_students():
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment;filename=students_export.csv"}
     )
-
-@app.route("/teacher/login-activity")
-@teacher_login_required
-def teacher_login_activity():
-    """Global view of student login activity for the teacher."""
-    q = (request.args.get("q") or "").strip()
-    class_name = (request.args.get("class") or "").strip()
-    page = max(1, int(request.args.get("page") or 1))
-    per_page = 50
-    offset = (page - 1) * per_page
-    where = ["1=1"]
-    params = []
-    if q:
-        where.append("(s.name LIKE ? OR s.username LIKE ? OR s.email LIKE ?)")
-        like = "%" + q + "%"
-        params.extend([like, like, like])
-    if class_name:
-        where.append("s.class_name = ?")
-        params.append(class_name)
-    sql_where = " AND ".join(where)
-    with get_db() as conn:
-        total = conn.execute(
-            f"""SELECT COUNT(*) FROM login_history lh
-               JOIN students s ON s.id = lh.student_id
-               WHERE {sql_where}""", params
-        ).fetchone()[0]
-        rows = conn.execute(
-            f"""SELECT lh.id, lh.login_time, lh.ip_address, lh.via_teacher,
-                      s.id AS student_id, s.name, s.class_name, s.username
-               FROM login_history lh
-               JOIN students s ON s.id = lh.student_id
-               WHERE {sql_where}
-               ORDER BY lh.login_time DESC
-               LIMIT ? OFFSET ?""", params + [per_page, offset]
-        ).fetchall()
-        classes = [r[0] for r in conn.execute(
-            "SELECT DISTINCT class_name FROM students ORDER BY class_name").fetchall()]
-    return render_template(
-        "teacher/login_activity.html",
-        rows=rows, total=total, page=page, per_page=per_page,
-        q=q, class_name=class_name, classes=classes,
-    )
-

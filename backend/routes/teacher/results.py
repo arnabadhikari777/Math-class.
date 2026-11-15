@@ -12,7 +12,7 @@ from backend.db.connection import get_db
 from backend.middleware.auth import teacher_login_required
 from backend.services import exam_service
 from backend.services.activity_service import log_activity
-from backend.services.pdf_service import build_student_result_pdf
+from backend.services.pdf_service import PdfFontError, build_student_result_pdf
 from backend.utils.helpers import percentage
 
 
@@ -101,7 +101,12 @@ def download_student_result_pdf(test_id, result_id):
             """SELECT a.* FROM answers a WHERE a.result_id=? ORDER BY a.position, a.id""",
             (result_id,)
         ).fetchall()
-    pdf_bytes = build_student_result_pdf(test, student, result, answers)
+    try:
+        pdf_bytes = build_student_result_pdf(test, student, result, answers)
+    except PdfFontError as exc:
+        app.logger.error("answer-sheet PDF: %s", exc)
+        flash(str(exc), "error")
+        return redirect(url_for("teacher_student_result", test_id=test_id, result_id=result_id))
     if not pdf_bytes:
         flash("PDF generation is not available on this server.", "error")
         return redirect(url_for("teacher_student_result", test_id=test_id, result_id=result_id))
