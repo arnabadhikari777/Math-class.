@@ -12,8 +12,8 @@ from backend.middleware.auth import teacher_login_required
 @teacher_login_required
 def teacher_dashboard():
     with get_db() as conn:
-        total_students = conn.execute("SELECT COUNT(*) AS c FROM students WHERE is_verified=1").fetchone()["c"]
-        pending = conn.execute("SELECT COUNT(*) AS c FROM students WHERE is_verified=0").fetchone()["c"]
+        total_students = conn.execute("SELECT COUNT(*) AS c FROM students WHERE is_verified=1 AND is_archived=0").fetchone()["c"]
+        pending = conn.execute("SELECT COUNT(*) AS c FROM students WHERE is_verified=0 AND is_archived=0").fetchone()["c"]
         total_notes = conn.execute("SELECT COUNT(*) AS c FROM notes").fetchone()["c"]
         total_tests = conn.execute("SELECT COUNT(*) AS c FROM tests").fetchone()["c"]
         total_results = conn.execute("SELECT COUNT(*) AS c FROM results").fetchone()["c"]

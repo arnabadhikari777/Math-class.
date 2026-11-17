@@ -165,7 +165,7 @@
             var dy = y - lastY;
             if (Math.abs(dy) < THRESHOLD) return;       // small movement: keep the current state
             if (max < window.innerHeight * 0.6) { set(false); lastY = y; return; } // short page: nothing to gain by hiding
-            if (y >= max - 2) { set(false); lastY = y; return; }    // end of page: bar is back (footer / last items reachable)
+            if (y >= max - 2) { set(false); lastY = y; return; }    // end of page: bar is back (last items reachable)
             set(dy > 0);
             lastY = y;
         }
@@ -598,7 +598,7 @@
             menus.forEach(function (m) { if (isOpen(m)) { e.preventDefault(); setOpen(m, false, true); } });
         });
         // other floating controls close an open menu
-        ["notifBtn", "qaBtn"].forEach(function (id) {
+        ["notifBtn"].forEach(function (id) {
             var b = $(id);
             if (b) b.addEventListener("click", function () { closeAll(null, false); }, true);
         });

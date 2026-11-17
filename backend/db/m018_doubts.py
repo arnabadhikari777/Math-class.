@@ -15,7 +15,72 @@ def _add_col(conn, table, col, ddl):
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
 
 
+# Columns the application code (doubt_service / doubts routes) reads or writes. ADD COLUMN cannot add a NOT NULL
+# column without a default, so those carry one. Order matters only for readability.
+DOUBT_COLUMNS = (
+    ("chapter", "TEXT NOT NULL DEFAULT ''"),
+    ("topic", "TEXT NOT NULL DEFAULT ''"),
+    ("question", "TEXT NOT NULL DEFAULT ''"),
+    ("image_url", "TEXT"),
+    ("image_public_id", "TEXT"),
+    ("image_meta", "TEXT"),
+    ("client_token", "TEXT"),
+    ("teacher_answer", "TEXT"),
+    ("teacher_answered_at", "TEXT"),
+    ("teacher_updated_at", "TEXT"),
+    ("teacher_seen", "INTEGER NOT NULL DEFAULT 0"),
+    ("ai_summary", "TEXT"),
+    ("ai_answered_at", "TEXT"),
+    ("created_at", "TEXT NOT NULL DEFAULT ''"),
+)
+
+
+def _table_exists(conn, name):
+    return conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone() is not None
+
+
+def repair_existing_doubts_table(conn):
+    """If a ``doubts`` table already exists with a different (legacy / unregistered m018_doubts_and_profile) layout,
+    add every missing column and copy legacy values across. Additive only: nothing is dropped or overwritten.
+
+    CREATE TABLE IF NOT EXISTS silently keeps an old table as it is, so without this the queries fail with
+    ``no such column: question`` (-> "Your doubts could not be loaded right now"). Returns the list of columns added."""
+    if not _table_exists(conn, "doubts"):
+        return []
+    have = {r[1] for r in conn.execute("PRAGMA table_info(doubts)")}
+    added = []
+    for col, ddl in DOUBT_COLUMNS:
+        if col not in have:
+            conn.execute("ALTER TABLE doubts ADD COLUMN %s %s" % (col, ddl))
+            have.add(col)
+            added.append(col)
+    stamp = "COALESCE(NULLIF(updated_at,''), created_at)" if "updated_at" in have else "created_at"
+    # --- legacy field mapping (only fills values that are still empty) ---
+    if "question_text" in have:
+        conn.execute("UPDATE doubts SET question=question_text WHERE (question IS NULL OR question='') "
+                     "AND question_text IS NOT NULL")
+    conn.execute("UPDATE doubts SET chapter='' WHERE chapter IS NULL")
+    conn.execute("UPDATE doubts SET topic='' WHERE topic IS NULL")
+    if "status" in have:   # legacy status 'answered' + a stored answer == teacher answered
+        conn.execute("UPDATE doubts SET teacher_answered_at=%s WHERE teacher_answered_at IS NULL "
+                     "AND status='answered' AND teacher_answer IS NOT NULL AND teacher_answer<>''" % stamp)
+    if "ai_has_answer" in have:
+        conn.execute("UPDATE doubts SET ai_answered_at=%s WHERE ai_answered_at IS NULL AND ai_has_answer=1" % stamp)
+    if "created_at" in have:
+        conn.execute("UPDATE doubts SET created_at=? WHERE created_at IS NULL OR created_at=''",
+                     (__import__("datetime").datetime.now().isoformat(),))
+    if _table_exists(conn, "doubt_images"):   # first legacy image row becomes the doubt's picture
+        conn.execute("""UPDATE doubts SET image_url=(SELECT url FROM doubt_images i WHERE i.doubt_id=doubts.id
+                                                      ORDER BY i.id LIMIT 1),
+                                          image_public_id=(SELECT public_id FROM doubt_images i WHERE i.doubt_id=doubts.id
+                                                      ORDER BY i.id LIMIT 1)
+                        WHERE (image_url IS NULL OR image_url='')
+                          AND EXISTS (SELECT 1 FROM doubt_images i WHERE i.doubt_id=doubts.id)""")
+    return added
+
+
 def up(conn):
+    repair_existing_doubts_table(conn)   # a pre-existing legacy table must be fixed BEFORE the indexes below
     conn.execute("""
         CREATE TABLE IF NOT EXISTS doubts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

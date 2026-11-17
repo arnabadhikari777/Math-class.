@@ -3,7 +3,6 @@
    Layout: desktop = two panes in a card; phone = list screen above the bottom nav, room screen full-screen
    (follows the on-screen keyboard through --vv-h / --vv-top set by chat.js). */
 body:has(#chatApp) .aiw-fab { display: none; }      /* the floating AI button would sit on top of "Send" */
-body:has(#chatApp) footer { display: none; }
 /* the page-enter animation leaves a transform on .container, which would re-anchor the fixed phone layout below */
 body:has(#chatApp) .container { margin-bottom: 0; padding-bottom: 0; animation: none; transform: none; }
 

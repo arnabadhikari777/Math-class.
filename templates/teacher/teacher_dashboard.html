@@ -17,18 +17,18 @@
   </div>
 </div>
 
-<div class="stats">
-  <div class="stat"><span class="stat-ic"><i class="fa-solid fa-users" aria-hidden="true"></i></span><div class="label">Students</div><div class="num"><a href="{{ url_for('students_list') }}">{{ total_students }}</a></div></div>
-  <div class="stat"><span class="stat-ic amber"><i class="fa-solid fa-user-clock" aria-hidden="true"></i></span><div class="label">Pending approval</div><div class="num">{{ pending }}</div></div>
-  <div class="stat"><span class="stat-ic green"><i class="fa-solid fa-file-pen" aria-hidden="true"></i></span><div class="label">Tests</div><div class="num"><a href="{{ url_for('manage_tests') }}">{{ total_tests }}</a></div></div>
-  <div class="stat"><span class="stat-ic rose"><i class="fa-solid fa-envelope" aria-hidden="true"></i></span><div class="label">New messages</div><div class="num"><a href="{{ url_for('teacher_contacts') }}">{{ new_contacts }}</a></div></div>
+<div class="stats stats-dash" role="list" aria-label="Overview">
+  <a class="stat stat-link" role="listitem" href="{{ url_for('students_list') }}" aria-label="Students: {{ total_students }}. Open student management"><span class="stat-ic"><i class="fa-solid fa-users" aria-hidden="true"></i></span><span class="label">Students</span><span class="num">{{ total_students }}</span><span class="stat-go">Manage students <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span></a>
+  <a class="stat stat-link" role="listitem" href="{{ url_for('students_list', status='pending') }}" aria-label="Pending approval: {{ pending }}. Open pending students"><span class="stat-ic amber"><i class="fa-solid fa-user-clock" aria-hidden="true"></i></span><span class="label">Pending approval</span><span class="num">{{ pending }}</span><span class="stat-go">View pending <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span></a>
+  <a class="stat stat-link" role="listitem" href="{{ url_for('manage_tests') }}" aria-label="Tests: {{ total_tests }}. Open test management"><span class="stat-ic green"><i class="fa-solid fa-file-pen" aria-hidden="true"></i></span><span class="label">Tests</span><span class="num">{{ total_tests }}</span><span class="stat-go">Manage tests <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span></a>
+  <a class="stat stat-link" role="listitem" href="{{ url_for('teacher_contacts') }}" aria-label="New messages: {{ new_contacts }}. Open contact inbox"><span class="stat-ic rose"><i class="fa-solid fa-envelope" aria-hidden="true"></i></span><span class="label">New messages</span><span class="num">{{ new_contacts }}</span><span class="stat-go">Open inbox <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span></a>
 </div>
 
 {% if pending or new_contacts %}
 <div class="card">
   <div class="card-head"><h2>Needs attention</h2></div>
   {% if pending %}
-  <div class="row-item"><div><div class="ttl">{{ pending }} student{{ '' if pending == 1 else 's' }} waiting for verification</div><div class="meta">They registered but have not finished verifying their email.</div></div><a class="btn btn-sm btn-outline" href="{{ url_for('students_list') }}">Open students</a></div>
+  <div class="row-item"><div><div class="ttl">{{ pending }} student{{ '' if pending == 1 else 's' }} waiting for verification</div><div class="meta">They registered but have not finished verifying their email.</div></div><a class="btn btn-sm btn-outline" href="{{ url_for('students_list', status='pending') }}">Open pending students</a></div>
   {% endif %}
   {% if new_contacts %}
   <div class="row-item"><div><div class="ttl">{{ new_contacts }} new message{{ '' if new_contacts == 1 else 's' }} in the inbox</div><div class="meta">From the contact form.</div></div><a class="btn btn-sm btn-outline" href="{{ url_for('teacher_contacts') }}">Open inbox</a></div>

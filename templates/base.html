@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=8">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v=9">
 {% block extra_head %}{% endblock %}
 </head>
 {% set ep = request.endpoint or '' %}
@@ -43,13 +43,13 @@
   <nav class="top-links keep" aria-label="Main">
     <a href="{{ url_for('login') }}" class="{{ 'active' if ep == 'login' }}"><span class="lg-x">Student </span>Login</a>
     <a href="{{ url_for('register') }}" class="{{ 'active' if ep == 'register' }}">Register</a>
-    <a href="{{ url_for('contact') }}" class="pub-extra {{ 'active' if ep == 'contact' }}">Contact</a>
+    <a href="{{ url_for('contact') }}" class="pub-contact {{ 'active' if ep == 'contact' }}"{% if ep == 'contact' %} aria-current="page"{% endif %}><i class="fa-solid fa-envelope" aria-hidden="true"></i> Contact</a>
     <a href="{{ url_for('teacher_login') }}" class="pub-extra {{ 'active' if ep == 'teacher_login' }}">Teacher</a>
     <div class="pub-more" data-menu>
       <button type="button" class="icon-btn" data-menu-trigger aria-haspopup="menu" aria-expanded="false" aria-controls="pubMenu" aria-label="More links"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></button>
       <div class="acct-menu" id="pubMenu" role="menu" data-menu-panel hidden>
-        <a role="menuitem" href="{{ url_for('contact') }}"><i class="fa-solid fa-envelope" aria-hidden="true"></i> Contact</a>
         <a role="menuitem" href="{{ url_for('teacher_login') }}"><i class="fa-solid fa-user-tie" aria-hidden="true"></i> Teacher login</a>
+        <a role="menuitem" href="{{ url_for('download_app') }}"><i class="fa-solid fa-mobile-screen-button" aria-hidden="true"></i> Get the App</a>
       </div>
     </div>
   </nav>
@@ -78,6 +78,7 @@
         <a role="menuitem" href="{{ url_for('student_profile') }}"><i class="fa-solid fa-user" aria-hidden="true"></i> Profile</a>
         <a role="menuitem" href="{{ url_for('doubt_box') }}"><i class="fa-regular fa-folder-open" aria-hidden="true"></i> My Doubts</a>
         <a role="menuitem" href="{{ url_for('student_settings') }}"><i class="fa-solid fa-gear" aria-hidden="true"></i> Settings</a>
+        <a role="menuitem" href="{{ url_for('download_app') }}"><i class="fa-solid fa-mobile-screen-button" aria-hidden="true"></i> Get the App</a>
         <form method="POST" action="{{ url_for('logout') }}" data-no-busy="1"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           {% if session.get('impersonating') %}<button type="submit" role="menuitem" class="acct-out"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Exit to Teacher</button>
           {% else %}<button type="submit" role="menuitem" class="acct-out"><i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i> Logout</button>{% endif %}
@@ -160,9 +161,6 @@
       {% endwith %}
       {% block content %}{% endblock %}
     </div>
-    <footer>
-      © 2026 Arnab Math Class{% if not is_teacher %} · <a href="{{ url_for('download_app') }}">Get the app</a> · {% if is_student %}<a href="{{ url_for('doubt_new') }}">Doubt</a>{% else %}<a href="{{ url_for('contact') }}">Contact</a>{% endif %}{% endif %}
-    </footer>
   </div>
 </div>
 
@@ -187,16 +185,6 @@
 </nav>
 {% endif %}
 
-{% if is_student and ep != 'test_exam' %}
-<div class="qa" id="qa">
-  <button type="button" class="qa-btn" id="qaBtn" aria-label="Quick actions" aria-expanded="false" aria-controls="qaMenu"><i class="fa-solid fa-ellipsis-vertical" aria-hidden="true"></i></button>
-  <div class="qa-menu" id="qaMenu" role="menu" hidden>
-    <a role="menuitem" href="{{ url_for('doubt_new') }}"><i class="fa-solid fa-circle-question" aria-hidden="true"></i> Ask a Doubt</a>
-    <a role="menuitem" href="{{ url_for('doubt_box') }}"><i class="fa-regular fa-folder-open" aria-hidden="true"></i> My Doubts</a>
-    <a role="menuitem" href="{{ url_for('download_app') }}"><i class="fa-solid fa-mobile-screen-button" aria-hidden="true"></i> Get the App</a>
-  </div>
-</div>
-{% endif %}
 <canvas id="confetti"></canvas>
 
 {% if is_student %}
@@ -204,8 +192,8 @@
 <script src="{{ url_for('static', filename='js/ai-widget.js') }}?v=11" defer></script>
 {% endif %}
 <script src="{{ url_for('static', filename='js/ui.js') }}?v=1" defer></script>
-<script src="{{ url_for('static', filename='js/shell.js') }}?v=2" defer></script>
-{% if is_student or is_teacher %}<script src="{{ url_for('static', filename='js/doubts.js') }}?v=2" defer></script>{% endif %}
+<script src="{{ url_for('static', filename='js/shell.js') }}?v=3" defer></script>
+{% if is_student or is_teacher %}<script src="{{ url_for('static', filename='js/doubts.js') }}?v=3" defer></script>{% endif %}
 {% if is_student %}<script src="{{ url_for('static', filename='js/notify-center.js') }}?v=1" defer></script>
 <script src="{{ url_for('static', filename='js/chat.js') }}?v=2" defer></script>{% endif %}
 <script src="{{ url_for('static', filename='js/app.js') }}?v=2" defer></script>

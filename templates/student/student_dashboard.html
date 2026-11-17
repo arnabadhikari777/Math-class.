@@ -7,13 +7,14 @@
     <h1>Hello, {{ student.name }}</h1>
     <p>Class {{ class_display(student.class_name) }}{% if student.roll %} · Roll {{ student.roll }}{% endif %}</p>
   </div>
-  <div class="flex gap-1 flex-wrap">
-    <a href="{{ url_for('doubt_new') }}" class="btn btn-primary"><i class="fa-solid fa-circle-question" aria-hidden="true"></i> Ask a Doubt</a>
-    <a href="{{ url_for('notes_list') }}" class="btn btn-outline"><i class="fa-solid fa-book-open" aria-hidden="true"></i> Study notes</a>
-    <a href="{{ url_for('chat_home') }}" data-chat-link class="btn btn-primary"><i class="fa-solid fa-comments" aria-hidden="true"></i> Chat</a>
-    <a href="{{ url_for('student_settings') }}" class="btn btn-outline"><i class="fa-solid fa-gear" aria-hidden="true"></i> Settings</a>
-  </div>
 </div>
+
+<nav class="sd-actions" aria-label="Quick actions">
+  <a class="sd-act" href="{{ url_for('doubt_new') }}"><span class="sd-ic"><i class="fa-solid fa-circle-question" aria-hidden="true"></i></span><span class="sd-t">Ask a Doubt</span></a>
+  <a class="sd-act" href="{{ url_for('notes_list') }}"><span class="sd-ic green"><i class="fa-solid fa-book-open" aria-hidden="true"></i></span><span class="sd-t">Study Notes</span></a>
+  <a class="sd-act" href="{{ url_for('chat_home') }}" data-chat-link><span class="sd-ic violet"><i class="fa-solid fa-comments" aria-hidden="true"></i></span><span class="sd-t">Chat</span></a>
+  <a class="sd-act" href="{{ url_for('student_settings') }}"><span class="sd-ic amber"><i class="fa-solid fa-gear" aria-hidden="true"></i></span><span class="sd-t">Settings</span></a>
+</nav>
 
 <div class="stats">
   <div class="stat"><span class="stat-ic"><i class="fa-solid fa-file-pen" aria-hidden="true"></i></span><div class="label">Open tests</div><div class="num">{{ tests|length - (attempted_test_ids|length) if tests|length >= attempted_test_ids|length else 0 }}</div></div>

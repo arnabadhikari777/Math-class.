@@ -1,4 +1,4 @@
-/* Doubts: quick-actions menu, Ask-a-Doubt form (inline validation, safe retry), My Doubts filters, image zoom,
+/* Doubts: Ask-a-Doubt form (inline validation, safe retry), My Doubts filters, image zoom,
    copy answer, teacher answer save, "Ask AI" bridge. No inline handlers (CSP). */
 (function () {
     "use strict";
@@ -7,15 +7,6 @@
     var doc = document;
     function $(id) { return doc.getElementById(id); }
     function toast(t, m) { if (window.AMC && window.AMC.toast) window.AMC.toast(t, m); }
-
-    // ---- quick actions menu ----
-    var btn = $("qaBtn"), menu = $("qaMenu");
-    if (btn && menu) {
-        var setOpen = function (v) { menu.hidden = !v; btn.setAttribute("aria-expanded", v ? "true" : "false"); };
-        btn.addEventListener("click", function (e) { e.stopPropagation(); setOpen(menu.hidden); });
-        doc.addEventListener("pointerdown", function (e) { if (!menu.hidden && !menu.contains(e.target) && e.target !== btn && !btn.contains(e.target)) setOpen(false); });
-        doc.addEventListener("keydown", function (e) { if (e.key === "Escape" && !menu.hidden) { setOpen(false); btn.focus(); } });
-    }
 
     // ---- filters: selects submit their form (inline onchange is blocked by the CSP) ----
     Array.prototype.forEach.call(doc.querySelectorAll("select[data-autosubmit]"), function (sel) {

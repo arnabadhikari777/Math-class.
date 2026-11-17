@@ -245,7 +245,8 @@ class DoubtTests(AppCase):
             r = (t if url.startswith("/teacher") else stu).get(url)
             self.assertEqual(r.status_code, 200, url)
         body = stu.get("/dashboard").get_data(as_text=True)
-        self.assertIn("Ask a Doubt", body); self.assertIn('id="qaMenu"', body)
+        self.assertIn("Ask a Doubt", body)
+        self.assertNotIn('id="qaMenu"', body); self.assertNotIn('id="qaBtn"', body)      # floating three-dot button is gone
         self.assertNotIn(">Contact<", body)
 
     # ---------------------------------------------------------------- avatar

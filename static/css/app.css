@@ -462,22 +462,6 @@ html.amc-scroll-lock body {
     margin-top: 0.15rem;
 }
 
-footer {
-    text-align: center;
-    padding: 1.1rem;
-    color: var(--text-muted);
-    font-size: 0.8rem;
-    border-top: 1px solid var(--border);
-    background: var(--surface);
-}
-footer a {
-    color: var(--text-muted);
-    text-decoration: underline;
-    text-underline-offset: 3px;
-}
-footer a:hover {
-    color: var(--primary);
-}
 
 .bottom-nav {
     display: none;
@@ -2329,7 +2313,6 @@ tr:hover td {
     .sidebar,
     .bottom-nav,
     .no-print,
-    footer,
     .amc-toasts,
     .amc-pop-back,
     .amc-dlg-back {
@@ -2892,7 +2875,6 @@ html { scroll-padding-top: calc(var(--topbar-h) + 12px); }
 }
 .tb-left { min-width: 0; }
 .acct, .pub-more { display: none; position: relative; }
-.qa { display: none; }
 .acct-btn {
     width: 38px; height: 38px; padding: 0; border-radius: 50%; border: 1px solid var(--border);
     background: var(--primary-soft); color: var(--primary); font: inherit; font-weight: 700;
@@ -2928,25 +2910,68 @@ body.menu-open .topbar { z-index: 230; }
     .top-actions { gap: 0.35rem; flex-shrink: 0; }
     .viewing-as { max-width: 34vw; overflow: hidden; text-overflow: ellipsis; font-size: 0.74rem; padding: 0.25rem 0.55rem; }
     .va-t { overflow: hidden; text-overflow: ellipsis; }
-    /* floating stack: AI button (unchanged) -> Quick actions directly above it, never overlapping */
-    .qa {
-        display: block; position: fixed; z-index: 315;
-        right: calc(1.1rem + 6px);
-        bottom: calc(var(--bottom-h) + 12px + var(--fab) + var(--fab-gap) + var(--safe-b));
-        transition: bottom 0.3s var(--ease), opacity 0.2s;
-    }
-    body.nav-hidden .qa { bottom: calc(14px + var(--fab) + var(--fab-gap) + var(--safe-b)); }
-    .qa-btn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--text); box-shadow: var(--shadow-md); cursor: pointer; font-size: 1.05rem; }
-    .qa-menu { position: absolute; right: 0; bottom: 54px; min-width: 190px; max-width: calc(100vw - 24px); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 0.3rem; display: grid; }
-    .qa-menu[hidden] { display: none; }
-    .qa-menu a { display: flex; gap: 0.6rem; align-items: center; min-height: 46px; padding: 0 0.75rem; color: var(--text); text-decoration: none; border-radius: 8px; }
-    .qa-menu a:hover, .qa-menu a:focus-visible { background: var(--surface2); }
     .bottom-nav { padding-left: max(6px, env(safe-area-inset-left, 0px)); padding-right: max(6px, env(safe-area-inset-right, 0px)); }
     .bottom-nav .bl { font-size: 0.72rem; }
-    body:has(.aiw-panel.open) .qa { display: none; }
     /* virtual keyboard open: bars and floating buttons step aside so they never cover the field or Send button */
     body.kb-open .bottom-nav { transform: translateY(calc(100% + 2px)); box-shadow: none; }
-    body.kb-open .qa, body.kb-open .aiw-fab { display: none; }
+    body.kb-open .aiw-fab { display: none; }
+}
+/* Student dashboard quick actions: 2 columns on phones, 4 on wider screens, equal heights, whole card is the link */
+.sd-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; margin-bottom: 1.1rem; }
+.sd-act {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.55rem;
+    min-height: 96px; padding: 0.9rem 0.5rem; text-align: center; color: var(--text); text-decoration: none;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+    -webkit-tap-highlight-color: transparent; transition: transform 0.15s var(--ease), border-color 0.15s, box-shadow 0.15s;
+}
+.sd-ic { width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; font-size: 1.05rem; background: var(--primary-soft); color: var(--primary); flex: none; }
+.sd-ic.green { background: var(--success-soft); color: var(--success); }
+.sd-ic.amber { background: var(--warning-soft); color: var(--warning); }
+.sd-ic.violet { background: var(--info-soft); color: var(--info); }
+.sd-t { font-weight: 600; font-size: 0.9rem; line-height: 1.2; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (hover: hover) { .sd-act:hover { border-color: var(--primary); box-shadow: var(--shadow-md); text-decoration: none; } }
+.sd-act:active { transform: scale(0.97); }
+.sd-act:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+@media (min-width: 720px) { .sd-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.9rem; } .sd-act { min-height: 108px; } }
+@media (max-width: 360px) { .sd-t { font-size: 0.84rem; } .sd-act { padding: 0.8rem 0.35rem; } }
+@media (prefers-reduced-motion: reduce) { .sd-act { transition: none; } }
+
+/* Teacher dashboard: each statistic is ONE link (whole card clickable, keyboard + touch friendly) */
+.stats-dash { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.stat.stat-link {
+    color: inherit; text-decoration: none; cursor: pointer; min-height: 116px; justify-content: flex-start;
+    -webkit-tap-highlight-color: transparent; transition: transform 0.15s var(--ease), box-shadow 0.15s, border-color 0.15s;
+}
+.stat.stat-link .label { padding-right: 2.8rem; overflow-wrap: anywhere; }
+.stat.stat-link .stat-go { margin-top: auto; padding-top: 0.45rem; font-size: 0.76rem; font-weight: 600; color: var(--primary); display: inline-flex; align-items: center; gap: 0.35rem; }
+.stat.stat-link .stat-go i { font-size: 0.65rem; transition: transform 0.15s; }
+@media (hover: hover) {
+    .stat.stat-link:hover { border-color: var(--primary); text-decoration: none; }
+    .stat.stat-link:hover .stat-go i { transform: translateX(3px); }
+}
+.stat.stat-link:active { transform: scale(0.98); box-shadow: var(--shadow); }
+.stat.stat-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+@media (max-width: 960px) { .stats-dash { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 400px) { .stat.stat-link { min-height: 108px; padding: 0.8rem 0.7rem; } .stat.stat-link .stat-go { font-size: 0.72rem; } }
+@media (prefers-reduced-motion: reduce) { .stat.stat-link, .stat.stat-link .stat-go i { transition: none; } }
+
+/* Public header: Contact is a real, always-visible button (never inside the "more" menu) */
+.top-links.keep a.pub-contact {
+    display: inline-flex; align-items: center; gap: 0.4rem; border: 1px solid var(--primary);
+    border-radius: 999px; color: var(--primary); font-weight: 600; padding: 0.4rem 0.85rem;
+}
+.top-links.keep a.pub-contact:hover, .top-links.keep a.pub-contact.active { background: var(--primary-soft); color: var(--primary); }
+.top-links.keep a.pub-contact:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+@media (max-width: 960px) {
+    /* the fixed AI button sits over the bottom-right corner: keep the last content clear of it (no footer any more) */
+    body.student-shell:not(.exam-page) .container { padding-bottom: calc(1.4rem + var(--fab) + var(--fab-gap)); }
+}
+@media (max-width: 400px) {
+    .topbar { padding-left: max(0.6rem, env(safe-area-inset-left, 0px)); padding-right: max(0.6rem, env(safe-area-inset-right, 0px)); }
+    .top-links.keep a { padding: 0.4rem 0.4rem; font-size: 0.8rem; }
+    .top-links.keep a.pub-contact { padding: 0.35rem 0.6rem; }
+    .top-links.keep a.pub-contact i { display: none; }
+    .top-actions { gap: 0.15rem; }
 }
 @media (max-width: 560px) {
     .top-links.keep { gap: 0.1rem; min-width: 0; }
@@ -2955,8 +2980,7 @@ body.menu-open .topbar { z-index: 230; }
     .pub-more { display: block; position: static; }
     .pub-more .acct-menu { right: 8px; top: calc(var(--topbar-h) - 4px); }
 }
-body.exam-page .qa { display: none; }
-@media (prefers-reduced-motion: reduce) { .qa, .acct-menu { transition: none; animation: none; } }
+@media (prefers-reduced-motion: reduce) { .acct-menu { transition: none; animation: none; } }
 
 /* inputs without a type attribute (doubt form) must also be 16px on phones: no iOS zoom */
 @media (max-width: 720px) { input:not([type]), input[type="file"] { font-size: 16px; } }

@@ -239,7 +239,7 @@ def _down_question_bank(conn):
     conn.execute("DROP TABLE IF EXISTS bank_categories")
 
 
-from backend.db import m008_exam_system, m010_support_tables, m011_publish_marking, m012_autosave, m013_sessions, m014_workspace, m015_chat, m016_username, m017_notification_dismissals, m018_doubts  # noqa: E402
+from backend.db import m008_exam_system, m010_support_tables, m011_publish_marking, m012_autosave, m013_sessions, m014_workspace, m015_chat, m016_username, m017_notification_dismissals, m018_doubts, m019_doubts_schema_check  # noqa: E402
 
 
 def _up_drop_legacy_attempts(conn):
@@ -304,6 +304,8 @@ MIGRATIONS = [
      m017_notification_dismissals.up, m017_notification_dismissals.down),
     ("018_doubts", "Doubt Management, per-doubt AI history, student profile picture, teacher notifications",
      m018_doubts.up, m018_doubts.down),
+    ("019_doubts_schema_check", "Forward-only repair/verification of the doubts table (legacy 018 layout -> current columns)",
+     m019_doubts_schema_check.up, m019_doubts_schema_check.down),
 ]
 
 

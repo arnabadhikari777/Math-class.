@@ -60,7 +60,7 @@ JS_AUDIT = r"""
     if (tb.scrollWidth > tb.clientWidth + 1) out.issues.push('header content wider than header (' + tb.scrollWidth + '>' + tb.clientWidth + ')');
   }
   // floating controls must not overlap each other
-  const fl = ['.bottom-nav', '.qa-btn', '.aiw-fab'].map(s => [s, document.querySelector(s)]).filter(([s, e]) => e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0);
+  const fl = ['.bottom-nav', '.aiw-fab'].map(s => [s, document.querySelector(s)]).filter(([s, e]) => e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0);
   for (let i = 0; i < fl.length; i++) for (let j = i + 1; j < fl.length; j++) {
     const a = fl[i][1].getBoundingClientRect(), b = fl[j][1].getBoundingClientRect();
     if (a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1) out.issues.push('overlap: ' + fl[i][0] + ' x ' + fl[j][0]);
@@ -102,8 +102,7 @@ async () => {
   if (pm && getComputedStyle(pm).display !== 'none' && pm.getBoundingClientRect().width > 0) { pm.click(); await sleep(60); const p = document.getElementById('pubMenu'); if (!p || p.hidden) issues.push('public menu did not open'); else inside(p, 'public menu'); }
   const nb = document.getElementById('notifBtn');
   if (nb) { nb.click(); await sleep(250); const np = document.getElementById('notifPanel'); if (!np || np.hidden) issues.push('notification panel did not open'); else inside(np, 'notification panel'); nb.click(); await sleep(150); }
-  const qb = document.getElementById('qaBtn');
-  if (qb && getComputedStyle(qb.parentElement).display !== 'none') { qb.click(); await sleep(60); const qm = document.getElementById('qaMenu'); if (qm.hidden) issues.push('quick actions did not open'); else inside(qm, 'quick actions menu'); qb.click(); }
+  if (document.getElementById('qaBtn') || document.querySelector('footer')) issues.push('removed element (quick-actions button / footer) is back');
   if (document.querySelector('.bottom-nav')) {
     await sleep(400); document.body.classList.add('kb-open'); await sleep(350);
     const bn = document.querySelector('.bottom-nav'); if (getComputedStyle(bn).display !== 'none' && bn.getBoundingClientRect().top < H - 4) issues.push('bottom nav still visible with keyboard open');
