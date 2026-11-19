@@ -27,7 +27,7 @@ MAX_CONTENT_LENGTH = 55 * 1024 * 1024
 
 EMAIL_ADDRESS = os.environ.get("EMAIL_ADDRESS", "")
 EMAIL_APP_PASSWORD = os.environ.get("EMAIL_APP_PASSWORD", "")
-EMAIL_SENDER_NAME = os.environ.get("EMAIL_SENDER_NAME", "Arnab Math Class")
+EMAIL_SENDER_NAME = os.environ.get("EMAIL_SENDER_NAME", "MathMania Academy")
 
 OTP_EXPIRY_MINUTES = 10
 OTP_MAX_ATTEMPTS = 5            # wrong guesses allowed per OTP before it is burned
@@ -35,7 +35,7 @@ RESET_EMAIL_PER_HOUR = 5        # forgot-password OTP requests per email per hou
 RESET_COOLDOWN_SECONDS = 60     # minimum gap between two OTP requests for one email
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 PASS_PERCENTAGE = 40
-SITE_NAME = "Arnab Math Class"
+SITE_NAME = "MathMania Academy"
 
 # --- Web Push (VAPID) config ---
 # These keys let the server send real push notifications to a student's phone/browser, even when the

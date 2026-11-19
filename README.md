@@ -1,4 +1,4 @@
-# Arnab Math Class
+# MathMania Academy
 
 Online notes, timed MCQ tests, student analytics and a teacher admin panel, built mobile-first for JEE-minded students.
 Flask + SQLite, no ORM. Installable as a PWA.

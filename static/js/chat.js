@@ -1,4 +1,4 @@
-/* Arnab Math Class - student chat (v2).
+/* MathMania Academy - student chat (v2).
    Loaded on every student page:
      * everywhere   -> a small heartbeat/badge poll (keeps you "online" and marks incoming messages "delivered")
      * on /chat      -> the full chat screen (chat list, people, requests, room with sent/delivered/seen).

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Canonical class values and validation for Arnab Math Class.
+"""Canonical class values and validation for MathMania Academy.
 
 Single source of truth for allowed class_name values used in registration,
 teacher student management, tests, notes, and announcements.

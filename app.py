@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Arnab Math Class - entry point.
+"""MathMania Academy - entry point.
 
 * Local:          python app.py
 * PythonAnywhere: the WSGI file does  ``from app import app as application``

@@ -30,7 +30,7 @@ self.addEventListener('activate', (event) => {
 // even if this site/app isn't open. Shows a system notification on the
 // student's phone/laptop.
 self.addEventListener('push', (event) => {
-  let data = { title: 'Arnab Math Class', body: 'You have a new update.', url: '/' };
+  let data = { title: 'MathMania Academy', body: 'You have a new update.', url: '/' };
   try {
     if (event.data) data = Object.assign(data, event.data.json());
   } catch (e) {

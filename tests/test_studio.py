@@ -28,7 +28,7 @@ class StoreConfigTests(unittest.TestCase):
         self.assertIn("not configured", self.store.config_problem())
 
     def test_key_name_as_cloud_name_is_caught(self):
-        os.environ.update({"CLOUDINARY_CLOUD_NAME": "Arnab Math Class", "CLOUDINARY_API_KEY": "123456789012345", "CLOUDINARY_API_SECRET": "s"})
+        os.environ.update({"CLOUDINARY_CLOUD_NAME": "MathMania Academy", "CLOUDINARY_API_KEY": "123456789012345", "CLOUDINARY_API_SECRET": "s"})
         self.assertIn("Cloud name", self.store.config_problem())
 
     def test_good_and_url_form(self):
@@ -129,7 +129,7 @@ class StudioTests(unittest.TestCase):
 
     def test_upload_bad_cloud_reports_friendly_error(self):
         cl = self.teacher()
-        with mock.patch.dict(os.environ, {"CLOUDINARY_CLOUD_NAME": "Arnab Math Class"}):
+        with mock.patch.dict(os.environ, {"CLOUDINARY_CLOUD_NAME": "MathMania Academy"}):
             r = cl.post("/teacher/studio/api/upload", data={"new_category": "X", "images": (io.BytesIO(PNG), "a.png")},
                         headers={"X-CSRFToken": CSRF}, content_type="multipart/form-data")
         self.assertEqual(r.status_code, 400)

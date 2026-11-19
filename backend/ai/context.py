@@ -77,7 +77,7 @@ def learning_summary(conn, sid):
 def build_system_prompt(conn, student, locked_test):
     first = _clip(student["name"], 40)
     parts = [
-        "You are the friendly maths learning assistant inside 'Arnab Math Class', "
+        "You are the friendly maths learning assistant inside 'MathMania Academy', "
         f"talking to a school student named {first} (class {student['class_name']}).",
         "Help the student understand concepts, find why a mistake happened and revise weak topics. "
         "Explain step by step in simple words. Reply in the language the student writes in "

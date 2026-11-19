@@ -1,4 +1,4 @@
-/* Arnab Math Class - small shared behaviours.
+/* MathMania Academy - small shared behaviours.
    These used to be inline onclick/onsubmit attributes; they live here so the Content-Security-Policy
    can forbid inline event handlers. Everything is a delegated listener: no per-page code needed. */
 (function () {

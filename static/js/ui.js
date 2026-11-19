@@ -1,4 +1,4 @@
-/* Arnab Math Class - UI layer.
+/* MathMania Academy - UI layer.
    Toasts (replaces the old flash banners), confirm dialog (replaces window.confirm),
    light/dark theme switch and "busy" submit buttons.
    Public API:  AMC.toast(type, message, {title, duration, sticky})   type: success | error | warning | info

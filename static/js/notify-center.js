@@ -1,4 +1,4 @@
-/* Arnab Math Class - student notification pop-ups.
+/* MathMania Academy - student notification pop-ups.
 
    What it shows (one pop-up at a time, OK unlocks after a 5 second countdown):
      * a NEW TEST notification          - only while that test is still open for this student

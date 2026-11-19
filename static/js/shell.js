@@ -1,4 +1,4 @@
-/* Arnab Math Class - app shell behaviour (loaded on every page).
+/* MathMania Academy - app shell behaviour (loaded on every page).
 
    1. Scroll lock       one shared lock used by the teacher drawer and the notification panel
    2. Teacher drawer    ONE drawer, opened by the top-left menu button AND the bottom "More" button
